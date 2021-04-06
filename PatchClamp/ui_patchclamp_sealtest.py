@@ -593,6 +593,11 @@ class PatchclampSealTestUI(QWidget):
         
         # save to file
         exporter.export(os.path.join(self.saving_dir, 'SealTest_' + "Rpip_" + self.pipette_resistance.text() + "Mohm_"+ self.patch_parameters + '.png'))       
+    
+    def closeEvent(self, event):
+        QtWidgets.QApplication.quit()
+        event.accept()
+
 
 if __name__ == "__main__":
     def run_app():
@@ -600,4 +605,7 @@ if __name__ == "__main__":
         mainwin = PatchclampSealTestUI()
         mainwin.show()
         app.exec_()
+    
+    # Execute script from the same directory as Tupolev_v2.py
+    os.chdir(os.getcwd() + '\\..')
     run_app()

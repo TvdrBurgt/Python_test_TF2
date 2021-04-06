@@ -80,7 +80,7 @@ class Mainbody(QWidget):
         #----------------------------------------------------------------------
         #----------------------------------GUI---------------------------------
         #----------------------------------------------------------------------
-        self.setMinimumSize(1630,1080)
+        self.setMinimumSize(1630,1000)
         self.setMaximumHeight(1080)
         self.setWindowTitle("Fiumicino")
         self.layout = QGridLayout(self)
