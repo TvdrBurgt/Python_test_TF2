@@ -13,7 +13,7 @@ from PyQt5 import QtWidgets
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QPen, QPixmap
 from PyQt5.QtWidgets import QWidget, QLabel, QGridLayout, QDoubleSpinBox, QPushButton, QGroupBox, QLineEdit,\
-                            QVBoxLayout, QHBoxLayout, QComboBox, QMessageBox, QSpinBox, QTabWidget
+                            QVBoxLayout, QHBoxLayout, QComboBox, QMessageBox, QSpinBox, QTabWidget, QTextEdit
 import pyqtgraph.exporters
 
 import pyqtgraph as pg
@@ -57,7 +57,7 @@ class SlidingWindow(pg.PlotWidget):
         
         self.pen = QPen()
         self.pen.setColor(QColor(145,255,244))
-        self.pen.setWidth(0.7)
+        self.pen.setWidth(1)
         self.pen.setStyle(Qt.DashLine)
         self.plotData = self.plot(pen=self.pen) #call plot, so it is not needed to calll this in the UI. However, you can still change the pen variables in the UI.
         
@@ -78,6 +78,8 @@ class SlidingWindow(pg.PlotWidget):
         """Get a window of the most recent 'windowSize' samples (or less if not available)."""
         self.plotData.setData(self.data)
         
+    
+
 class PatchclampSealTestUI(QWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -94,10 +96,11 @@ class PatchclampSealTestUI(QWidget):
         self.currentclampTest.measurementThread_currentclamp.measurement.connect(self.handleMeasurement) #Connecting to the measurement signal
 
         self.zapfunction = PatchclampSealTest_zap()
+        
         #----------------------------------------------------------------------
         #----------------------------------GUI---------------------------------
         #----------------------------------------------------------------------
-        self.setFixedHeight(700)
+        self.setMinimumSize(1020,1000)
         self.setWindowTitle("Patchclamp Seal Test")
         
         self.ICON_RED_LED = "./Icons/off.png"
@@ -314,10 +317,69 @@ class PatchclampSealTestUI(QWidget):
         self.plotLayout.addWidget(valueContainer, 2, 0, 1, 1)
         
         plotContainer.setLayout(self.plotLayout)
+        
+        #-----------------------------Snapshot view----------------------------
+        SnapshotContainer = QGroupBox()
+        SnapshotContainer.setMinimumHeight(600)
+        SnapshotContainer.setMinimumWidth(600)
+        SnapshotWidgetLayout = QGridLayout()
+        
+        SnapshotWidget = pg.ImageView()
+        
+        SnapshotWidget.ui.roiBtn.hide()
+        SnapshotWidget.ui.menuBtn.hide()
+        SnapshotWidget.ui.histogram.hide()
+        
+        SnapshotWidgetLayout.addWidget(SnapshotWidget)
+        SnapshotContainer.setLayout(SnapshotWidgetLayout)
+        
+        #--------------------------Automatic patching--------------------------
+        #----------------------------Console massage---------------------------
+        consoleContainer = StylishQT.roundQGroupBox(title="Automatic patch clamping")
+        consoleLayout = QGridLayout()
+        
+        console_text_edit = QTextEdit()
+        console_text_edit.setPlaceholderText('Follow the steps given here.')
+        consoleLayout.addWidget(console_text_edit, 1, 0, 1, 2)
+        
+        autopatchstartButton = StylishQT.runButton()
+        # autopatchstartButton.clicked.connect(lambda: self.measure_currentclamp())
+        consoleLayout.addWidget(autopatchstartButton, 0, 0)
+        
+        autopatchstopButton = StylishQT.stop_deleteButton()
+        autopatchstopButton.setEnabled(False)
+        # autopatchstopButton.clicked.connect(lambda: self.stopMeasurement_currentclamp())
+        consoleLayout.addWidget(autopatchstopButton, 0, 1)
+        
+        autopatchstartButton = StylishQT.runButton()
+        # autopatchstartButton.clicked.connect(lambda: self.measure_currentclamp())
+        consoleLayout.addWidget(autopatchstartButton, 0, 2)
+        
+        autopatchstartButton = StylishQT.runButton()
+        # autopatchstartButton.clicked.connect(lambda: self.measure_currentclamp())
+        consoleLayout.addWidget(autopatchstartButton, 0, 3)
+        
+        
+#         self.stage_left = QPushButton()
+#         self.stage_left.setStyleSheet("QPushButton {color:white;background-color: #FFCCE5;}"
+#                                       "QPushButton:hover:!pressed {color:white;background-color: #CCFFFF;}")
+#         self.stage_left.setToolTip("Click arrow to enable WASD keyboard control")
+#         self.stage_left.setFixedWidth(40)
+#         self.stage_left.setFixedHeight(40)
+#         self.stage_left.setIcon(QIcon('./Icons/LeftArrow.png'))
+#         self.stage_left.setIconSize(QSize(35,35))
+#         self.stagecontrolLayout.addWidget(self.stage_left, 2, 3)
+        
+        
+        
+        consoleContainer.setLayout(consoleLayout)
+        
         #---------------------------Adding to master---------------------------
-        master = QVBoxLayout()
-        master.addWidget(controlContainer)
-        master.addWidget(plotContainer)
+        master = QGridLayout()
+        master.addWidget(controlContainer, 0, 0, 1, 1)
+        master.addWidget(plotContainer, 1, 0, 1, 1)
+        master.addWidget(SnapshotContainer, 0, 1, 1, 1)
+        master.addWidget(consoleContainer, 1, 1, 1, 1)
         
         self.setLayout(master)
         
@@ -524,12 +586,14 @@ class PatchclampSealTestUI(QWidget):
         #constant = float(self.HoldingList.currentText()[0:3])
         #self.executer = execute_constant_vpatch(constant/1000*10)
         #print("Holding vm at "+str(constant)+' mV')
-    '''        
+        
     def closeEvent(self, event):
         """On closing the application we have to make sure that the measuremnt
         stops and the device gets freed."""
-        self.stopMeasurement()
-    '''       
+        # self.stopMeasurement()
+        QtWidgets.QApplication.quit()
+        event.accept()
+        
     def stop_hold_Measurement(self):
         """Stop the seal test."""
         self.holdTest.aboutToQuitHandler()
@@ -593,10 +657,6 @@ class PatchclampSealTestUI(QWidget):
         
         # save to file
         exporter.export(os.path.join(self.saving_dir, 'SealTest_' + "Rpip_" + self.pipette_resistance.text() + "Mohm_"+ self.patch_parameters + '.png'))       
-    
-    def closeEvent(self, event):
-        QtWidgets.QApplication.quit()
-        event.accept()
 
 
 if __name__ == "__main__":
@@ -606,6 +666,6 @@ if __name__ == "__main__":
         mainwin.show()
         app.exec_()
     
-    # Execute script from the same directory as Tupolev_v2.py
+    # Ensure that the Widget can be run either independently or as part of Tupolev.
     os.chdir(os.getcwd() + '\\..')
     run_app()
