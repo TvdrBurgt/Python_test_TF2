@@ -1380,6 +1380,8 @@ class CameraUI(QMainWindow):
         except:
             pass
         self.close()
+        QtWidgets.QApplication.quit()
+        event.accept()
 
         """
         # =============================================================================
