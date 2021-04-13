@@ -35,7 +35,7 @@ from PyQt5.QtWidgets import (QWidget, QButtonGroup, QLabel, QSlider, QSpinBox, Q
 import pyqtgraph as pg
 import StylishQT
 
-import PatchClamp.ui_patchclamp_sealtest
+import PatchClamp.ui_patchclamp # import PatchClamp.ui_patchclamp_sealtest
 import NIDAQ.WaveformWidget
 import GalvoWidget.PMTWidget
 import ImageAnalysis.AnalysisWidget
@@ -93,7 +93,7 @@ class Mainbody(QWidget):
         self.Camera_WidgetInstance = HamamatsuCam.HamamatsuUI.CameraUI()
         self.Galvo_WidgetInstance = GalvoWidget.PMTWidget.PMTWidgetUI()
         self.Waveformer_WidgetInstance = NIDAQ.WaveformWidget.WaveformGenerator()
-        self.PatchClamp_WidgetInstance = PatchClamp.ui_patchclamp_sealtest.PatchclampSealTestUI()
+        self.PatchClamp_WidgetInstance = PatchClamp.ui_patchclamp.AutomaticPatchclampUI() # self.PatchClamp_WidgetInstance = PatchClamp.ui_patchclamp_sealtest.PatchclampSealTestUI()
         self.Analysis_WidgetInstance = ImageAnalysis.AnalysisWidget.AnalysisWidgetUI()
         self.Coordinate_WidgetInstance = CoordinatesManager.CoordinateWidget2.CoordinatesWidgetUI()
         

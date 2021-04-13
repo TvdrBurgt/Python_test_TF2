@@ -17,7 +17,7 @@ import os
 # Ensure that the Widget can be run either independently or as part of Tupolev.
 if __name__ == "__main__":
     os.chdir(os.getcwd() + '\\..')
-    from HamamatsuCam.HamamatsuUI import CameraUI
+from HamamatsuCam.HamamatsuUI import CameraUI
 
 
 class AutomaticPatchclampUI(QWidget):
@@ -36,21 +36,23 @@ class AutomaticPatchclampUI(QWidget):
         #-----------------------------Snapshot view----------------------------
         snapshotContainer = QGroupBox()
         snapshotContainer.setMinimumSize(600, 600)
-        
         snapshotLayout = QGridLayout()
         
         #add a pyqt graphic and hide roi, menu, histogram
-        snapshotWidget = pg.ImageView()
-        snapshotWidget.ui.roiBtn.hide()
-        snapshotWidget.ui.menuBtn.hide()
-        snapshotWidget.ui.histogram.hide()
-        snapshotLayout.addWidget(snapshotWidget, 0, 0, 1, 1)
+        self.snapshotWidget = pg.ImageView()
+        self.snapshotWidget.ui.roiBtn.hide()
+        self.snapshotWidget.ui.menuBtn.hide()
+        self.snapshotWidget.ui.histogram.hide()
+        snapshotLayout.addWidget(self.snapshotWidget, 0, 0, 1, 1)
         
         #add a snapshot button
         request_camera_image_button = QPushButton("Snap image")
-        # request_camera_image_button.clicked.connect(lambda: self.request_SnapImg())      # is lambda necessary?
+        # request_camera_image_button.clicked.connect(lambda: self.request_SnapImg      # is lambda necessary?
         request_camera_image_button.clicked.connect(self.request_SnapImg)
         snapshotLayout.addWidget(request_camera_image_button, 1, 0, 1, 1)
+        
+        #update figure when new snapshot is made
+        CameraUI().output_signal_SnapImg.connect(self.updateimage)
         
         snapshotContainer.setLayout(snapshotLayout)
         
@@ -60,18 +62,21 @@ class AutomaticPatchclampUI(QWidget):
         
         self.setLayout(master)
         
+        
         #----------------------------------------------------------------------
         #-----------------------------End of GUI-------------------------------
         #----------------------------------------------------------------------
         
-        # CameraUI.output_signal_SnapImg.connect(self.updateimage)
         
-    # def updateimage(self,image):
-    #     pipetterecognition(image)
-        
+    def updateimage(self,image):
+        # pipetterecognition(image)
+        print('Refresh the image figure and do image analysis etc...')
+        self.snapshotWidget.getImageItem().setImage(image)
         
     def request_SnapImg(self):
-        self.sig_request_SnapImg.emit()
+        # self.sig_request_SnapImg.emit()
+        print('Asking Camera for a snap')
+        CameraUI().SnapImg()
     
     def closeEvent(self, event):
         """On closing the application we have to make sure that the console

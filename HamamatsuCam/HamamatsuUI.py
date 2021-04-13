@@ -32,6 +32,7 @@ if __name__ == "__main__":
     dname = os.path.dirname(abspath)
     os.chdir(dname+'/../')
 from HamamatsuCam.HamamatsuDCAM import *
+# from PatchClamp.ui_patchclamp import AutomaticPatchclampUI
 import StylishQT
 
 '''
@@ -676,6 +677,11 @@ class CameraUI(QMainWindow):
         MainWinCentralWidget.layout.addWidget(CameraAcquisitionContainer, 1, 0)
         
         """
+        ------------------------Autopatch signal connect-----------------------
+        """
+        # AutomaticPatchclampUI.sig_request_SnapImg.connect(self.SnapImg)
+        
+        """
         # =============================================================================
         # --------------------------------Live Screen----------------------------------
         #   Initiating an imageview object for the main Livescreen. Hiding the pre
@@ -716,6 +722,7 @@ class CameraUI(QMainWindow):
         #--------------------------------------------------------------END of GUI-----------------------------------------------------------------
         #=========================================================================================================================================
         """
+    
     
     def ConnectCamera(self):
         """
