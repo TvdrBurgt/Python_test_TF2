@@ -93,7 +93,7 @@ class Mainbody(QWidget):
         self.Camera_WidgetInstance = HamamatsuCam.HamamatsuUI.CameraUI()
         self.Galvo_WidgetInstance = GalvoWidget.PMTWidget.PMTWidgetUI()
         self.Waveformer_WidgetInstance = NIDAQ.WaveformWidget.WaveformGenerator()
-        self.PatchClamp_WidgetInstance = PatchClamp.ui_patchclamp.AutomaticPatchclampUI() # self.PatchClamp_WidgetInstance = PatchClamp.ui_patchclamp_sealtest.PatchclampSealTestUI()
+        self.PatchClamp_WidgetInstance = PatchClamp.patchclampwidget.PatchClampUI()
         self.Analysis_WidgetInstance = ImageAnalysis.AnalysisWidget.AnalysisWidgetUI()
         self.Coordinate_WidgetInstance = CoordinatesManager.CoordinateWidget2.CoordinatesWidgetUI()
         
