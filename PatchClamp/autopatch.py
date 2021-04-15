@@ -8,8 +8,6 @@ Created on Thu Apr 15 11:12:26 2021
 from HamamatsuCam.HamamatsuActuator import CamActuator
 from PI_ObjectiveMotor.focuser import PIMotor
 
-from ImageAnalysis.ImageProcessingAutopatch import DetectPipetteTips
-
 
 
 class AutomaticPatcher():

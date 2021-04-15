@@ -5,15 +5,16 @@ Created on Mon Apr 12 10:37:51 2021
 @author: tvdrb
 """
 
-import sys
 import os
+import sys
+import numpy as np
 
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QGroupBox
 import pyqtgraph.exporters
 import pyqtgraph as pg
 
-from PatchClamp.autopatch import AutoPatch
+from PatchClamp.autopatch import AutomaticPatcher
 
 
 # Ensure that the Widget can be run either independently or as part of Tupolev.
@@ -22,8 +23,6 @@ if __name__ == "__main__":
 
 
 class PatchClampUI(QWidget):
-    
-    
     
     def __init__(self, camera_handle = None, motor_handle = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -41,9 +40,8 @@ class PatchClampUI(QWidget):
         
         # Display to project snapshots
         self.snapshotWidget = pg.ImageView()
-        self.Live_item = self.snapshotWidget.getImageItem() #setLevels
-        self.Live_view = self.snapshotWidget.getView()
-        self.Live_item.setAutoDownsample(True)
+        self.view = self.snapshotWidget.getImageItem() #setLevels
+        self.view.setAutoDownsample(True)
         
         self.snapshotWidget.ui.roiBtn.hide()
         self.snapshotWidget.ui.menuBtn.hide()
@@ -74,10 +72,12 @@ class PatchClampUI(QWidget):
         #======================================================================
     
     def snapshot(self):
-        autopatch_instance = AutoPatch()
+        autopatch_instance = AutomaticPatcher()
         image = autopatch_instance.snap_image()
         
-        self.Live_item.setImage(image)
+        # Update display
+        self.view.setImage(image)
+        
     
     def localize_pipette(self):
         pass
@@ -95,7 +95,7 @@ class PatchClampUI(QWidget):
 if __name__ == "__main__":
     def run_app():
         app = QtWidgets.QApplication(sys.argv)
-        mainwin = AutomaticPatchclampUI()
+        mainwin = PatchClampUI()
         mainwin.show()
         app.exec_()
     run_app()

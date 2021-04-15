@@ -334,6 +334,9 @@ class PatchclampSealTestUI(QWidget):
         SnapshotContainer.setLayout(SnapshotWidgetLayout)
         
         #--------------------------Automatic patching--------------------------
+        cam_img_request_signal = pyqtSignal()
+        
+        
         #----------------------------Console massage---------------------------
         consoleContainer = StylishQT.roundQGroupBox(title="Automatic patch clamping")
         consoleLayout = QGridLayout()
