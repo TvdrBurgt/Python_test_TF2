@@ -5,9 +5,12 @@ Created on Thu Apr 15 11:12:26 2021
 @author: tvdrb
 """
 
+import numpy as np
+
 from HamamatsuCam.HamamatsuActuator import CamActuator
 from PI_ObjectiveMotor.focuser import PIMotor
 
+from ImageAnalysis.ImageProcessing_AutoPatch import PipetteTipDetector
 
 
 class AutomaticPatcher():
@@ -51,6 +54,50 @@ class AutomaticPatcher():
         snapped_image = self.HamamatsuCam_ins.SnapImage(exposure_time)
         
         return snapped_image
+    
+    def detect_pipette_tip(image):
+        UPPER_ANGLE = 97.5         # Only for first calibration
+        LOWER_ANGLE = 82.5         # Only for first calibration
+        PIPETTEDIAMETER = 16.5     # Only for first calibration
+    
+        # First round of pipette tip detection
+        x1, y1 = PipetteTipDetector.locate_tip(image,
+                                               UPPER_ANGLE,
+                                               LOWER_ANGLE,
+                                               PIPETTEDIAMETER,
+                                               blursize=15,
+                                               angle_range=10,
+                                               num_angles=1000,
+                                               num_peaks=8
+                                               )
+        
+        # Crop image
+        cropped_image, xref, yref, faultylocalisation = PipetteTipDetector.crop_image(image, x1, y1)
+        
+        # Second round of pipette tip detection
+        if not faultylocalisation:
+            x2, y2 = PipetteTipDetector.locate_tip(cropped_image,
+                                                  UPPER_ANGLE,
+                                                  LOWER_ANGLE,
+                                                  PIPETTEDIAMETER,
+                                                  blursize=4,
+                                                  angle_range=10,
+                                                  num_angles=5000,
+                                                  num_peaks=6
+                                                  )
+        else:
+            x2 = np.nan
+            y2 = np.nan
+        
+        # Adjusting x2 and y2 with the reference coordinates
+        x = xref + x2
+        y = yref + y2
+        
+        # Return pipette tip coordinates
+        print('Pipette tip detected @ (x,y) = (%f,%f)' % (x,y))
+        
+        return x, y
+        
     
     def focus_pipette(self):
         

@@ -7,19 +7,20 @@ Created on Mon Apr 12 10:37:51 2021
 
 import os
 import sys
-import numpy as np
 
 from PyQt5 import QtWidgets
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QGroupBox
+from PyQt5.QtGui import QPen
 import pyqtgraph.exporters
 import pyqtgraph as pg
 
-from PatchClamp.autopatch import AutomaticPatcher
-
+from skimage import io
 
 # Ensure that the Widget can be run either independently or as part of Tupolev.
 if __name__ == "__main__":
     os.chdir(os.getcwd() + '\\..')
+from PatchClamp.autopatch import AutomaticPatcher
 
 
 class PatchClampUI(QWidget):
@@ -40,7 +41,7 @@ class PatchClampUI(QWidget):
         
         # Display to project snapshots
         self.snapshotWidget = pg.ImageView()
-        self.view = self.snapshotWidget.getImageItem() #setLevels
+        self.view = self.snapshotWidget.getImageItem()
         self.view.setAutoDownsample(True)
         
         self.snapshotWidget.ui.roiBtn.hide()
@@ -54,9 +55,9 @@ class PatchClampUI(QWidget):
         snapshotLayout.addWidget(request_camera_image_button, 1, 0, 1, 1)
         
         # Button for detecting pipette tip
-        request_camera_image_button = QPushButton("Detect pipette tip")
-        request_camera_image_button.clicked.connect(self.localize_pipette)
-        snapshotLayout.addWidget(request_camera_image_button, 1, 1, 1, 1)
+        request_pipette_coordinates_button = QPushButton("Detect pipette tip")
+        request_pipette_coordinates_button.clicked.connect(self.localize_pipette)
+        snapshotLayout.addWidget(request_pipette_coordinates_button, 1, 1, 1, 1)
         
         snapshotContainer.setLayout(snapshotLayout)
         
@@ -73,13 +74,26 @@ class PatchClampUI(QWidget):
     
     def snapshot(self):
         autopatch_instance = AutomaticPatcher()
-        image = autopatch_instance.snap_image()
+        
+        try:
+            self.snap = autopatch_instance.snap_image()
+        except:
+            filepath = r"C:\Users\tvdrb\Desktop\Thijs\Translation space\focus 250 200 0.tif"
+            self.snap = io.imread(filepath)
         
         # Update display
-        self.view.setImage(image)
+        self.view.setImage(self.snap.T)
         
     
     def localize_pipette(self):
+        x, y = AutomaticPatcher.detect_pipette_tip(self.snap)
+        
+        # Draw a crosshair at pipette tip coordinates
+        pen = QPen(Qt.red, 0.1)
+        pen.setWidthF(5)
+        r = MyCrosshairOverlay(pos=(x, y), size=25, pen=pen, movable=False)
+        self.snapshotWidget.getView().addItem(r)
+        
         pass
     
     def closeEvent(self, event):
@@ -90,6 +104,14 @@ class PatchClampUI(QWidget):
         """
         QtWidgets.QApplication.quit()
         event.accept()
+
+
+class MyCrosshairOverlay(pg.CrosshairROI):
+    def __init__(self, pos=None, size=None, **kargs):
+        self._shape = None
+        pg.ROI.__init__(self, pos, size, **kargs)
+        self.sigRegionChanged.connect(self.invalidate)
+        self.aspectLocked = True
 
 
 if __name__ == "__main__":
