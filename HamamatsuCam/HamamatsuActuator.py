@@ -62,7 +62,7 @@ class CamActuator:
         #         Set default camera properties.
         # =====================================================================
         # self.dcam = ctypes.WinDLL(r'M:\tnw\ist\do\projects\Neurophotonics\Brinkslab\People\Xin Meng\Code\Python_test\HamamatsuCam\19_12\dcamapi.dll')
-        self.dcam = ctypes.WinDLL(os.getcwd() + '\\HamamatsuCam\\19_12\\dcamapi.dll')
+        self.dcam = ctypes.WinDLL('HamamatsuCam\\19_12\\dcamapi.dll')
 
         paraminit = DCAMAPI_INIT(0, 0, 0, 0, None, None) 
         paraminit.size = ctypes.sizeof(paraminit)
