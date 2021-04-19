@@ -51,7 +51,7 @@ class PatchClampUI(QWidget):
         
         # Button for making a snapshot
         request_camera_image_button = QPushButton("Snap image")
-        request_camera_image_button.clicked.connect(self.snapshot)
+        request_camera_image_button.clicked.connect(self.snap_shot)
         snapshotLayout.addWidget(request_camera_image_button, 1, 0, 1, 1)
         
         # Button for detecting pipette tip
@@ -72,7 +72,7 @@ class PatchClampUI(QWidget):
         #---------------------------- End of GUI ------------------------------
         #======================================================================
     
-    def snapshot(self):
+    def snap_shot(self):
         autopatch_instance = AutomaticPatcher()
         
         try:
@@ -82,7 +82,7 @@ class PatchClampUI(QWidget):
             self.snap = io.imread(filepath)
         
         # Update display
-        self.view.setImage(self.snap.T)
+        self.view.setImage(self.snap)
         
     
     def localize_pipette(self):
@@ -117,6 +117,7 @@ class MyCrosshairOverlay(pg.CrosshairROI):
 if __name__ == "__main__":
     def run_app():
         app = QtWidgets.QApplication(sys.argv)
+        pg.setConfigOptions(imageAxisOrder='row-major') #Transposes image in pg.ImageView()
         mainwin = PatchClampUI()
         mainwin.show()
         app.exec_()
