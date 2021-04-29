@@ -47,17 +47,22 @@ class PatchClampUI(QWidget):
         self.snapshotWidget.ui.roiBtn.hide()
         self.snapshotWidget.ui.menuBtn.hide()
         self.snapshotWidget.ui.histogram.hide()
-        snapshotLayout.addWidget(self.snapshotWidget, 0, 0, 1, 2)
+        snapshotLayout.addWidget(self.snapshotWidget, 0, 0, 1, 3)
+        
+        # Button for automatic focussing a pipette
+        request_autofocus_button = QPushButton("Autofocus pipette")
+        request_autofocus_button.clicked.connect(self.autofocus)
+        snapshotLayout.addWidget(request_autofocus_button, 1, 0, 1, 1)
         
         # Button for making a snapshot
         request_camera_image_button = QPushButton("Snap image")
         request_camera_image_button.clicked.connect(self.snap_shot)
-        snapshotLayout.addWidget(request_camera_image_button, 1, 0, 1, 1)
+        snapshotLayout.addWidget(request_camera_image_button, 1, 1, 1, 1)
         
         # Button for detecting pipette tip
         request_pipette_coordinates_button = QPushButton("Detect pipette tip")
         request_pipette_coordinates_button.clicked.connect(self.localize_pipette)
-        snapshotLayout.addWidget(request_pipette_coordinates_button, 1, 1, 1, 1)
+        snapshotLayout.addWidget(request_pipette_coordinates_button, 1, 2, 1, 1)
         
         snapshotContainer.setLayout(snapshotLayout)
         
@@ -71,6 +76,15 @@ class PatchClampUI(QWidget):
         #======================================================================
         #---------------------------- End of GUI ------------------------------
         #======================================================================
+        
+        
+    def autofocus(self):
+        autopatch_instance = AutomaticPatcher()
+        autopatch_instance.autofocus()
+        
+        # Update display
+        self.view.setImage(self.snap)
+        
     
     def snap_shot(self):
         autopatch_instance = AutomaticPatcher()
