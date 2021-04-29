@@ -25,7 +25,6 @@ class PipetteTipDetector:
             xpos        = x position of the pipette tip
             ypos        = y position of the pipette tip
         """
-        
         # Gaussian blur
         print('I)\t Gaussian blurring...')
         IB = filters.gaussian(I, blursize)
@@ -71,9 +70,7 @@ class PipetteTipDetector:
         deltax = (diameter*np.sin((angle1+angle2)/2))/(2*np.tan((angle1-angle2)/2))
         deltay = -(diameter*np.cos((angle1+angle2)/2))/(2*np.tan((angle1-angle2)/2))
         xpos = xpos - deltax
-        ypos = ypos - deltay    
-        print('dx = %.2f' % (deltax))
-        print('dy = %.2f' % (deltay))
+        ypos = ypos - deltay
         
         return xpos, ypos
     
@@ -82,7 +79,6 @@ class PipetteTipDetector:
         This functions crops the input figure around the coordinates from the
         first tip detection algorithm.
         """
-        
         # round pipette coordinates to integers
         xpos = np.round(xpos)
         ypos = np.round(ypos)
@@ -127,3 +123,36 @@ class PipetteTipDetector:
         
         return Icropped, x0, y0, faultylocalisation
 
+class PipetteAutofocus:
+    
+    def comp_Gaussian_kernel(size, fwhm = 3, center=None):
+        """ Make a square Gaussian kernel.
+        size is the length of a side of the square
+        fwhm is full-width-half-maximum, which
+        can be thought of as an effective radius.
+        """
+        x = np.arange(0, size, 1, float)
+        y = x[:,np.newaxis]
+        
+        if center is None:
+            x0 = y0 = size // 2
+        else:
+            x0 = center[0]
+            y0 = center[1]
+        
+        return np.exp(-4*np.log(2) * ((x-x0)**2 + (y-y0)**2) / fwhm**2)
+    
+    def comp_variance_of_Laplacian(img):
+        """
+        Computes a penalty score that is minimum for sharp images.
+        """
+        # average images
+        img_average = filters.gaussian(img, 4)
+        
+        # calculate laplacian
+        img_laplace = filters.laplace(img_average, 3)
+        
+        # calculate variance
+        penalty = np.var(img_laplace)
+        
+        return penalty
