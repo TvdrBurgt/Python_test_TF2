@@ -11,7 +11,7 @@ from HamamatsuCam.HamamatsuActuator import CamActuator
 from PI_ObjectiveMotor.focuser import PIMotor
 from PatchClamp import ScientificaPatchStar
 
-from ImageAnalysis.ImageProcessing_AutoPatch import PipetteTipDetector, PipetteAutofocus
+from PatchClamp.ImageProcessing_AutoPatch import PipetteTipDetector, PipetteAutofocus
 
 
 class AutomaticPatcher():
@@ -37,13 +37,12 @@ class AutomaticPatcher():
         super().__init__(*args, **kwargs)
         
         # Static parameter settings
-        self.exposure_time = 0.02   # in seconds
+        self.exposure_time = 0.02   # camera exposure time (in seconds)
         
         # Variable paramater settings that methods will update
         self.manipulator_position_absolute = [0, 0, 0]  # x,y,z in micrometers
         self.manipulator_position_relative = [0, 0, 0]  # x,y,z in micrometers
         self.objective_position = 0                     # z in micrometers/10
-        self.focus_penalty = 0                          # variance in pixel^2
         
         """
         #====================== Connect hardware devices ======================
@@ -99,82 +98,89 @@ class AutomaticPatcher():
         
         return snapped_image
         
-    def autofocus(self):
+    def autofocus_pipette(self):
         """ Focus pipette tip from above.
         
         This method bring the pipette tip into focus by approaching the focal
-        plane from above using the micromanipulator only. We assume a pre-
-        calibrated coordinate system and the pipette tip in the FOV center.
+        plane from above using the micromanipulator only. We start by moving
+        the pipette up to check the position relative to the focal plane as a
+        safety measure. Furthermore, we assume a pre-calibrated coordinate
+        system and the pipette tip in the FOV center.
         """
-        
-        # Step sizes to lower the micromanipulator with
-        stepsize = 10  # Step size in micrometers
+        # Parameters to vary
+        stepsize = 10  # initial stepsize (in micrometers)
+        margin = 0.95  # threshold for max values (percentage)
         
         # Construct Gaussian window
         I = self.snap_image()
         window = PipetteAutofocus.comp_Gaussian_kernel(size=I.shape[1], fwhm=I.shape[1]/4)
         
-        """"Step up three times and check position relative to the focus"""
+        """"Step up three times to compute penalties [p1,p2,p3]"""
         penalties = np.zeros(3)
-        for i in range(len(penalties)):
-            
-            # Capture image and apply Gaussian window
+        for i in range(3):
+            # Capture image
             I = self.snap_image()
+            
+            # Apply image window
             IW = I * window
             
             # Calculate out of focus penalty score
             penalties[i] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
             
             # Move pipette up
-            if i < len(penalties)-1:
+            if i < 2:
                 self.manipulator_position_relative(stepsize)
+            
+        """Continue finding the focal plane (offset)"""
+        while True:
+            # Find maximum, middle, and minimum penalty values
+            i_min, i_mdl, i_max = np.argsort(penalties)
+            p_min, p_mdl, p_max = np.sort(penalties)
+            
+            # Check which penalty is significant (maximum, minimum, none)
+            pinbool = np.zeros(3)
+            if margin*p_max > p_mdl:
+                pinbool[i_max] = 1
+            elif margin*p_max > p_min:
+                pinbool[i_max] = 1
+                pinbool[i_mdl] = 1
+            else:
+                pinbool = np.ones(3)
         
-        """"Continue finding the focus (offset)"""
-        if np.argmax(penalties) == 0:
-            # Focal plane is down
-            self.manipulator_position_relative(-(len(penalties)-1)*stepsize)
-            
-            while stepsize >= 0.1:
-                # Move pipette down
-                self.manipulator_position_relative(-stepsize)
-                
-                # Capture image and apply Gaussian window
-                I = self.snap_image()
-                IW = I * window
-                
-                # Calculate out of focus penalty score
-                penalties = np.roll(penalties, 1)
-                penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                
-                if np.argmax(penalties) == 0:
-                    pass
-                else:
-                    self.manipulator_position_relative(stepsize)
-                    stepsize = stepsize/10
-            
-        elif np.argmax(penalties) == 1:
-            # Focus plane is in between
-            pass
-            
-        else:
-            # Focal plane is above
-            pass
+        
+        """Final approach by sampling the entire peak"""
     
-    def move_focus(self, distance):
-        """
-        # =============================================================================
-        #         connect the Objective motor
-        # =============================================================================
-        """
-        print('----------------------Starting to connect the Objective motor-------------------------')
-        self.pi_device_instance = PIMotor()
-        print('Objective motor connected.')
-        self.initial_focus_position = self.pi_device_instance.pidevice.qPOS(self.pi_device_instance.pidevice.axes)['1']
-        print("init_focus_position : {}".format(self.initial_focus_position))
+    
+    def autofocus_helper(self, pinbool=[0,0,0]):
         
-        self.target_position = self.initial_focus_position + distance
         
-        self.pi_device_instance.move(self.target_position)
+        
+        
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    # def move_focus(self, distance):
+    #     """
+    #     # =============================================================================
+    #     #         connect the Objective motor
+    #     # =============================================================================
+    #     """
+    #     print('----------------------Starting to connect the Objective motor-------------------------')
+    #     self.pi_device_instance = PIMotor()
+    #     print('Objective motor connected.')
+    #     self.initial_focus_position = self.pi_device_instance.pidevice.qPOS(self.pi_device_instance.pidevice.axes)['1']
+    #     print("init_focus_position : {}".format(self.initial_focus_position))
+        
+    #     self.target_position = self.initial_focus_position + distance
+        
+    #     self.pi_device_instance.move(self.target_position)
     
     def detect_pipette_tip(image):
         UPPER_ANGLE = 97.5      #Only for first calibration
@@ -218,17 +224,6 @@ class AutomaticPatcher():
         print('Pipette tip detected @ (x,y) = (%f,%f)' % (x,y))
         
         return x, y
-    
-    def focus_pipette(self):
-        # step 1. localize pipette tip
-        # step 2. move tip to the center of FOV
-        # step 3. initiate focus finder
-        #           a. calculate out of focus penalty
-        penalty = PipetteAutofocus.comp_variance_of_Laplacian(self.snap_image())
-        print(penalty)
-        #           b. move pipette down
-        #           repeat until local maximum found
-        pass
         
     def calibrate_coordsys(self):
         """ Calibrate PatchStar coordinate system.

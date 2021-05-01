@@ -80,7 +80,7 @@ class PatchClampUI(QWidget):
         
     def autofocus(self):
         autopatch_instance = AutomaticPatcher()
-        autopatch_instance.autofocus()
+        autopatch_instance.autofocus_pipette()
         
         # Update display
         self.view.setImage(self.snap)
