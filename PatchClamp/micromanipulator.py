@@ -7,7 +7,7 @@ Created on Tue Feb 16 16:56:57 2021
 
 import serial
 
-class MicroManipulator:
+class ScientificaPatchStar:
     """
     This class is for controlling the Scientifica PatchStar micromanipulator.
     """
@@ -19,16 +19,22 @@ class MicroManipulator:
         self.CRending = '\r'
         
         # try out connection
-        with serial.Serial(self.port, self.baudrate, timeout=5) as patchstar:
-            patchstar.write('TYPE'.encode('ascii'))
-            response = patchstar.read()
-            # Read the remaining characters in the response buffer
-            buffersize = patchstar.in_waiting
-            response += patchstar.read_until(size=buffersize)
-        if response == '':
-            print('Scientifica device not found')
+        command = 'DESC' + self.CRending
+        with serial.Serial(self.port, self.baudrate, timeout=3) as patchstar:
+            # Encode the command to ascii and send to PatchStar
+            patchstar.write(command.encode('ascii'))
+            # Wait until all data is written
+            patchstar.flush()
+            # Read first character from PatchStar response
+            response = patchstar.read_until(self.CRending.encode('ascii'))
+            # Decodes response to utf-8
+            response = response.decode('utf-8')
+            # Strip off the carriage return
+            response = response.rstrip(self.CRending)
+        if response != '':
+            print('Scientifica device found: {}'.format(response))
         else:
-            print('Scientifica device found: {} (5 = PatchStar)'.format(response))
+            print('No Scientifica devices found')
         
     
     def stop(self):
@@ -43,12 +49,11 @@ class MicroManipulator:
             # Wait until all data is written
             patchstar.flush()
             # Read first character from PatchStar response
-            response = patchstar.read()
-            # Read the remaining characters in the response buffer
-            buffersize = patchstar.in_waiting
-            response += patchstar.read_until(size=buffersize)
+            response = patchstar.read_until(self.CRending.encode('ascii'))
             # Decodes response to utf-8
             response = response.decode('utf-8')
+            # Strip off the carriage return
+            response = response.rstrip(self.CRending)
             
         return response
     
@@ -72,12 +77,11 @@ class MicroManipulator:
             # Wait until all data is written
             patchstar.flush()
             # Read first character from PatchStar response
-            response = patchstar.read()
-            # Read the remaining characters in the response buffer
-            buffersize = patchstar.in_waiting
-            response += patchstar.read_until(size=buffersize)
+            response = patchstar.read_until(self.CRending.encode('ascii'))
             # Decodes response to utf-8
             response = response.decode('utf-8')
+            # Strip off the carriage return
+            response = response.rstrip(self.CRending)
             
         return response
     
@@ -95,14 +99,13 @@ class MicroManipulator:
             # Wait until all data is written
             patchstar.flush()
             # Read first character from PatchStar response
-            response = patchstar.read()
-            # Read the remaining characters in the response buffer
-            buffersize = patchstar.in_waiting
-            response += patchstar.read_until(size=buffersize)
+            response = patchstar.read_until(self.CRending.encode('ascii'))
             # Decodes response to utf-8
             response = response.decode('utf-8')
+            # Strip off the carriage return
+            response = response.rstrip(self.CRending)
             
-            [x, y, z] = response.split()
+            [x, y, z] = response.split('\t')
             
         return [float(x), float(y), float(z)]
         
@@ -120,12 +123,34 @@ class MicroManipulator:
             # Wait until all data is written
             patchstar.flush()
             # Read first character from PatchStar response
-            response = patchstar.read()
-            # Read the remaining characters in the response buffer
-            buffersize = patchstar.in_waiting
-            response += patchstar.read_until(size=buffersize)
+            response = patchstar.read_until(self.CRending.encode('ascii'))
             # Decodes response to utf-8
             response = response.decode('utf-8')
+            # Strip off the carriage return
+            response = response.rstrip(self.CRending)
+            
+        return response
+        
+    def moveRel(self, x=0, y=0, z=0):
+        """
+        Moves the patchstar relative to the current position, example:
+            Send: REL 100 26 3
+            Response: A (if move allowed else E) but it is always allowed, it
+            just moves to the edge...
+        """
+        command = "ABS %d %d %d" % (x,y,z) + self.CRending
+        
+        with serial.Serial(self.port, self.baudrate) as patchstar:
+            # Encode the command to ascii and send to PatchStar
+            patchstar.write(command.encode('ascii'))
+            # Wait until all data is written
+            patchstar.flush()
+            # Read first character from PatchStar response
+            response = patchstar.read_until(self.CRending.encode('ascii'))
+            # Decodes response to utf-8
+            response = response.decode('utf-8')
+            # Strip off the carriage return
+            response = response.rstrip(self.CRending)
             
         return response
     
@@ -144,12 +169,11 @@ class MicroManipulator:
             # Wait until all data is written
             patchstar.flush()
             # Read first character from PatchStar response
-            response = patchstar.read()
-            # Read the remaining characters in the response buffer
-            buffersize = patchstar.in_waiting
-            response += patchstar.read_until(size=buffersize)
+            response = patchstar.read_until(self.CRending.encode('ascii'))
             # Decodes response to utf-8
             response = response.decode('utf-8')
+            # Strip off the carriage return
+            response = response.rstrip(self.CRending)
             
         return response
         
@@ -167,64 +191,19 @@ class MicroManipulator:
             # Wait until all data is written
             patchstar.flush()
             # Read first character from PatchStar response
-            response = patchstar.read()
-            # Read the remaining characters in the response buffer
-            buffersize = patchstar.in_waiting
-            response += patchstar.read_until(size=buffersize)
+            response = patchstar.read_until(self.CRending.encode('ascii'))
             # Decodes response to utf-8
             response = response.decode('utf-8')
+            # Strip off the carriage return
+            response = response.rstrip(self.CRending)
             
             print('Send: {}'.format(command))
             print('Response: {}'.format(response))
-        
-    def getApproachAngle(self):
-        """
-        Return the angle being used to determine the approach axis, example:
-            Send: ANGLE
-            Response: 24
-        """
-        command = 'ANGLE' + self.CRending
-        
-        with serial.Serial(self.port, self.baudrate) as patchstar:
-            # Encode the command to ascii and send to PatchStar
-            patchstar.write(command.encode('ascii'))
-            # Wait until all data is written
-            patchstar.flush()
-            # Read first character from PatchStar response
-            response = patchstar.read()
-            # Read the remaining characters in the response buffer
-            buffersize = patchstar.in_waiting
-            response += patchstar.read_until(size=buffersize)
-            # Decodes response to utf-8
-            response = response.decode('utf-8')
-            
-        return response
-        
-    def setApproachAngle(self, a=0):
-        """
-        Sets the angle in degrees of the approach axis, example:
-            Send: ANGLE 24
-            Response: A (if set allowed else E)
-        """
-        command = 'ANGLE %d' % a + self.CRending
-        
-        with serial.Serial(self.port, self.baudrate) as patchstar:
-            # Encode the command to ascii and send to PatchStar
-            patchstar.write(command.encode('ascii'))
-            # Wait until all data is written
-            patchstar.flush()
-            # Read first character from PatchStar response
-            response = patchstar.read()
-            # Read the remaining characters in the response buffer
-            buffersize = patchstar.in_waiting
-            response += patchstar.read_until(size=buffersize)
-            # Decodes response to utf-8
-            response = response.decode('utf-8')
-            
-        return response
 
 if __name__ == '__main__':
-    patchstar = MicroManipulator('COM16')
-    # patchstar.getPos()
-    # patchstar.moveAbsZ(0)
-    # patchstar.echoLine()
+    manipulator = ScientificaPatchStar('COM16')
+    # manipulator.getPos()
+    # manipulator.moveAbsZ(0)
+    # manipulator.echoLine()
+    
+    

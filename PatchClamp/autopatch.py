@@ -5,11 +5,15 @@ Created on Thu Apr 15 11:12:26 2021
 @author: tvdrb
 """
 
+import os
 import numpy as np
 
+# Ensure that the Widget can be run either independently or as part of Tupolev.
+if __name__ == "__main__":
+    os.chdir(os.getcwd() + '\\..')
 from HamamatsuCam.HamamatsuActuator import CamActuator
 from PI_ObjectiveMotor.focuser import PIMotor
-from PatchClamp import ScientificaPatchStar
+from PatchClamp.micromanipulator import ScientificaPatchStar
 
 from PatchClamp.ImageProcessing_AutoPatch import PipetteTipDetector, PipetteAutofocus
 
@@ -34,7 +38,7 @@ class AutomaticPatcher():
         None.
         
         """
-        super().__init__(*args, **kwargs)
+        # super().__init__(*args, **kwargs)
         
         # Static parameter settings
         self.exposure_time = 0.02   # camera exposure time (in seconds)
@@ -48,7 +52,7 @@ class AutomaticPatcher():
         #====================== Connect hardware devices ======================
         """
         # Create a camera instance if the handle is not provided.
-        print('Connecting camera')
+        print('Connecting camera...')
         if camera_handle == None:
             self.hamamatsu_cam_instance = CamActuator()
             self.hamamatsu_cam_instance.initializeCamera()
@@ -56,23 +60,23 @@ class AutomaticPatcher():
             self.hamamatsu_cam_instance = camera_handle
         
         # Create an objective motor instance if the handle is not provided.
-        print('Connecting objective motor')
+        print('Connecting objective motor...')
         if motor_handle == None:
             self.pi_device_instance = PIMotor()
         else:
             self.pi_device_instance = motor_handle
-            
+        
         # Create a micromanipulator instance if the handle is not provided.
-        print('Initiating micromanipulator')
+        print('Connecting micromanipulator...')
         if micromanipulator_handle == None:
-            self.scientifica_device_instance = ScientificaPatchStar()
+            self.micromanipulator_instance = ScientificaPatchStar()
         else:
-            self.scientifica_device_instance = micromanipulator_handle
+            self.micromanipulator_instance = micromanipulator_handle
         
         """
         #==================== Get hardware device settings ====================
         """
-        self.manipulator_position_absolute = self.scientifica_device_instance.getPos()
+        self.manipulator_position_absolute = self.micromanipulator_instance.getPos()
         self.objective_position = self.pi_device_instance.GetCurrentPos()
         
     
@@ -129,7 +133,7 @@ class AutomaticPatcher():
             
             # Move pipette up
             if i < 2:
-                self.manipulator_position_relative(stepsize)
+                self.micromanipulator_instance.moveRel(stepsize)
             
         """Continue finding the focal plane (offset)"""
         while True:
@@ -152,29 +156,9 @@ class AutomaticPatcher():
     
     
     def autofocus_helper(self, pinbool=[0,0,0]):
-        
-        
-        
-        
-    
-    
-    
-    
-    
-    
-    
-    
-    
+        pass
     
     # def move_focus(self, distance):
-    #     """
-    #     # =============================================================================
-    #     #         connect the Objective motor
-    #     # =============================================================================
-    #     """
-    #     print('----------------------Starting to connect the Objective motor-------------------------')
-    #     self.pi_device_instance = PIMotor()
-    #     print('Objective motor connected.')
     #     self.initial_focus_position = self.pi_device_instance.pidevice.qPOS(self.pi_device_instance.pidevice.axes)['1']
     #     print("init_focus_position : {}".format(self.initial_focus_position))
         
@@ -235,3 +219,6 @@ class AutomaticPatcher():
         pass
     
         
+if __name__ == "__main__":
+    instance = AutomaticPatcher()
+    
