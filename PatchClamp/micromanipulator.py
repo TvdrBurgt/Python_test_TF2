@@ -25,7 +25,7 @@ class ScientificaPatchStar:
             patchstar.write(command.encode('ascii'))
             # Wait until all data is written
             patchstar.flush()
-            # Read first character from PatchStar response
+            # Read PatchStar response until carriage return
             response = patchstar.read_until(self.CRending.encode('ascii'))
             # Decodes response to utf-8
             response = response.decode('utf-8')
@@ -48,7 +48,7 @@ class ScientificaPatchStar:
             patchstar.write(command.encode('ascii'))
             # Wait until all data is written
             patchstar.flush()
-            # Read first character from PatchStar response
+            # Read PatchStar response until carriage return
             response = patchstar.read_until(self.CRending.encode('ascii'))
             # Decodes response to utf-8
             response = response.decode('utf-8')
@@ -76,7 +76,7 @@ class ScientificaPatchStar:
             patchstar.write(command.encode('ascii'))
             # Wait until all data is written
             patchstar.flush()
-            # Read first character from PatchStar response
+            # Read PatchStar response until carriage return
             response = patchstar.read_until(self.CRending.encode('ascii'))
             # Decodes response to utf-8
             response = response.decode('utf-8')
@@ -98,7 +98,7 @@ class ScientificaPatchStar:
             patchstar.write(command.encode('ascii'))
             # Wait until all data is written
             patchstar.flush()
-            # Read first character from PatchStar response
+            # Read PatchStar response until carriage return
             response = patchstar.read_until(self.CRending.encode('ascii'))
             # Decodes response to utf-8
             response = response.decode('utf-8')
@@ -122,7 +122,7 @@ class ScientificaPatchStar:
             patchstar.write(command.encode('ascii'))
             # Wait until all data is written
             patchstar.flush()
-            # Read first character from PatchStar response
+            # Read PatchStar response until carriage return
             response = patchstar.read_until(self.CRending.encode('ascii'))
             # Decodes response to utf-8
             response = response.decode('utf-8')
@@ -145,7 +145,7 @@ class ScientificaPatchStar:
             patchstar.write(command.encode('ascii'))
             # Wait until all data is written
             patchstar.flush()
-            # Read first character from PatchStar response
+            # Read PatchStar response until carriage return
             response = patchstar.read_until(self.CRending.encode('ascii'))
             # Decodes response to utf-8
             response = response.decode('utf-8')
@@ -168,7 +168,7 @@ class ScientificaPatchStar:
             patchstar.write(command.encode('ascii'))
             # Wait until all data is written
             patchstar.flush()
-            # Read first character from PatchStar response
+            # Read PatchStar response until carriage return
             response = patchstar.read_until(self.CRending.encode('ascii'))
             # Decodes response to utf-8
             response = response.decode('utf-8')
@@ -190,7 +190,7 @@ class ScientificaPatchStar:
             patchstar.write(command.encode('ascii'))
             # Wait until all data is written
             patchstar.flush()
-            # Read first character from PatchStar response
+            # Read PatchStar response until carriage return
             response = patchstar.read_until(self.CRending.encode('ascii'))
             # Decodes response to utf-8
             response = response.decode('utf-8')
@@ -203,7 +203,6 @@ class ScientificaPatchStar:
 if __name__ == '__main__':
     manipulator = ScientificaPatchStar('COM16')
     # manipulator.getPos()
-    # manipulator.moveAbsZ(0)
     # manipulator.echoLine()
     
     
