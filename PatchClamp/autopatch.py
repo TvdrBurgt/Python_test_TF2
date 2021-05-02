@@ -112,14 +112,19 @@ class AutomaticPatcher():
         system and the pipette tip in the FOV center.
         """
         # Parameters to vary
-        stepsize = 10  # initial stepsize (in micrometers)
-        margin = 0.95  # threshold for max values (percentage)
+        focusprecision = 0.01   # focal plane finding precision (micrometers)
+        optimalstepsize = 10    # peak recognizing step size (micrometers)
+        margin = 0.95           # threshold for max values (percentage)
         
         # Construct Gaussian window
         I = self.snap_image()
         window = PipetteAutofocus.comp_Gaussian_kernel(size=I.shape[1], fwhm=I.shape[1]/4)
         
+        # Save current pipette position
+        reference = self.micromanipulator_instance.getPos()[2]
+        
         """"Step up three times to compute penalties [p1,p2,p3]"""
+        print('Step up three times')
         penalties = np.zeros(3)
         for i in range(3):
             # Capture image
@@ -133,16 +138,19 @@ class AutomaticPatcher():
             
             # Move pipette up
             if i < 2:
-                self.micromanipulator_instance.moveRel(stepsize)
+                self.micromanipulator_instance.moveRel(optimalstepsize)
             
-        """Continue finding the focal plane (offset)"""
-        while True:
+        """Iteratively find peak in focus penalty values"""
+        stepsize = optimalstepsize
+        stepsizemin = optimalstepsize/4
+        stepsizemax = optimalstepsize*4
+        pinbool = np.zeros(3)
+        while pinbool != [0,1,0]:
             # Find maximum, middle, and minimum penalty values
             i_min, i_mdl, i_max = np.argsort(penalties)
             p_min, p_mdl, p_max = np.sort(penalties)
             
             # Check which penalty is significant (maximum, minimum, none)
-            pinbool = np.zeros(3)
             if margin*p_max > p_mdl:
                 pinbool[i_max] = 1
             elif margin*p_max > p_min:
@@ -150,13 +158,158 @@ class AutomaticPatcher():
                 pinbool[i_mdl] = 1
             else:
                 pinbool = np.ones(3)
+            
+            print(pinbool)
+            
+            # Move micromanipulator towards local maximum through (7 modes)
+            if pinbool == [0,1,0]:
+                pass
+            elif pinbool == [1,0,1]:
+                self.micromanipulator_instance.moveAbs(reference-stepsize)
+                I = self.snap_image()
+                IW = I * window
+                penalties[1] = penalties[0]
+                penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
+                reference = reference - stepsize
+            elif pinbool == [1,0,0]:
+                if stepsize > optimalstepsize:
+                    stepsize = stepsize/2
+                    penalties[1] = penalties[0]
+                    self.micromanipulator_instance.moveAbs(reference+stepsize)
+                    I = self.snap_image()
+                    IW = I * window
+                    penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
+                    self.micromanipulator_instance.moveAbs(reference-stepsize)
+                    I = self.snap_image()
+                    IW = I * window
+                    penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
+                    reference = reference - stepsize
+                elif stepsize < optimalstepsize:
+                    stepsize = stepsize*2
+                    penalties[1] = penalties[0]
+                    self.micromanipulator_instance.moveAbs(reference-stepsize)
+                    I = self.snap_image()
+                    IW = I * window
+                    penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
+                    reference = reference - stepsize
+                else:
+                    penalties = np.roll(penalties,1)
+                    self.micromanipulator_instance.moveAbs(reference-stepsize)
+                    I = self.snap_image()
+                    IW = I * window
+                    penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
+                    reference = reference - stepsize
+            elif pinbool == [0,0,1]:
+                if stepsize > optimalstepsize:
+                    stepsize = stepsize/2
+                    penalties[1] = penalties[2]
+                    self.micromanipulator_instance.moveAbs(reference+3*stepsize)
+                    I = self.snap_image()
+                    IW = I * window
+                    penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
+                    self.micromanipulator_instance.moveAbs(reference+5*stepsize)
+                    I = self.snap_image()
+                    IW = I * window
+                    penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
+                    reference = reference + 3*stepsize
+                elif stepsize < optimalstepsize:
+                    stepsize = stepsize*2
+                    penalties[1] = penalties[2]
+                    self.micromanipulator_instance.moveAbs(reference+2*stepsize)
+                    I = self.snap_image()
+                    IW = I * window
+                    penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
+                    reference = reference
+                else:
+                    penalties = np.roll(penalties,-1)
+                    self.micromanipulator_instance.moveAbs(reference+3*stepsize)
+                    I = self.snap_image()
+                    IW = I * window
+                    penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
+                    reference = reference + stepsize
+            elif pinbool == [1,1,0]:
+                if stepsize == stepsizemin:
+                    penalties = np.roll(penalties,1)
+                    self.micromanipulator_instance.moveAbs(reference-stepsize)
+                    I = self.snap_image()
+                    IW = I * window
+                    penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
+                    reference = reference - stepsize
+                else:
+                    stepsize = stepsize/2
+                    penalties[1] = penalties[0]
+                    self.micromanipulator_instance.moveAbs(reference+stepsize)
+                    I = self.snap_image()
+                    IW = I * window
+                    penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
+                    self.micromanipulator_instance.moveAbs(reference-stepsize)
+                    I = self.snap_image()
+                    IW = I * window
+                    penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
+                    reference = reference - stepsize
+            elif pinbool == [0,1,1]:
+                if stepsize == stepsizemin:
+                    penalties = np.roll(penalties,-1)
+                    self.micromanipulator_instance.moveAbs(reference+3*stepsize)
+                    I = self.snap_image()
+                    IW = I * window
+                    penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
+                    reference = reference + stepsize
+                else:
+                    stepsize = stepsize/2
+                    penalties[1] = penalties[2]
+                    self.micromanipulator_instance.moveAbs(reference+3*stepsize)
+                    I = self.snap_image()
+                    IW = I * window
+                    penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
+                    self.micromanipulator_instance.moveAbs(reference+5*stepsize)
+                    I = self.snap_image()
+                    IW = I * window
+                    penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
+                    reference = reference + 3*stepsize
+            elif pinbool == [1,1,1]:
+                if stepsize == stepsizemax:
+                    penalties = np.roll(penalties,1)
+                    self.micromanipulator_instance.moveAbs(reference-stepsize)
+                    I = self.snap_image()
+                    IW = I * window
+                    penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
+                    reference = reference - stepsize
+                else:
+                    stepsize = 2*stepsize
+                    self.micromanipulator_instance.moveAbs(reference-stepsize)
+                    I = self.snap_image()
+                    IW = I * window
+                    penalties[1] = penalties[0]
+                    penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
+                    reference = reference - stepsize
         
+        """Final approach by sampling between the zeros in [0,1,0]"""
+        while stepsize > focusprecision:
+            # Sample ten points between outer penalty values
+            penalties = np.zeros(11)
+            positions = np.linspace(reference, reference+2*stepsize, 11)
+            for idx, pos in enumerate(positions):
+                self.micromanipulator_instance.moveAbs(pos)
+                I = self.snap_image()
+                IW = I * window
+                penalties[idx] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
+            
+            # Locate maximum penalty value
+            i_max = penalties.argmax()
+            
+            # Decrease step size
+            stepsize = stepsize/5
+            
+            # Set reference position one step below maximum penalty position
+            reference = positions[i_max] - stepsize
         
-        """Final approach by sampling the entire peak"""
+        print('Focus offset found!')
+                
+                
     
     
-    def autofocus_helper(self, pinbool=[0,0,0]):
-        pass
+    
     
     # def move_focus(self, distance):
     #     self.initial_focus_position = self.pi_device_instance.pidevice.qPOS(self.pi_device_instance.pidevice.axes)['1']
