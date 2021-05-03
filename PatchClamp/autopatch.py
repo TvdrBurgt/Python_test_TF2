@@ -20,7 +20,7 @@ from PatchClamp.ImageProcessing_AutoPatch import PipetteTipDetector, PipetteAuto
 
 class AutomaticPatcher():
     
-    def __init__(self, camera_handle = None, motor_handle = None, \
+    def __init__(self, imageview_handle, camera_handle = None, motor_handle = None, \
                  micromanipulator_handle = None, *args, **kwargs):
         """
         
@@ -39,6 +39,8 @@ class AutomaticPatcher():
         
         """
         # super().__init__(*args, **kwargs)
+        
+        self.imageview = imageview_handle
         
         # Static parameter settings
         self.exposure_time = 0.02   # camera exposure time (in seconds)
@@ -96,9 +98,11 @@ class AutomaticPatcher():
             pass
         
     def snap_image(self):
+        # Snap image with camera instance
         snapped_image = self.HamamatsuCam_instance.SnapImage(self.exposure_time)
         
-        # Update figure...
+        # Display the newly snapped image
+        self.imageview.setImage(snapped_image)
         
         return snapped_image
         
@@ -362,7 +366,11 @@ class AutomaticPatcher():
         
     #     self.pi_device_instance.move(self.target_position)
     
-    def detect_pipette_tip(image):
+    def detect_pipette_tip(self):
+        
+        # Snap image
+        image = self.snap_image()
+        
         UPPER_ANGLE = 97.5      #Only for first calibration
         LOWER_ANGLE = 82.5      #Only for first calibration
         PIPETTEDIAMETER = 16.5  #Only for first calibration

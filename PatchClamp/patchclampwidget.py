@@ -8,14 +8,14 @@ Created on Mon Apr 12 10:37:51 2021
 import os
 import sys
 
+import threading
+
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QGroupBox
 from PyQt5.QtGui import QPen
 import pyqtgraph.exporters
 import pyqtgraph as pg
-
-from skimage import io
 
 # Ensure that the Widget can be run either independently or as part of Tupolev.
 if __name__ == "__main__":
@@ -77,30 +77,23 @@ class PatchClampUI(QWidget):
         #---------------------------- End of GUI ------------------------------
         #======================================================================
         
+        # Fire up backend
+        self.autopatch_instance = AutomaticPatcher(imageview_handle=self.view)
+        
         
     def autofocus(self):
-        autopatch_instance = AutomaticPatcher()
-        autopatch_instance.autofocus_pipette()
+        self.autopatch_instance.autofocus_pipette()
         
         # Update display
         self.view.setImage(self.snap)
         
-    
     def snap_shot(self):
-        autopatch_instance = AutomaticPatcher()
-        
-        try:
-            self.snap = autopatch_instance.snap_image()
-        except:
-            filepath = r"C:\Users\tvdrb\Desktop\Thijs\Translation space\focus 250 200 0.tif"
-            self.snap = io.imread(filepath)
-        
-        # Update display
-        self.view.setImage(self.snap)
+        # snap image and update the view
+        self.autopatch_instance.snap_image()
         
     
     def localize_pipette(self):
-        x, y = AutomaticPatcher.detect_pipette_tip(self.snap)
+        x, y = self.autopatch_instance.detect_pipette_tip()
         
         # Draw a crosshair at pipette tip coordinates
         pen = QPen(Qt.red, 0.1)
@@ -109,6 +102,12 @@ class PatchClampUI(QWidget):
         self.snapshotWidget.getView().addItem(r)
         
         pass
+    
+    def run_in_thread(self, fn, *args, **kwargs):
+        thread = threading.Thread(target=fn, args=args, kwargs=kwargs)
+        thread.start()
+        
+        return thread
     
     def closeEvent(self, event):
         """ Interupts widget processes
