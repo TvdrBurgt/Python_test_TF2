@@ -725,8 +725,7 @@ class CameraUI(QMainWindow):
         #         Load dcamapi.dll version: 19.12.641.5901
         # =============================================================================
         """
-        # dcam = ctypes.WinDLL(r'M:\tnw\ist\do\projects\Neurophotonics\Brinkslab\People\Xin Meng\Code\Python_test\HamamatsuCam\19_12\dcamapi.dll')
-        dcam = ctypes.WinDLL('HamamatsuCam\\19_12\\dcamapi.dll')
+        dcam = ctypes.WinDLL(r'M:\tnw\ist\do\projects\Neurophotonics\Brinkslab\People\Xin Meng\Code\Python_test\HamamatsuCam\19_12\dcamapi.dll')
         
         paraminit = DCAMAPI_INIT(0, 0, 0, 0, None, None) 
         paraminit.size = ctypes.sizeof(paraminit)

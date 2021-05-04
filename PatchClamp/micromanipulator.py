@@ -11,10 +11,11 @@ class ScientificaPatchStar:
     """
     This class is for controlling the Scientifica PatchStar micromanipulator.
     """
-    def __init__(self, address):
+    def __init__(self, address='COM16', baudrate=38400):
         # Serial settings
         self.port = address
-        self.baudrate = 38400   #Either 9600 or 38400
+        self.baudrate = baudrate   #Either 9600 or 38400
+        
         # Additional settings
         self.CRending = '\r'
         

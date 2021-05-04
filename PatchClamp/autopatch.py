@@ -38,9 +38,6 @@ class AutomaticPatcher():
         None.
         
         """
-        # super().__init__(*args, **kwargs)
-        
-        self.imageview = imageview_handle
         
         # Static parameter settings
         self.exposure_time = 0.02   # camera exposure time (in seconds)
@@ -85,7 +82,7 @@ class AutomaticPatcher():
     def disconnect_devices(self):
         # Disconnect camera
         try:
-            self.HamamatsuCam_instance.Exit()
+            self.hamamatsu_cam_instance.Exit()
             print('Camera disconnected.')
         except:
             pass
@@ -99,7 +96,7 @@ class AutomaticPatcher():
         
     def snap_image(self):
         # Snap image with camera instance
-        snapped_image = self.HamamatsuCam_instance.SnapImage(self.exposure_time)
+        snapped_image = self.hamamatsu_cam_instance.SnapImage(self.exposure_time)
         
         # Display the newly snapped image
         self.imageview.setImage(snapped_image)
@@ -132,7 +129,7 @@ class AutomaticPatcher():
         penaltyhistory = np.zeros(3)
         
         """"Step up three times to compute penalties [p1,p2,p3]"""
-        print('Step up three times')
+        print('Step up two times')
         penalties = np.zeros(3)
         for i in range(3):
             # Capture image
@@ -150,6 +147,7 @@ class AutomaticPatcher():
             
             # Move pipette up
             if i < 2:
+                print('step up')
                 self.micromanipulator_instance.moveAbs(reference+(i+1)*optimalstepsize)
             
         """Iteratively find peak in focus penalty values"""
@@ -165,18 +163,24 @@ class AutomaticPatcher():
             # Check which penalty is significant (maximum, minimum, none)
             if margin*p_max > p_mdl:
                 pinbool[i_max] = 1
+                pinbool[i_mdl] = 0
+                pinbool[i_min] = 0
             elif margin*p_max > p_min:
                 pinbool[i_max] = 1
                 pinbool[i_mdl] = 1
+                pinbool[i_min] = 0
             else:
-                pinbool = np.ones(3)
-            
+                pinbool[i_max] = 1
+                pinbool[i_mdl] = 1
+                pinbool[i_min] = 1
+                
             print(pinbool)
+            print(reference)
             
             # Move micromanipulator towards local maximum through (7 modes)
-            if pinbool == [0,1,0]:
+            if np.array_equal(pinbool, [0,1,0]):
                 pass
-            elif pinbool == [1,0,1]:
+            elif np.array_equal(pinbool, [1,0,1]):
                 self.micromanipulator_instance.moveAbs(reference-stepsize)
                 I = self.snap_image()
                 IW = I * window
@@ -185,7 +189,7 @@ class AutomaticPatcher():
                 positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
                 penaltyhistory = np.append(penaltyhistory, penalties[0])
                 reference = reference - stepsize
-            elif pinbool == [1,0,0]:
+            elif np.array_equal(pinbool, [1,0,0]):
                 if stepsize > optimalstepsize:
                     stepsize = stepsize/2
                     penalties[1] = penalties[0]
@@ -221,7 +225,7 @@ class AutomaticPatcher():
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     reference = reference - stepsize
-            elif pinbool == [0,0,1]:
+            elif np.array_equal(pinbool, [0,0,1]):
                 if stepsize > optimalstepsize:
                     stepsize = stepsize/2
                     penalties[1] = penalties[2]
@@ -257,7 +261,7 @@ class AutomaticPatcher():
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
                     reference = reference + stepsize
-            elif pinbool == [1,1,0]:
+            elif np.array_equal(pinbool, [1,1,0]):
                 if stepsize == stepsizemin:
                     penalties = np.roll(penalties,1)
                     self.micromanipulator_instance.moveAbs(reference-stepsize)
@@ -283,7 +287,7 @@ class AutomaticPatcher():
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     reference = reference - stepsize
-            elif pinbool == [0,1,1]:
+            elif np.array_equal(pinbool, [0,1,1]):
                 if stepsize == stepsizemin:
                     penalties = np.roll(penalties,-1)
                     self.micromanipulator_instance.moveAbs(reference+3*stepsize)
@@ -309,7 +313,7 @@ class AutomaticPatcher():
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
                     reference = reference + 3*stepsize
-            elif pinbool == [1,1,1]:
+            elif np.array_equal(pinbool, [1,1,1]):
                 if stepsize == stepsizemax:
                     penalties = np.roll(penalties,1)
                     self.micromanipulator_instance.moveAbs(reference-stepsize)
@@ -331,6 +335,7 @@ class AutomaticPatcher():
                     reference = reference - stepsize
         
         """Final approach by sampling between the zeros in [0,1,0]"""
+        print('Coarse focus found, continue with finetuning')
         while stepsize > focusprecision:
             # Sample ten points between outer penalty values
             penalties = np.zeros(11)
