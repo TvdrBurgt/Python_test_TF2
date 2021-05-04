@@ -148,7 +148,7 @@ class AutomaticPatcher():
             # Move pipette up
             if i < 2:
                 print('step up')
-                self.micromanipulator_instance.moveAbs(reference+(i+1)*optimalstepsize)
+                self.micromanipulator_instance.moveAbsZ(reference+(i+1)*optimalstepsize)
             
         """Iteratively find peak in focus penalty values"""
         stepsize = optimalstepsize
@@ -181,7 +181,7 @@ class AutomaticPatcher():
             if np.array_equal(pinbool, [0,1,0]):
                 pass
             elif np.array_equal(pinbool, [1,0,1]):
-                self.micromanipulator_instance.moveAbs(reference-stepsize)
+                self.micromanipulator_instance.moveAbsZ(reference-stepsize)
                 I = self.snap_image()
                 IW = I * window
                 penalties[1] = penalties[0]
@@ -193,13 +193,13 @@ class AutomaticPatcher():
                 if stepsize > optimalstepsize:
                     stepsize = stepsize/2
                     penalties[1] = penalties[0]
-                    self.micromanipulator_instance.moveAbs(reference+stepsize)
+                    self.micromanipulator_instance.moveAbsZ(reference+stepsize)
                     I = self.snap_image()
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
-                    self.micromanipulator_instance.moveAbs(reference-stepsize)
+                    self.micromanipulator_instance.moveAbsZ(reference-stepsize)
                     I = self.snap_image()
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -209,7 +209,7 @@ class AutomaticPatcher():
                 elif stepsize < optimalstepsize:
                     stepsize = stepsize*2
                     penalties[1] = penalties[0]
-                    self.micromanipulator_instance.moveAbs(reference-stepsize)
+                    self.micromanipulator_instance.moveAbsZ(reference-stepsize)
                     I = self.snap_image()
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -218,7 +218,7 @@ class AutomaticPatcher():
                     reference = reference - stepsize
                 else:
                     penalties = np.roll(penalties,1)
-                    self.micromanipulator_instance.moveAbs(reference-stepsize)
+                    self.micromanipulator_instance.moveAbsZ(reference-stepsize)
                     I = self.snap_image()
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -229,13 +229,13 @@ class AutomaticPatcher():
                 if stepsize > optimalstepsize:
                     stepsize = stepsize/2
                     penalties[1] = penalties[2]
-                    self.micromanipulator_instance.moveAbs(reference+3*stepsize)
+                    self.micromanipulator_instance.moveAbsZ(reference+3*stepsize)
                     I = self.snap_image()
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
-                    self.micromanipulator_instance.moveAbs(reference+5*stepsize)
+                    self.micromanipulator_instance.moveAbsZ(reference+5*stepsize)
                     I = self.snap_image()
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -245,7 +245,7 @@ class AutomaticPatcher():
                 elif stepsize < optimalstepsize:
                     stepsize = stepsize*2
                     penalties[1] = penalties[2]
-                    self.micromanipulator_instance.moveAbs(reference+2*stepsize)
+                    self.micromanipulator_instance.moveAbsZ(reference+2*stepsize)
                     I = self.snap_image()
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -254,7 +254,7 @@ class AutomaticPatcher():
                     reference = reference
                 else:
                     penalties = np.roll(penalties,-1)
-                    self.micromanipulator_instance.moveAbs(reference+3*stepsize)
+                    self.micromanipulator_instance.moveAbsZ(reference+3*stepsize)
                     I = self.snap_image()
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -264,7 +264,7 @@ class AutomaticPatcher():
             elif np.array_equal(pinbool, [1,1,0]):
                 if stepsize == stepsizemin:
                     penalties = np.roll(penalties,1)
-                    self.micromanipulator_instance.moveAbs(reference-stepsize)
+                    self.micromanipulator_instance.moveAbsZ(reference-stepsize)
                     I = self.snap_image()
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -274,13 +274,13 @@ class AutomaticPatcher():
                 else:
                     stepsize = stepsize/2
                     penalties[1] = penalties[0]
-                    self.micromanipulator_instance.moveAbs(reference+stepsize)
+                    self.micromanipulator_instance.moveAbsZ(reference+stepsize)
                     I = self.snap_image()
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
-                    self.micromanipulator_instance.moveAbs(reference-stepsize)
+                    self.micromanipulator_instance.moveAbsZ(reference-stepsize)
                     I = self.snap_image()
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -290,7 +290,7 @@ class AutomaticPatcher():
             elif np.array_equal(pinbool, [0,1,1]):
                 if stepsize == stepsizemin:
                     penalties = np.roll(penalties,-1)
-                    self.micromanipulator_instance.moveAbs(reference+3*stepsize)
+                    self.micromanipulator_instance.moveAbsZ(reference+3*stepsize)
                     I = self.snap_image()
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -300,13 +300,13 @@ class AutomaticPatcher():
                 else:
                     stepsize = stepsize/2
                     penalties[1] = penalties[2]
-                    self.micromanipulator_instance.moveAbs(reference+3*stepsize)
+                    self.micromanipulator_instance.moveAbsZ(reference+3*stepsize)
                     I = self.snap_image()
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
-                    self.micromanipulator_instance.moveAbs(reference+5*stepsize)
+                    self.micromanipulator_instance.moveAbsZ(reference+5*stepsize)
                     I = self.snap_image()
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -316,7 +316,7 @@ class AutomaticPatcher():
             elif np.array_equal(pinbool, [1,1,1]):
                 if stepsize == stepsizemax:
                     penalties = np.roll(penalties,1)
-                    self.micromanipulator_instance.moveAbs(reference-stepsize)
+                    self.micromanipulator_instance.moveAbsZ(reference-stepsize)
                     I = self.snap_image()
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -325,7 +325,7 @@ class AutomaticPatcher():
                     reference = reference - stepsize
                 else:
                     stepsize = 2*stepsize
-                    self.micromanipulator_instance.moveAbs(reference-stepsize)
+                    self.micromanipulator_instance.moveAbsZ(reference-stepsize)
                     I = self.snap_image()
                     IW = I * window
                     penalties[1] = penalties[0]
@@ -341,7 +341,7 @@ class AutomaticPatcher():
             penalties = np.zeros(11)
             positions = np.linspace(reference, reference+2*stepsize, 11)
             for idx, pos in enumerate(positions):
-                self.micromanipulator_instance.moveAbs(pos)
+                self.micromanipulator_instance.moveAbsZ(pos)
                 I = self.snap_image()
                 IW = I * window
                 penalties[idx] = PipetteAutofocus.comp_variance_of_Laplacian(IW)

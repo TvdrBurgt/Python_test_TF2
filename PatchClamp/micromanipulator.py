@@ -110,13 +110,35 @@ class ScientificaPatchStar:
             
         return [float(x), float(y), float(z)]
         
-    def moveAbs(self, x=0, y=0, z=0):
+    def moveAbs(self, x, y, z):
         """
-        Moves the patchstar to the given absolute position on, example:
+        Moves the patchstar to the given absolute position, example:
             Send: ABS 100 26 3
             Response: A (if move allowed else E)
         """
         command = "ABS %d %d %d" % (x,y,z) + self.CRending
+        
+        with serial.Serial(self.port, self.baudrate) as patchstar:
+            # Encode the command to ascii and send to PatchStar
+            patchstar.write(command.encode('ascii'))
+            # Wait until all data is written
+            patchstar.flush()
+            # Read PatchStar response until carriage return
+            response = patchstar.read_until(self.CRending.encode('ascii'))
+            # Decodes response to utf-8
+            response = response.decode('utf-8')
+            # Strip off the carriage return
+            response = response.rstrip(self.CRending)
+            
+        return response
+    
+    def moveAbsZ(self, z):
+        """
+        Moves the patchstar to the absolute position on the z axis, example:
+            Send: ABSZ 128
+            Response: A (if move allowed else E)
+        """
+        command = "ABSZ %d" % z + self.CRending
         
         with serial.Serial(self.port, self.baudrate) as patchstar:
             # Encode the command to ascii and send to PatchStar
@@ -177,29 +199,6 @@ class ScientificaPatchStar:
             response = response.rstrip(self.CRending)
             
         return response
-        
-    def echoLine(self):
-        """
-        Causes the patchstar to echo the input, example:
-            Send: > hello
-            Response: HELLO
-        """
-        command = '> hello' + self.CRending
-        
-        with serial.Serial(self.port, self.baudrate) as patchstar:
-            # Encode the command to ascii and send to PatchStar
-            patchstar.write(command.encode('ascii'))
-            # Wait until all data is written
-            patchstar.flush()
-            # Read PatchStar response until carriage return
-            response = patchstar.read_until(self.CRending.encode('ascii'))
-            # Decodes response to utf-8
-            response = response.decode('utf-8')
-            # Strip off the carriage return
-            response = response.rstrip(self.CRending)
-            
-            print('Send: {}'.format(command))
-            print('Response: {}'.format(response))
 
 if __name__ == '__main__':
     manipulator = ScientificaPatchStar('COM16')
