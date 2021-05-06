@@ -8,12 +8,9 @@ Created on Mon Apr 12 10:37:51 2021
 import os
 import sys
 
-import threading
-
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QThread
 from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QGroupBox
-from PyQt5.QtGui import QPen
 import pyqtgraph.exporters
 import pyqtgraph as pg
 
@@ -41,8 +38,8 @@ class PatchClampUI(QWidget):
         
         # Display to project snapshots
         self.snapshotWidget = pg.ImageView()
-        self.view = self.snapshotWidget.getImageItem()
-        self.view.setAutoDownsample(True)
+        self.canvas = self.snapshotWidget.getImageItem()
+        self.canvas.setAutoDownsample(True)
         
         self.snapshotWidget.ui.roiBtn.hide()
         self.snapshotWidget.ui.menuBtn.hide()
@@ -61,7 +58,7 @@ class PatchClampUI(QWidget):
         
         # Button for detecting pipette tip
         request_pipette_coordinates_button = QPushButton("Detect pipette tip")
-        request_pipette_coordinates_button.clicked.connect(self.localize_pipette)
+        # request_pipette_coordinates_button.clicked.connect(self.localize_pipette)
         snapshotLayout.addWidget(request_pipette_coordinates_button, 1, 2, 1, 1)
         
         snapshotContainer.setLayout(snapshotLayout)
@@ -77,34 +74,32 @@ class PatchClampUI(QWidget):
         #---------------------------- End of GUI ------------------------------
         #======================================================================
         
-        # Fire up backend
-        self.autopatch_instance = AutomaticPatcher(imageview_handle=self.view)
+        # Initiate backend
+        self.autopatch_instance = AutomaticPatcher()
+        
+        # Move backend to a thread
+        self.thread = QThread()
+        self.autopatch_instance.moveToThread(self.thread)
+        
+        # Connect our GUI display to the newimage slot
+        self.autopatch_instance.newimage.connect(self.update_graph)
+        
+        # 
+        self.thread.started.connect(self.autopatch_instance.run)
+        self.thread.start()
         
         
     def autofocus(self):
-        self.autopatch_instance.autofocus_pipette()
+        self.autopatch_instance.autofocus_pipette
         
     def snap_shot(self):
         # snap image and update the view
         self.autopatch_instance.snap_image()
         
-    
-    def localize_pipette(self):
-        x, y = self.autopatch_instance.detect_pipette_tip()
+    def update_graph(self, image):
+        # Display the newly snapped image
+        self.canvas.setImage(image)
         
-        # Draw a crosshair at pipette tip coordinates
-        pen = QPen(Qt.red, 0.1)
-        pen.setWidthF(5)
-        r = MyCrosshairOverlay(pos=(x, y), size=25, pen=pen, movable=False)
-        self.snapshotWidget.getView().addItem(r)
-        
-        pass
-    
-    def run_in_thread(self, fn, *args, **kwargs):
-        thread = threading.Thread(target=fn, args=args, kwargs=kwargs)
-        thread.start()
-        
-        return thread
     
     def closeEvent(self, event):
         """ Interupts widget processes
@@ -114,14 +109,6 @@ class PatchClampUI(QWidget):
         """
         QtWidgets.QApplication.quit()
         event.accept()
-
-
-class MyCrosshairOverlay(pg.CrosshairROI):
-    def __init__(self, pos=None, size=None, **kargs):
-        self._shape = None
-        pg.ROI.__init__(self, pos, size, **kargs)
-        self.sigRegionChanged.connect(self.invalidate)
-        self.aspectLocked = True
 
 
 if __name__ == "__main__":

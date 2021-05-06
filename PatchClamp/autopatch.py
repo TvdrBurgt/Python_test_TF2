@@ -6,7 +6,12 @@ Created on Thu Apr 15 11:12:26 2021
 """
 
 import os
+import time
 import numpy as np
+
+from copy import copy
+
+from PyQt5.QtCore import pyqtSignal, QObject
 
 # Ensure that the Widget can be run either independently or as part of Tupolev.
 if __name__ == "__main__":
@@ -18,9 +23,10 @@ from PatchClamp.micromanipulator import ScientificaPatchStar
 from PatchClamp.ImageProcessing_AutoPatch import PipetteTipDetector, PipetteAutofocus
 
 
-class AutomaticPatcher():
+class AutomaticPatcher(QObject):
+    newimage = pyqtSignal(np.ndarray)
     
-    def __init__(self, imageview_handle, camera_handle = None, motor_handle = None, \
+    def __init__(self, camera_handle = None, motor_handle = None, \
                  micromanipulator_handle = None, *args, **kwargs):
         """
         
@@ -38,6 +44,9 @@ class AutomaticPatcher():
         None.
         
         """
+        QObject.__init__(self, *args, **kwargs)
+        
+        self.lastview = np.random.rand(2048,2048)
         
         # Static parameter settings
         self.exposure_time = 0.02   # camera exposure time (in seconds)
@@ -49,35 +58,40 @@ class AutomaticPatcher():
         
         """
         #====================== Connect hardware devices ======================
-        """
-        # Create a camera instance if the handle is not provided.
-        print('Connecting camera...')
-        if camera_handle == None:
-            self.hamamatsu_cam_instance = CamActuator()
-            self.hamamatsu_cam_instance.initializeCamera()
-        else:
-            self.hamamatsu_cam_instance = camera_handle
+        # """
+        # # Create a camera instance if the handle is not provided.
+        # print('Connecting camera...')
+        # if camera_handle == None:
+        #     self.hamamatsu_cam_instance = CamActuator()
+        #     self.hamamatsu_cam_instance.initializeCamera()
+        # else:
+        #     self.hamamatsu_cam_instance = camera_handle
         
-        # Create an objective motor instance if the handle is not provided.
-        print('Connecting objective motor...')
-        if motor_handle == None:
-            self.pi_device_instance = PIMotor()
-        else:
-            self.pi_device_instance = motor_handle
+        # # Create an objective motor instance if the handle is not provided.
+        # print('Connecting objective motor...')
+        # if motor_handle == None:
+        #     self.pi_device_instance = PIMotor()
+        # else:
+        #     self.pi_device_instance = motor_handle
         
-        # Create a micromanipulator instance if the handle is not provided.
-        print('Connecting micromanipulator...')
-        if micromanipulator_handle == None:
-            self.micromanipulator_instance = ScientificaPatchStar()
-        else:
-            self.micromanipulator_instance = micromanipulator_handle
+        # # Create a micromanipulator instance if the handle is not provided.
+        # print('Connecting micromanipulator...')
+        # if micromanipulator_handle == None:
+        #     self.micromanipulator_instance = ScientificaPatchStar()
+        # else:
+        #     self.micromanipulator_instance = micromanipulator_handle
         
         """
         #==================== Get hardware device settings ====================
         """
-        self.manipulator_position_absolute = self.micromanipulator_instance.getPos()
-        self.objective_position = self.pi_device_instance.GetCurrentPos()
+        # self.manipulator_position_absolute = self.micromanipulator_instance.getPos()
+        # self.objective_position = self.pi_device_instance.GetCurrentPos()
         
+    def run(self):
+        print('data acquisition started')
+        while True:
+            self.lastview = np.random.rand(2048,2048)
+            time.sleep(self.exposure_time)
     
     def disconnect_devices(self):
         # Disconnect camera
@@ -96,10 +110,11 @@ class AutomaticPatcher():
         
     def snap_image(self):
         # Snap image with camera instance
-        snapped_image = self.hamamatsu_cam_instance.SnapImage(self.exposure_time)
+        snapped_image = copy(self.lastview)
+        print('snap!')
         
-        # Display the newly snapped image
-        self.imageview.setImage(snapped_image)
+        # Emit the newly snapped image for display in widget
+        self.newimage.emit(snapped_image)
         
         return snapped_image
         
