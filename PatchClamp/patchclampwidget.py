@@ -8,12 +8,9 @@ Created on Mon Apr 12 10:37:51 2021
 import os
 import sys
 
-import threading
-
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QThread
 from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QGroupBox
-from PyQt5.QtGui import QPen
 import pyqtgraph.exporters
 import pyqtgraph as pg
 
@@ -34,77 +31,95 @@ class PatchClampUI(QWidget):
         #----------------------- General widget settings ----------------------
         self.setWindowTitle("Automatic Patchclamp")
         
+        # -------------------------- Save directory ---------------------------
+        
         #---------------------------- Snapshot view ---------------------------
         snapshotContainer = QGroupBox()
-        snapshotContainer.setMinimumSize(600, 600)
+        snapshotContainer.setMinimumSize(1200, 600)
         snapshotLayout = QGridLayout()
+        
+        # Display to project live camera view
+        self.liveWidget = pg.ImageView()
+        self.canvaslive = self.liveWidget.getImageItem()
+        self.canvaslive.setAutoDownsample(True)
+        
+        self.liveWidget.ui.roiBtn.hide()
+        self.liveWidget.ui.menuBtn.hide()
+        self.liveWidget.ui.histogram.hide()
+        snapshotLayout.addWidget(self.liveWidget, 0, 0, 1, 2)
         
         # Display to project snapshots
         self.snapshotWidget = pg.ImageView()
-        self.view = self.snapshotWidget.getImageItem()
-        self.view.setAutoDownsample(True)
+        self.canvassnap = self.snapshotWidget.getImageItem()
+        self.canvassnap.setAutoDownsample(True)
         
         self.snapshotWidget.ui.roiBtn.hide()
         self.snapshotWidget.ui.menuBtn.hide()
         self.snapshotWidget.ui.histogram.hide()
-        snapshotLayout.addWidget(self.snapshotWidget, 0, 0, 1, 3)
+        snapshotLayout.addWidget(self.snapshotWidget, 0, 2, 1, 2)
+        
+        # Button for staring live camera view
+        request_camera_image_button = QPushButton("Live")
+        # request_camera_image_button.clicked.connect(self.live)
+        snapshotLayout.addWidget(request_camera_image_button, 1, 0, 1, 1)
+        
+        # Button for making a snapshot
+        request_camera_image_button = QPushButton("Snap")
+        request_camera_image_button.clicked.connect(self.snap)
+        snapshotLayout.addWidget(request_camera_image_button, 1, 1, 1, 1)
         
         # Button for automatic focussing a pipette
         request_autofocus_button = QPushButton("Autofocus pipette")
         request_autofocus_button.clicked.connect(self.autofocus)
-        snapshotLayout.addWidget(request_autofocus_button, 1, 0, 1, 1)
-        
-        # Button for making a snapshot
-        request_camera_image_button = QPushButton("Snap image")
-        request_camera_image_button.clicked.connect(self.snap_shot)
-        snapshotLayout.addWidget(request_camera_image_button, 1, 1, 1, 1)
+        snapshotLayout.addWidget(request_autofocus_button, 1, 2, 1, 1)
         
         # Button for detecting pipette tip
         request_pipette_coordinates_button = QPushButton("Detect pipette tip")
-        request_pipette_coordinates_button.clicked.connect(self.localize_pipette)
-        snapshotLayout.addWidget(request_pipette_coordinates_button, 1, 2, 1, 1)
+        # request_pipette_coordinates_button.clicked.connect(self.localize_pipette)
+        snapshotLayout.addWidget(request_pipette_coordinates_button, 1, 3, 1, 1)
         
         snapshotContainer.setLayout(snapshotLayout)
         
-        #-------------------------- Adding to master --------------------------
+        # --------------------------- Add to master ---------------------------
         master = QGridLayout()
         master.addWidget(snapshotContainer, 0, 0, 1, 1)
         
         self.setLayout(master)
         
+        # =====================================================================
+        # ---------------------------- End of GUI -----------------------------
+        # =====================================================================
         
-        #======================================================================
-        #---------------------------- End of GUI ------------------------------
-        #======================================================================
+        # Initiate backend
+        self.autopatch_instance = AutomaticPatcher()
         
-        # Fire up backend
-        self.autopatch_instance = AutomaticPatcher(imageview_handle=self.view)
+        # Connect signals to slots
+        self.autopatch_instance.livesignal.connect(lambda I: self.update_canvas(I, canvasnumber=0))
+        self.autopatch_instance.snapsignal.connect(lambda I: self.update_canvas(I, canvasnumber=1))
         
+    
+    def update_canvas(self, image, canvasnumber):
+        if canvasnumber == 0:
+            # Update the live canvas
+            self.canvaslive.setImage(image)
+        else:
+            # Update the snap canvas
+            self.canvassnap.setImage(image)
         
     def autofocus(self):
-        self.autopatch_instance.autofocus_pipette()
+        # Create a thread
+        self.thread = QThread()
+        # Move backend to a thread
+        self.autopatch_instance.moveToThread(self.thread)
+        # Run pipette autofocus when thread is started
+        self.thread.started.connect(self.autopatch_instance.autofocus_pipette)
+        # Start thread
+        self.thread.start()
         
-    def snap_shot(self):
+    def snap(self):
         # snap image and update the view
         self.autopatch_instance.snap_image()
         
-    
-    def localize_pipette(self):
-        x, y = self.autopatch_instance.detect_pipette_tip()
-        
-        # Draw a crosshair at pipette tip coordinates
-        pen = QPen(Qt.red, 0.1)
-        pen.setWidthF(5)
-        r = MyCrosshairOverlay(pos=(x, y), size=25, pen=pen, movable=False)
-        self.snapshotWidget.getView().addItem(r)
-        
-        pass
-    
-    def run_in_thread(self, fn, *args, **kwargs):
-        thread = threading.Thread(target=fn, args=args, kwargs=kwargs)
-        thread.start()
-        
-        return thread
     
     def closeEvent(self, event):
         """ Interupts widget processes
@@ -114,14 +129,6 @@ class PatchClampUI(QWidget):
         """
         QtWidgets.QApplication.quit()
         event.accept()
-
-
-class MyCrosshairOverlay(pg.CrosshairROI):
-    def __init__(self, pos=None, size=None, **kargs):
-        self._shape = None
-        pg.ROI.__init__(self, pos, size, **kargs)
-        self.sigRegionChanged.connect(self.invalidate)
-        self.aspectLocked = True
 
 
 if __name__ == "__main__":
