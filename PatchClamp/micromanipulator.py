@@ -21,8 +21,8 @@ class ScientificaPatchStar:
         self.baudrate = baudrate   #Either 9600 or 38400
         self.CRending = '\r'
         
-        # Rotation matrix for camera FOV alignment starts as identity matrix
-        [self.R, self.Rinv] = self.constructrotationmatrix(0, 0, 0)
+        # Rotation matrix for camera FOV alignment
+        [self.R, self.Rinv] = self.constructrotationmatrix()
         
         # try out connection
         command = 'DESC' + self.CRending
@@ -43,10 +43,11 @@ class ScientificaPatchStar:
             print('No Scientifica devices found')
         
     @staticmethod
-    def constructrotationmatrix(alpha, beta, gamma):
+    def constructrotationmatrix(alpha=0, beta=0, gamma=0):
         """
         This function constructs the 3D rotation matrix that aligns the
         PatchStar coordinate system with that of the camera field-of-view.
+        Default angles (=0) return the identitiy matrix as rotation matrix.
         """
         R_alpha = lambda a: np.matrix([[1, 0, 0],
                                        [0, np.cos(a), np.sin(a)],
@@ -150,7 +151,7 @@ class ScientificaPatchStar:
             Response: A (if move allowed else E)
         """
         # Apply rotation matrix to input coordinates
-        [x, y, z] = self.Rinv*np.array([[x], [y], [z]])
+        [x, y, z] = self.Rinv.dot([x, y, z])
         
         command = "ABS %d %d %d" % (x,y,z) + self.CRending
         
@@ -200,7 +201,7 @@ class ScientificaPatchStar:
             just moves to the edge...
         """
         # Apply rotation matrix to input coordinates
-        [x, y, z] = self.Rinv*np.array([[x], [y], [z]])
+        [x, y, z] = self.Rinv.dot([x, y, z])
         
         command = "ABS %d %d %d" % (x,y,z) + self.CRending
         

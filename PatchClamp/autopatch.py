@@ -85,7 +85,7 @@ class AutomaticPatcher(QObject):
         #==================== Get hardware device settings ====================
         """
         self.manipulator_position_absolute = self.micromanipulator_instance.getPos()
-        self.objective_position = self.pi_device_instance.GetCurrentPos()
+        # self.objective_position = self.pi_device_instance.GetCurrentPos()
         
     
     def disconnect_devices(self):
@@ -439,11 +439,59 @@ class AutomaticPatcher(QObject):
     def calibrate_coordsys(self):
         """ Calibrate PatchStar coordinate system.
         
-        This method returns the coordinate transformation coefficients that
-        align the coordinate systems of the PatchStar with the camera.
+        This method returns the rotation angles that align the coordinate-
+        systems of the PatchStar with the camera. We assume the z-axis of the
+        PatchStar always points up.
         """
+        # Specify the number of steps and their size for slope detection
+        numsteps = 10
+        xstep = 5           # in micrometer
+        ystep = 5           # in micrometer
+        zstep = 5           # in micrometer
         
-        pass
+        # Set the micromanipulator absolute- and relative position
+        self.manipulator_position_absolute = self.micromanipulator_instance.getPos()
+        step2pos = lambda pos: np.add(self.manipulator_position_absolute, pos)
+        
+        
+        for idx, step in enumerate([[xstep,0,0], [0,ystep,0], [0,0,zstep]]):
+            v = np.empty(numsteps)
+            w = np.empty(numsteps)
+            
+            # Detect pipette tip and move micromanipulator
+            for i in numsteps:
+                v[i], w[i] = self.detect_pipette_tip()
+                if i < numsteps:
+                    self.micromanipulator_instance.moveAbs(step2pos(np.multiply(step,(i+1))))
+                else:
+                    self.micromanipulator_instance.moveAbs(step2pos([0,0,0]))
+            
+            # Reduce array of pipette coordinates to one x and one y
+            if idx == 1:
+                Ex = [np.nanmean(v)/xstep, np.nanmean(w)/xstep, 0]
+            elif idx == 2:
+                Ey = [np.nanmean(v)/ystep, np.nanmean(w)/ystep, 0]
+            elif idx == 3:
+                Ez = [np.nanmean(v)/zstep, np.nanmean(w)/zstep, 0]
+        
+        # Calculate rotation angle: gamma
+        gamma = np.arctan(-Ex[0]/Ex[1])
+        
+        # Choose between gamma and gamma-pi and rotate accordingly
+        self.micromanipulator_instance.constructrotationmatrix(0, 0, gamma)
+        Ey_gammarotated = self.micromanipulator_instance.Rinv.dot(Ey)
+        if Ey_gammarotated[1] < 0:
+            gamma = gamma - np.pi
+            self.micromanipulator_instance.constructrotationmatrix(0, 0, gamma)
+        
+        # Calculate rotation angles: alpha, beta
+        alpha = np.arcsin(Ez[0]*np.sin(gamma) + Ez[1]*np.cos(gamma))
+        beta = (-Ez[0]*np.cos(gamma) + Ez[1]*np.sin(gamma))/np.cos(alpha)
+        
+        # Apply full rotation matrix and verify Ey maps to y-axis
+        self.micromanipulator_instance.constructrotationmatrix(alpha, beta, gamma)
+        Ey_rotated = self.micromanipulator_instance.Rinv.dot(Ey)
+        print(Ey_rotated)
     
     
     # def move_focus(self, distance):
