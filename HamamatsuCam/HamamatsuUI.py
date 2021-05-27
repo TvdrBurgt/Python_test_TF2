@@ -7,12 +7,12 @@ Created on Tue Apr 14 18:47:31 2020
 
 from __future__ import division
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import Qt, pyqtSignal, QRectF, QTimer
-from PyQt5.QtGui import QFont, QColor, QPen, QIcon, QMovie
+from PyQt5.QtCore import Qt, pyqtSignal, QRectF, QPoint, QRect, QObject, QSize, QTimer
+from PyQt5.QtGui import QImage, QPalette, QBrush, QFont, QPainter, QColor, QPen, QIcon, QMovie, QIntValidator
 
-from PyQt5.QtWidgets import (QWidget, QButtonGroup, QLabel, QSpinBox, QDoubleSpinBox, QGridLayout, QPushButton, QGroupBox, 
-                             QLineEdit, QComboBox, QTabWidget, 
-                             QProgressBar, QStyleFactory, QMainWindow, QAction, QStackedWidget)
+from PyQt5.QtWidgets import (QWidget, QButtonGroup, QLabel, QSlider, QSpinBox, QDoubleSpinBox, QGridLayout, QPushButton, QGroupBox, 
+                             QLineEdit, QVBoxLayout, QHBoxLayout, QComboBox, QMessageBox, QTabWidget, QCheckBox, QRadioButton, 
+                             QFileDialog, QProgressBar, QTextEdit, QStyleFactory, QMainWindow, QMenu, QAction, QStackedWidget)
 import pyqtgraph as pg
 import sys
 import os
@@ -21,9 +21,10 @@ import threading
 import numpy as np
 import ctypes
 import ctypes.util
-from datetime import datetime
+from datetime import datetime, date
 import skimage.external.tifffile as skimtiff
 from skimage.measure import block_reduce
+from PIL import Image
 
 # Ensure that the Widget can be run either independently or as part of Tupolev.
 if __name__ == "__main__":
@@ -674,7 +675,6 @@ class CameraUI(QMainWindow):
         CameraAcquisitionContainer.setLayout(CameraAcquisitionLayout)
         MainWinCentralWidget.layout.addWidget(CameraAcquisitionContainer, 1, 0)
         
-        
         """
         # =============================================================================
         # --------------------------------Live Screen----------------------------------
@@ -716,7 +716,6 @@ class CameraUI(QMainWindow):
         #--------------------------------------------------------------END of GUI-----------------------------------------------------------------
         #=========================================================================================================================================
         """
-    
     
     def ConnectCamera(self):
         """
@@ -1381,8 +1380,6 @@ class CameraUI(QMainWindow):
         except:
             pass
         self.close()
-        QtWidgets.QApplication.quit()
-        event.accept()
 
         """
         # =============================================================================
