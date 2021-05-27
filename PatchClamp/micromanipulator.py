@@ -18,7 +18,7 @@ class ScientificaPatchStar:
     def __init__(self, address='COM16', baudrate=38400):
         # Serial settings
         self.port = address
-        self.baudrate = baudrate   #Either 9600 or 38400
+        self.baudrate = baudrate
         self.CRending = '\r'
         
         # Rotation matrix for camera FOV alignment
@@ -37,10 +37,10 @@ class ScientificaPatchStar:
             response = response.decode('utf-8')
             # Strip off the carriage return
             response = response.rstrip(self.CRending)
-        if response != '':
-            print('Scientifica device found: {}'.format(response))
+        if response == 'PatchStar':
+            print('found: 1 {}'.format(response))
         else:
-            print('No Scientifica devices found')
+            print('No PatchStar found')
         
     @staticmethod
     def constructrotationmatrix(alpha=0, beta=0, gamma=0):
@@ -49,18 +49,18 @@ class ScientificaPatchStar:
         PatchStar coordinate system with that of the camera field-of-view.
         Default angles (=0) return the identitiy matrix as rotation matrix.
         """
-        R_alpha = lambda a: np.matrix([[1, 0, 0],
-                                       [0, np.cos(a), np.sin(a)],
-                                       [0, -np.sin(a), np.cos(a)]])
-        R_beta = lambda b: np.matrix([[np.cos(b), 0, -np.sin(b)],
-                                      [0, 1, 0],
-                                      [np.sin(b), 0, np.cos(b)]])
-        R_gamma = lambda c: np.matrix([[np.cos(c), np.sin(c), 0],
-                                       [-np.sin(c), np.cos(c), 0],
-                                       [0, 0, 1]])
+        R_alpha = np.array([[1, 0, 0],
+                            [0, np.cos(alpha), np.sin(alpha)],
+                            [0, -np.sin(alpha), np.cos(alpha)]])
+        R_beta = np.array([[np.cos(beta), 0, -np.sin(beta)],
+                           [0, 1, 0],
+                           [np.sin(beta), 0, np.cos(beta)]])
+        R_gamma = np.array([[np.cos(gamma), np.sin(gamma), 0],
+                            [-np.sin(gamma), np.cos(gamma), 0],
+                            [0, 0, 1]])
         
         # Full rotation matrix
-        R = R_gamma(gamma)*R_beta(beta)*R_alpha(alpha)
+        R = R_gamma @ R_beta @ R_alpha
         
         # Inverse of rotation matrix
         Rinv = np.transpose(R)
@@ -140,9 +140,9 @@ class ScientificaPatchStar:
             [x, y, z] = response.split('\t')
             
             # Convert coordinates to float and apply rotation matrix
-            [x, y, z] = self.R*np.array([[float(x)], [float(y)], [float(z)]])
+            [x, y, z] = self.R @ [[float(x), float(y), float(z)]]
             
-        return [x, y, z]
+        return x, y, z
         
     def moveAbs(self, x, y, z):
         """
@@ -151,7 +151,7 @@ class ScientificaPatchStar:
             Response: A (if move allowed else E)
         """
         # Apply rotation matrix to input coordinates
-        [x, y, z] = self.Rinv.dot([x, y, z])
+        [x, y, z] = self.Rinv @ [x, y, z]
         
         command = "ABS %d %d %d" % (x,y,z) + self.CRending
         
@@ -201,7 +201,7 @@ class ScientificaPatchStar:
             just moves to the edge...
         """
         # Apply rotation matrix to input coordinates
-        [x, y, z] = self.Rinv.dot([x, y, z])
+        [x, y, z] = self.Rinv @ [x, y, z]
         
         command = "ABS %d %d %d" % (x,y,z) + self.CRending
         
@@ -244,6 +244,5 @@ class ScientificaPatchStar:
 
 if __name__ == '__main__':
     manipulator = ScientificaPatchStar('COM16')
-    # manipulator.getPos()
     
     
