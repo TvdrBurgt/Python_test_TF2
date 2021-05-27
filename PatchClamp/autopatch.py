@@ -8,6 +8,10 @@ Created on Thu Apr 15 11:12:26 2021
 import os
 import time
 import numpy as np
+import datetime
+from skimage import io
+
+from PyQt5.QtCore import pyqtSignal, QObject
 
 from copy import copy
 
@@ -24,7 +28,8 @@ from PatchClamp.ImageProcessing_AutoPatch import PipetteTipDetector, PipetteAuto
 
 
 class AutomaticPatcher(QObject):
-    newimage = pyqtSignal(np.ndarray)
+    livesignal = pyqtSignal(np.ndarray)
+    snapsignal = pyqtSignal(np.ndarray)
     
     def __init__(self, camera_handle = None, motor_handle = None, \
                  micromanipulator_handle = None, *args, **kwargs):
@@ -46,7 +51,7 @@ class AutomaticPatcher(QObject):
         """
         QObject.__init__(self, *args, **kwargs)
         
-        self.lastview = np.random.rand(2048,2048)
+        self.savedirectory = r'W:\staff-groups\tnw\ist\do\projects\Neurophotonics\Brinkslab\Data\Thijs\Save directory\\'
         
         # Static parameter settings
         self.exposure_time = 0.02   # camera exposure time (in seconds)
@@ -58,14 +63,14 @@ class AutomaticPatcher(QObject):
         
         """
         #====================== Connect hardware devices ======================
-        # """
-        # # Create a camera instance if the handle is not provided.
-        # print('Connecting camera...')
-        # if camera_handle == None:
-        #     self.hamamatsu_cam_instance = CamActuator()
-        #     self.hamamatsu_cam_instance.initializeCamera()
-        # else:
-        #     self.hamamatsu_cam_instance = camera_handle
+        """
+        # Create a camera instance if the handle is not provided.
+        print('Connecting camera...')
+        if camera_handle == None:
+            self.hamamatsu_cam_instance = CamActuator()
+            self.hamamatsu_cam_instance.initializeCamera()
+        else:
+            self.hamamatsu_cam_instance = camera_handle
         
         # # Create an objective motor instance if the handle is not provided.
         # print('Connecting objective motor...')
@@ -74,24 +79,18 @@ class AutomaticPatcher(QObject):
         # else:
         #     self.pi_device_instance = motor_handle
         
-        # # Create a micromanipulator instance if the handle is not provided.
-        # print('Connecting micromanipulator...')
-        # if micromanipulator_handle == None:
-        #     self.micromanipulator_instance = ScientificaPatchStar()
-        # else:
-        #     self.micromanipulator_instance = micromanipulator_handle
+        # Create a micromanipulator instance if the handle is not provided.
+        print('Connecting micromanipulator...')
+        if micromanipulator_handle == None:
+            self.micromanipulator_instance = ScientificaPatchStar()
+        else:
+            self.micromanipulator_instance = micromanipulator_handle
         
         """
         #==================== Get hardware device settings ====================
         """
-        # self.manipulator_position_absolute = self.micromanipulator_instance.getPos()
+        self.manipulator_position_absolute = self.micromanipulator_instance.getPos()
         # self.objective_position = self.pi_device_instance.GetCurrentPos()
-        
-    def run(self):
-        print('data acquisition started')
-        while True:
-            self.lastview = np.random.rand(2048,2048)
-            time.sleep(self.exposure_time)
     
     def disconnect_devices(self):
         # Disconnect camera
@@ -107,14 +106,15 @@ class AutomaticPatcher(QObject):
             print('Objective motor disconnected.')
         except:
             pass
-        
+    
+    
     def snap_image(self):
         # Snap image with camera instance
         snapped_image = copy(self.lastview)
         print('snap!')
         
         # Emit the newly snapped image for display in widget
-        self.newimage.emit(snapped_image)
+        self.snapsignal.emit(snapped_image)
         
         return snapped_image
         
@@ -130,7 +130,7 @@ class AutomaticPatcher(QObject):
         # Parameters to vary
         focusprecision = 0.01   # focal plane finding precision (micrometers)
         optimalstepsize = 10    # peak recognizing step size (micrometers)
-        margin = 0.95           # threshold for max values (percentage)
+        margin = 0.96           # threshold for max values (percentage)
         
         # Construct Gaussian window
         I = self.snap_image()
@@ -149,6 +149,7 @@ class AutomaticPatcher(QObject):
         for i in range(3):
             # Capture image
             I = self.snap_image()
+            io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I)
             
             # Apply image window
             IW = I * window
@@ -167,8 +168,8 @@ class AutomaticPatcher(QObject):
             
         """Iteratively find peak in focus penalty values"""
         stepsize = optimalstepsize
-        stepsizemin = optimalstepsize/4
-        stepsizemax = optimalstepsize*4
+        stepsizemin = optimalstepsize/2
+        stepsizemax = optimalstepsize*8
         pinbool = np.zeros(3)
         while pinbool != [0,1,0]:
             # Find maximum, middle, and minimum penalty values
@@ -198,6 +199,7 @@ class AutomaticPatcher(QObject):
             elif np.array_equal(pinbool, [1,0,1]):
                 self.micromanipulator_instance.moveAbsZ(reference-stepsize)
                 I = self.snap_image()
+                io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I)
                 IW = I * window
                 penalties[1] = penalties[0]
                 penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -210,12 +212,14 @@ class AutomaticPatcher(QObject):
                     penalties[1] = penalties[0]
                     self.micromanipulator_instance.moveAbsZ(reference+stepsize)
                     I = self.snap_image()
+                    io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
                     self.micromanipulator_instance.moveAbsZ(reference-stepsize)
                     I = self.snap_image()
+                    io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
@@ -226,6 +230,7 @@ class AutomaticPatcher(QObject):
                     penalties[1] = penalties[0]
                     self.micromanipulator_instance.moveAbsZ(reference-stepsize)
                     I = self.snap_image()
+                    io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
@@ -235,6 +240,7 @@ class AutomaticPatcher(QObject):
                     penalties = np.roll(penalties,1)
                     self.micromanipulator_instance.moveAbsZ(reference-stepsize)
                     I = self.snap_image()
+                    io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
@@ -246,12 +252,14 @@ class AutomaticPatcher(QObject):
                     penalties[1] = penalties[2]
                     self.micromanipulator_instance.moveAbsZ(reference+3*stepsize)
                     I = self.snap_image()
+                    io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     self.micromanipulator_instance.moveAbsZ(reference+5*stepsize)
                     I = self.snap_image()
+                    io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
@@ -262,6 +270,7 @@ class AutomaticPatcher(QObject):
                     penalties[1] = penalties[2]
                     self.micromanipulator_instance.moveAbsZ(reference+2*stepsize)
                     I = self.snap_image()
+                    io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
@@ -271,6 +280,7 @@ class AutomaticPatcher(QObject):
                     penalties = np.roll(penalties,-1)
                     self.micromanipulator_instance.moveAbsZ(reference+3*stepsize)
                     I = self.snap_image()
+                    io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
@@ -281,6 +291,7 @@ class AutomaticPatcher(QObject):
                     penalties = np.roll(penalties,1)
                     self.micromanipulator_instance.moveAbsZ(reference-stepsize)
                     I = self.snap_image()
+                    io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
@@ -291,12 +302,14 @@ class AutomaticPatcher(QObject):
                     penalties[1] = penalties[0]
                     self.micromanipulator_instance.moveAbsZ(reference+stepsize)
                     I = self.snap_image()
+                    io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
                     self.micromanipulator_instance.moveAbsZ(reference-stepsize)
                     I = self.snap_image()
+                    io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
@@ -307,6 +320,7 @@ class AutomaticPatcher(QObject):
                     penalties = np.roll(penalties,-1)
                     self.micromanipulator_instance.moveAbsZ(reference+3*stepsize)
                     I = self.snap_image()
+                    io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
@@ -317,12 +331,14 @@ class AutomaticPatcher(QObject):
                     penalties[1] = penalties[2]
                     self.micromanipulator_instance.moveAbsZ(reference+3*stepsize)
                     I = self.snap_image()
+                    io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     self.micromanipulator_instance.moveAbsZ(reference+5*stepsize)
                     I = self.snap_image()
+                    io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
@@ -333,6 +349,7 @@ class AutomaticPatcher(QObject):
                     penalties = np.roll(penalties,1)
                     self.micromanipulator_instance.moveAbsZ(reference-stepsize)
                     I = self.snap_image()
+                    io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
@@ -342,6 +359,7 @@ class AutomaticPatcher(QObject):
                     stepsize = 2*stepsize
                     self.micromanipulator_instance.moveAbsZ(reference-stepsize)
                     I = self.snap_image()
+                    io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I)
                     IW = I * window
                     penalties[1] = penalties[0]
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -358,6 +376,7 @@ class AutomaticPatcher(QObject):
             for idx, pos in enumerate(positions):
                 self.micromanipulator_instance.moveAbsZ(pos)
                 I = self.snap_image()
+                io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I)
                 IW = I * window
                 penalties[idx] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                 positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
@@ -374,17 +393,6 @@ class AutomaticPatcher(QObject):
         
         print('Focus offset found!')
                 
-    
-    
-    
-    
-    # def move_focus(self, distance):
-    #     self.initial_focus_position = self.pi_device_instance.pidevice.qPOS(self.pi_device_instance.pidevice.axes)['1']
-    #     print("init_focus_position : {}".format(self.initial_focus_position))
-        
-    #     self.target_position = self.initial_focus_position + distance
-        
-    #     self.pi_device_instance.move(self.target_position)
     
     def detect_pipette_tip(self):
         
@@ -436,13 +444,70 @@ class AutomaticPatcher(QObject):
     def calibrate_coordsys(self):
         """ Calibrate PatchStar coordinate system.
         
-        This method returns the coordinate transformation coefficients that
-        align the coordinate systems of the PatchStar with the camera.
+        This method returns the rotation angles that align the coordinate-
+        systems of the PatchStar with the camera. We assume the z-axis of the
+        PatchStar always points up.
         """
+        # Specify the number of steps and their size for slope detection
+        numsteps = 10
+        xstep = 5           # in micrometer
+        ystep = 5           # in micrometer
+        zstep = 5           # in micrometer
         
-        pass
+        # Set the micromanipulator absolute- and relative position
+        self.manipulator_position_absolute = self.micromanipulator_instance.getPos()
+        step2pos = lambda pos: np.add(self.manipulator_position_absolute, pos)
+        
+        
+        for idx, step in enumerate([[xstep,0,0], [0,ystep,0], [0,0,zstep]]):
+            v = np.empty(numsteps)
+            w = np.empty(numsteps)
+            
+            # Detect pipette tip and move micromanipulator
+            for i in numsteps:
+                v[i], w[i] = self.detect_pipette_tip()
+                if i < numsteps:
+                    self.micromanipulator_instance.moveAbs(step2pos(np.multiply(step,(i+1))))
+                else:
+                    self.micromanipulator_instance.moveAbs(step2pos([0,0,0]))
+            
+            # Reduce array of pipette coordinates to one x and one y
+            if idx == 1:
+                Ex = [np.nanmean(v)/xstep, np.nanmean(w)/xstep, 0]
+            elif idx == 2:
+                Ey = [np.nanmean(v)/ystep, np.nanmean(w)/ystep, 0]
+            elif idx == 3:
+                Ez = [np.nanmean(v)/zstep, np.nanmean(w)/zstep, 0]
+        
+        # Calculate rotation angle: gamma
+        gamma = np.arctan(-Ex[0]/Ex[1])
+        
+        # Choose between gamma and gamma-pi and rotate accordingly
+        self.micromanipulator_instance.constructrotationmatrix(0, 0, gamma)
+        Ey_gammarotated = self.micromanipulator_instance.Rinv.dot(Ey)
+        if Ey_gammarotated[1] < 0:
+            gamma = gamma - np.pi
+            self.micromanipulator_instance.constructrotationmatrix(0, 0, gamma)
+        
+        # Calculate rotation angles: alpha, beta
+        alpha = np.arcsin(Ez[0]*np.sin(gamma) + Ez[1]*np.cos(gamma))
+        beta = (-Ez[0]*np.cos(gamma) + Ez[1]*np.sin(gamma))/np.cos(alpha)
+        
+        # Apply full rotation matrix and verify Ey maps to y-axis
+        self.micromanipulator_instance.constructrotationmatrix(alpha, beta, gamma)
+        Ey_rotated = self.micromanipulator_instance.Rinv.dot(Ey)
+        print(Ey_rotated)
     
+    
+    # def move_focus(self, distance):
+    #     self.initial_focus_position = self.pi_device_instance.pidevice.qPOS(self.pi_device_instance.pidevice.axes)['1']
+    #     print("init_focus_position : {}".format(self.initial_focus_position))
         
+    #     self.target_position = self.initial_focus_position + distance
+        
+    #     self.pi_device_instance.move(self.target_position)
+    
+    
 if __name__ == "__main__":
     instance = AutomaticPatcher()
     
