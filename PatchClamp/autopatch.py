@@ -57,8 +57,8 @@ class AutomaticPatcher(QObject):
         self.exposure_time = 0.02   # camera exposure time (in seconds)
         
         # Variable paramater settings that methods will update
-        self.manipulator_position_absolute = [0, 0, 0]  # x,y,z in micrometers
-        self.manipulator_position_relative = [0, 0, 0]  # x,y,z in micrometers
+        # self.manipulator_position_absolute = [0, 0, 0]  # x,y,z in micrometers
+        # self.manipulator_position_relative = [0, 0, 0]  # x,y,z in micrometers
         self.objective_position = 0                     # z in micrometers/10
         
         """
@@ -89,7 +89,7 @@ class AutomaticPatcher(QObject):
         """
         #==================== Get hardware device settings ====================
         """
-        self.manipulator_position_absolute = self.micromanipulator_instance.getPos()
+        # self.manipulator_position_absolute = self.micromanipulator_instance.getPos()
         # self.objective_position = self.pi_device_instance.GetCurrentPos()
     
     def disconnect_devices(self):
@@ -137,8 +137,9 @@ class AutomaticPatcher(QObject):
         window = PipetteAutofocus.comp_Gaussian_kernel(size=I.shape[1], fwhm=I.shape[1]/4)
         
         # Set reference pipette position as origin
-        self.micromanipulator_instance.setZero()
-        reference = self.micromanipulator_instance.getPos()[2]
+        # self.micromanipulator_instance.setZero()
+        # reference = self.micromanipulator_instance.getPos()[2]
+        reference = self.micromanipulator_instance.position[2]
         
         # Initialize array for storing [positions; penalties]
         positionhistory = np.zeros(3)
@@ -159,13 +160,14 @@ class AutomaticPatcher(QObject):
             penalties[i] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
             
             # Save position and penalty in history
-            positionhistory[i] = self.micromanipulator_instance.getPos()[2]
+            positionhistory[i] = self.micromanipulator_instance.position[2]
             penaltyhistory[i] = penalties[i]
             
             # Move pipette up
             if i < 2:
                 print('step up')
-                self.micromanipulator_instance.moveAbsZ(reference+(i+1)*optimalstepsize)
+                # self.micromanipulator_instance.moveAbsZ(reference+(i+1)*optimalstepsize)
+                self.micromanipulator_instance.moveRel(0,0,optimalstepsize)
             
         """Iteratively find peak in focus penalty values"""
         stepsize = optimalstepsize
@@ -201,13 +203,13 @@ class AutomaticPatcher(QObject):
             if np.array_equal(pinbool, [0,1,0]):
                 pass
             elif np.array_equal(pinbool, [1,0,1]):
-                self.micromanipulator_instance.moveAbsZ(reference-stepsize)
+                # self.micromanipulator_instance.moveAbsZ(reference-stepsize)
                 I = self.snap_image()
                 io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                 IW = I * window
                 penalties[1] = penalties[0]
                 penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
+                positionhistory = np.append(positionhistory, self.micromanipulator_instance.position[2])
                 penaltyhistory = np.append(penaltyhistory, penalties[0])
                 reference = reference - stepsize
             elif np.array_equal(pinbool, [1,0,0]):
@@ -219,14 +221,14 @@ class AutomaticPatcher(QObject):
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
+                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.position[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
                     self.micromanipulator_instance.moveAbsZ(reference-stepsize)
                     I = self.snap_image()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
+                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.position[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     reference = reference - stepsize
                 elif stepsize < optimalstepsize:
@@ -237,7 +239,7 @@ class AutomaticPatcher(QObject):
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
+                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.position[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     reference = reference - stepsize
                 else:
@@ -247,7 +249,7 @@ class AutomaticPatcher(QObject):
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
+                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.position[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     reference = reference - stepsize
             elif np.array_equal(pinbool, [0,0,1]):
@@ -259,14 +261,14 @@ class AutomaticPatcher(QObject):
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
+                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.position[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     self.micromanipulator_instance.moveAbsZ(reference+5*stepsize)
                     I = self.snap_image()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
+                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.position[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
                     reference = reference + 3*stepsize
                 elif stepsize < optimalstepsize:
@@ -277,7 +279,7 @@ class AutomaticPatcher(QObject):
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
+                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.position[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
                     reference = reference
                 else:
@@ -287,7 +289,7 @@ class AutomaticPatcher(QObject):
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
+                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.position[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
                     reference = reference + stepsize
             elif np.array_equal(pinbool, [1,1,0]):
@@ -298,7 +300,7 @@ class AutomaticPatcher(QObject):
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
+                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.position[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     reference = reference - stepsize
                 else:
@@ -309,14 +311,14 @@ class AutomaticPatcher(QObject):
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
+                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.position[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
                     self.micromanipulator_instance.moveAbsZ(reference-stepsize)
                     I = self.snap_image()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
+                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.position[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     reference = reference - stepsize
             elif np.array_equal(pinbool, [0,1,1]):
@@ -327,7 +329,7 @@ class AutomaticPatcher(QObject):
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
+                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.position[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
                     reference = reference + stepsize
                 else:
@@ -338,14 +340,14 @@ class AutomaticPatcher(QObject):
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
+                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.position[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     self.micromanipulator_instance.moveAbsZ(reference+5*stepsize)
                     I = self.snap_image()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
+                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.position[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
                     reference = reference + 3*stepsize
             elif np.array_equal(pinbool, [1,1,1]):
@@ -356,7 +358,7 @@ class AutomaticPatcher(QObject):
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
+                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.position[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     reference = reference - stepsize
                 else:
@@ -367,7 +369,7 @@ class AutomaticPatcher(QObject):
                     IW = I * window
                     penalties[1] = penalties[0]
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
+                    positionhistory = np.append(positionhistory, self.micromanipulator_instance.position[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     reference = reference - stepsize
         
@@ -383,7 +385,7 @@ class AutomaticPatcher(QObject):
                 io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                 IW = I * window
                 penalties[idx] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
+                positionhistory = np.append(positionhistory, self.micromanipulator_instance.position[2])
                 penaltyhistory = np.append(penaltyhistory, penalties[idx])
             
             # Locate maximum penalty value
@@ -461,7 +463,7 @@ class AutomaticPatcher(QObject):
         zstep = 500           # in micrometer/100
         
         # Set the micromanipulator absolute- and relative position
-        self.manipulator_position_absolute = self.micromanipulator_instance.getPos()
+        self.manipulator_position_absolute = self.micromanipulator_instance.position
         step2pos = lambda pos: np.add(self.manipulator_position_absolute, pos)
         
         
