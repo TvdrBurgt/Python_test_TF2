@@ -7,6 +7,7 @@ Created on Tue Feb 16 16:56:57 2021
 
 import serial
 import numpy as np
+import time
 
 
 class ScientificaPatchStar:
@@ -67,28 +68,7 @@ class ScientificaPatchStar:
         
         return R, Rinv
     
-    
-    def stop(self):
-        """
-        Stops any motion.
-        """
-        command = 'STOP' + self.CRending
-        
-        with serial.Serial(self.port, self.baudrate) as patchstar:
-            # Encode the command to ascii and send to PatchStar
-            patchstar.write(command.encode('ascii'))
-            # Wait until all data is written
-            patchstar.flush()
-            # Read PatchStar response until carriage return
-            response = patchstar.read_until(self.CRending.encode('ascii'))
-            # Decodes response to utf-8
-            response = response.decode('utf-8')
-            # Strip off the carriage return
-            response = response.rstrip(self.CRending)
-            
-        return response
-    
-    def reportStatus(self):
+    def wait_until_finished(self):
         """
         Returns the status of the patchstar, responses:
             0 - Motors idle.
@@ -103,16 +83,27 @@ class ScientificaPatchStar:
         command = 'S' + self.CRending
         
         with serial.Serial(self.port, self.baudrate) as patchstar:
-            # Encode the command to ascii and send to PatchStar
-            patchstar.write(command.encode('ascii'))
-            # Wait until all data is written
-            patchstar.flush()
-            # Read PatchStar response until carriage return
-            response = patchstar.read_until(self.CRending.encode('ascii'))
-            # Decodes response to utf-8
-            response = response.decode('utf-8')
-            # Strip off the carriage return
-            response = response.rstrip(self.CRending)
+            response = '-1'
+            
+            while True:
+                try:
+                    # Encode the command to ascii and send to PatchStar
+                    patchstar.write(command.encode('ascii'))
+                    # Wait until all data is written
+                    patchstar.flush()
+                    # Read PatchStar response until carriage return
+                    response = patchstar.read_until(self.CRending.encode('ascii'))
+                    # Decodes response to utf-8
+                    response = response.decode('utf-8')
+                    # Strip off the carriage return
+                    response = response.rstrip(self.CRending)
+                except:
+                    print('Busy traffic')
+                    
+                if response != '0':
+                    time.sleep(0.05)
+                else:
+                    break
             
         return response
     
@@ -167,6 +158,9 @@ class ScientificaPatchStar:
             # Strip off the carriage return
             response = response.rstrip(self.CRending)
             
+        # Wait untill move has finished
+        self.wait_until_finished()
+            
         return response
     
     def moveAbsZ(self, z):
@@ -217,6 +211,9 @@ class ScientificaPatchStar:
             # Strip off the carriage return
             response = response.rstrip(self.CRending)
             
+        # Wait untill move has finished
+        self.wait_until_finished()
+            
         return response
     
     def setZero(self):
@@ -227,6 +224,26 @@ class ScientificaPatchStar:
             Response: A (if set allowed else E)
         """
         command = 'ZERO' + self.CRending
+        
+        with serial.Serial(self.port, self.baudrate) as patchstar:
+            # Encode the command to ascii and send to PatchStar
+            patchstar.write(command.encode('ascii'))
+            # Wait until all data is written
+            patchstar.flush()
+            # Read PatchStar response until carriage return
+            response = patchstar.read_until(self.CRending.encode('ascii'))
+            # Decodes response to utf-8
+            response = response.decode('utf-8')
+            # Strip off the carriage return
+            response = response.rstrip(self.CRending)
+            
+        return response
+    
+    def stop(self):
+        """
+        Stops any motion.
+        """
+        command = 'STOP' + self.CRending
         
         with serial.Serial(self.port, self.baudrate) as patchstar:
             # Encode the command to ascii and send to PatchStar
