@@ -22,14 +22,16 @@ class ScientificaPatchStar(serial.Serial):
         
         # Initiate default settings
         self.CRending = '\r'                    # Carriage return
-        self.reference = np.array([0, 0, 0])    # x, y, z (in um)
-        self.position = np.array([0, 0, 0])     # x, y, z (in um)
+        self.origin = np.array([0, 0, 0])       # Coordinate origin
+        self.manipcoords = np.array([0, 0, 0])  # Manipulator coordinate FOR
+        self.camcoords = np.array([0, 0, 0])    # Camera coordinate FOR
         self.R = np.identity(3)                 # 3D rotation matrix
         self.Rinv = np.identity(3)              # 3D rotation matrix inverse
         
         # Fill-in known settings
-        self.reference = self.getPos()
-        self.position = self.getPos()
+        self.origin = self.getPos()
+        self.manipcoords = self.origin
+        self.cameracoords = self.manipcoord
         [self.R, self.Rinv] = self.constructrotationmatrix()
         
     @staticmethod
@@ -81,7 +83,7 @@ class ScientificaPatchStar(serial.Serial):
                 print('Busy traffic')
                 
             if response != '0':
-                time.sleep(0.05)
+                time.sleep(0.1)
             else:
                 break
             
@@ -120,8 +122,12 @@ class ScientificaPatchStar(serial.Serial):
             Send: ABS 100 26 3
             Response: A (if move allowed else E)
         """
-        # Apply rotation matrix to input coordinates
-        [x, y, z] = self.Rinv @ [x, y, z]
+        # Transform camera- to micromanipulator frame of reference
+        self.camcoords = [x, y, z]
+        self.manipcoords = self.Rinv @ [x, y, z]
+        
+        # Add coordinate origin
+        [x, y, z] = self.origin + self.manipcoords
         
         command = "ABS %d %d %d" % (x,y,z) + self.CRending
         
@@ -135,10 +141,10 @@ class ScientificaPatchStar(serial.Serial):
         response = response.decode('utf-8')
         # Strip off the carriage return
         response = response.rstrip(self.CRending)
-            
+        
         # Wait untill move has finished
         self.wait_until_finished()
-            
+        
         return response
     
     def moveAbsZ(self, z):
@@ -146,8 +152,10 @@ class ScientificaPatchStar(serial.Serial):
         Moves the PatchStar to the given absolute position in z. The x and y
         coordinates do not change.
         """
-        targetpos = [self.position[0], self.position[1], z]
-        self.moveAbs(targetpos)
+        # Target location in camera frame of reference
+        target = [self.camcoords[0], self.camcoords[1], z]
+        
+        return self.moveAbs(target)
         
     def moveRel(self, x=0, y=0, z=0):
         """
@@ -156,13 +164,10 @@ class ScientificaPatchStar(serial.Serial):
         imperfections from relative movements - and calculates the target
         position by adding the current position.
         """
-        # Make relative move an aboslute move
-        targetpos = self.position + [x, y, z]
+        # Target location in camera frame of reference
+        target = self.camcoords + [x, y, z]
         
-        # Move the PatchStar
-        response = self.moveAbs()
-        
-        return response
+        return self.moveAbs(target)
     
     def stop(self):
         """
