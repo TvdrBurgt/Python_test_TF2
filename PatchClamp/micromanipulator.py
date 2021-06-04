@@ -18,7 +18,7 @@ class ScientificaPatchStar(serial.Serial):
     """
     def __init__(self, address='COM16', baud=38400):
         # Set up serial connection
-        super().__init__(port=self.address, baudrate=self.baud, timeout=1)
+        super().__init__(port=address, baudrate=baud, timeout=1)
         
         # Initiate default settings
         self.CRending = '\r'                    # Carriage return

@@ -126,6 +126,7 @@ class PatchClampUI(QWidget):
         On closing the application we have to make sure that the console
         gets freed.
         """
+        self.autopatch_instance.disconnect_devices()
         QtWidgets.QApplication.quit()
         event.accept()
 

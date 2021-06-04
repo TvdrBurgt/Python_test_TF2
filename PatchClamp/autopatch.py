@@ -100,6 +100,14 @@ class AutomaticPatcher(QObject):
         except:
             pass
         
+        # Disconnect micromanipulator
+        try:
+            self.micromanipulator_instance.stop()
+            self.micromanipulator_instance.close()
+            print('Micromanipulator disconnected.')
+        except:
+            pass
+        
         # Disconnect objective motor
         try:
             self.pi_device_instance.CloseMotorConnection()
