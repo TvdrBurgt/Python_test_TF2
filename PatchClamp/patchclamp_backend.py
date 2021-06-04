@@ -33,7 +33,7 @@ class CameraThread(QThread):
         self.live = True
         # Camera settings
         self.isrunning = False
-        self.frame = np.zeros((2048,2048))
+        self.frame = np.random.rand(2048,2048)
         self.initializeCamera()
         # QThread settings
         self.moveToThread(self)
@@ -61,8 +61,6 @@ class CameraThread(QThread):
             self.hcam.setPropertyValue("binning", "1x1")
             # Set exposure time to 0.02
             self.hcam.setPropertyValue("exposure_time", 0.1)
-            
-            self.GetKeyCameraProperties()
         
     def acquire(self):
         # Start acquisition and wait one second for camera to start
@@ -79,8 +77,8 @@ class CameraThread(QThread):
                 self.frame = np.resize(frames[-1].np_array, (dims[1], dims[0]))
             except:
                 pass
-            # self.frame = np.random.rand(2048, 2048)
-            # QThread.msleep(10)
+            ## self.frame = np.random.rand(2048, 2048)
+            # QThread.msleep(100)   # Is it necessary to wait the exposure time so while-loop doesn't continue?
             if self.live:
                 self.livesignal.emit(self.frame)
             else:
