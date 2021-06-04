@@ -40,12 +40,13 @@ class CameraThread(QThread):
         self.started.connect(self.acquire)
         
     def initializeCamera(self):
+        # Can we make this path relative?
         dcamapi_path = r"M:\tnw\ist\do\projects\Neurophotonics\Brinkslab\People\Xin Meng\Code\Python_test\HamamatsuCam\19_12\dcamapi.dll"
         self.dcam = ctypes.WinDLL(dcamapi_path)
 
         paraminit = DCAMAPI_INIT(0, 0, 0, 0, None, None)
         paraminit.size = ctypes.sizeof(paraminit)
-        error_code = self.dcam.dcamapi_init(ctypes.byref(paraminit))
+        self.dcam.dcamapi_init(ctypes.byref(paraminit))
 
         n_cameras = paraminit.iDeviceCount
         print("found:", n_cameras, "cameras")
@@ -55,15 +56,15 @@ class CameraThread(QThread):
             
             # Enable defect correction
             self.hcam.setPropertyValue("defect_correct_mode", 2)
-            # Set the readout speed to fast.
+            # Set the readout speed to fast
             self.hcam.setPropertyValue("readout_speed", 2)
-            # Set the binning to 1.
+            # Set the binning
             self.hcam.setPropertyValue("binning", "1x1")
-            # Set exposure time to 0.02
-            self.hcam.setPropertyValue("exposure_time", 0.1)
+            # Set exposure time
+            self.hcam.setPropertyValue("exposure_time", 0.2)
         
     def acquire(self):
-        # Start acquisition and wait one second for camera to start
+        # Start acquisition and wait more than exposure time for camera start
         self.isrunning = True
         self.hcam.startAcquisition()
         QThread.msleep(1000)
@@ -75,13 +76,11 @@ class CameraThread(QThread):
             try:
                 [frames, dims] = self.hcam.getFrames()
                 self.frame = np.resize(frames[-1].np_array, (dims[1], dims[0]))
+                if self.live:
+                    self.livesignal.emit(self.frame)
+                else:
+                    pass
             except:
-                pass
-            ## self.frame = np.random.rand(2048, 2048)
-            # QThread.msleep(100)   # Is it necessary to wait the exposure time so while-loop doesn't continue?
-            if self.live:
-                self.livesignal.emit(self.frame)
-            else:
                 pass
         self.hcam.stopAcquisition()
         print("camera acquisition stopped")
@@ -102,7 +101,6 @@ class CameraThread(QThread):
     
     def __del__(self):
         self.isrunning = False
-        self.hcam.shutdown()
         self.dcam.dcamapi_uninit()
         self.quit()
         self.wait()
