@@ -28,14 +28,14 @@ class CameraThread(QThread):
     livesignal = pyqtSignal(np.ndarray)
     
     def __init__(self):
+        super().__init__()
         # Class settings
         self.live = True
         # Camera settings
         self.isrunning = False
-        self.frame = np.ndarray
-        # self.initializeCamera()
+        self.frame = np.zeros((2048,2048))
+        self.initializeCamera()
         # QThread settings
-        super().__init__()
         self.moveToThread(self)
         self.started.connect(self.acquire)
         
@@ -52,7 +52,7 @@ class CameraThread(QThread):
 
         if n_cameras > 0:
             self.hcam = HamamatsuCameraMR(camera_id=0)
-
+            
             # Enable defect correction
             self.hcam.setPropertyValue("defect_correct_mode", 2)
             # Set the readout speed to fast.
@@ -61,25 +61,31 @@ class CameraThread(QThread):
             self.hcam.setPropertyValue("binning", "1x1")
             # Set exposure time to 0.02
             self.hcam.setPropertyValue("exposure_time", 0.1)
-
+            
             self.GetKeyCameraProperties()
         
     def acquire(self):
+        # Start acquisition and wait one second for camera to start
         self.isrunning = True
-        # self.hcam.acquisition_mode = "run_till_abort"
-        # self.hcam.startAcquisition()
+        self.hcam.startAcquisition()
+        QThread.msleep(1000)
         print("camera acquisition started")
 
         while self.isrunning:
             ## Mutex lock here?
-            # [frames, dims] = self.hcam.getFrames()
-            # self.frame = np.resize(frames[-1].np_array, (dims[1], dims[0]))
-            self.frame = np.random.rand(2048, 2048)
-            QThread.msleep(10)
+            # The camera does not always output an image
+            try:
+                [frames, dims] = self.hcam.getFrames()
+                self.frame = np.resize(frames[-1].np_array, (dims[1], dims[0]))
+            except:
+                pass
+            # self.frame = np.random.rand(2048, 2048)
+            # QThread.msleep(10)
             if self.live:
                 self.livesignal.emit(self.frame)
             else:
                 pass
+        self.hcam.stopAcquisition()
         print("camera acquisition stopped")
         
     def snap(self):
@@ -98,7 +104,8 @@ class CameraThread(QThread):
     
     def __del__(self):
         self.isrunning = False
-        # self.hcam.stopAcquisition()
+        self.hcam.shutdown()
+        self.dcam.dcamapi_uninit()
         self.quit()
         self.wait()
 
