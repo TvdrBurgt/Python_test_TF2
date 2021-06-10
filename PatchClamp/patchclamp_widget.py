@@ -17,7 +17,7 @@ import pyqtgraph as pg
 # Change path so the Widget can be run either independently or as part of Tupolev.
 if __name__ == "__main__":
     os.chdir(os.getcwd() + '\\..')
-from PatchClamp.patchclamp_backend_v2 import CameraThread, AutoPatchThread
+from PatchClamp.patchclamp_backend import CameraThread, AutoPatchThread
 
 
 class PatchClampUI(QWidget):
