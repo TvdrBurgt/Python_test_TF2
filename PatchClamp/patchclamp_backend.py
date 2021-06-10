@@ -1,43 +1,49 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Jun  1 11:35:14 2021
+Created on Thu Apr 15 11:12:26 2021
 
 @author: tvdrb
 """
 
-import numpy as np
 import os
-import datetime
-from skimage import io
 import ctypes
+import datetime
+import logging
+import numpy as np
 
 from copy import copy
+from skimage import io
 
-from PyQt5.QtCore import pyqtSignal, QThread
+from PyQt5.QtCore import pyqtSignal, pyqtSlot, QThread, QMutex
 
 if __name__ == "__main__":
     os.chdir(os.getcwd() + '\\..')
 from HamamatsuCam.HamamatsuDCAM import HamamatsuCameraMR, DCAMAPI_INIT
-from PatchClamp.micromanipulator import ScientificaPatchStar
-
+# from PI_ObjectiveMotor.focuser import PIMotor
 from PatchClamp.ImageProcessing_AutoPatch import PipetteTipDetector, PipetteAutofocus
 
 
 class CameraThread(QThread):
     snapsignal = pyqtSignal(np.ndarray)
     livesignal = pyqtSignal(np.ndarray)
-    
+
     def __init__(self):
+        # Class attributes
+        self.frame = np.random.rand(2048, 2048)
+        # self.initializeCamera()
+        
+        # QThread attributes
         super().__init__()
-        # Class settings
-        self.live = True
-        # Camera settings
         self.isrunning = False
-        self.frame = np.random.rand(2048,2048)
-        self.initializeCamera()
-        # QThread settings
+        self.mutex = QMutex()
         self.moveToThread(self)
         self.started.connect(self.acquire)
+
+    def __del__(self):
+        self.isrunning = False
+        # self.dcam.dcamapi_uninit()
+        self.quit()
+        self.wait()
         
     def initializeCamera(self):
         # Can we make this path relative?
@@ -62,67 +68,87 @@ class CameraThread(QThread):
             self.hcam.setPropertyValue("binning", "1x1")
             # Set exposure time
             self.hcam.setPropertyValue("exposure_time", 0.2)
-        
+    
+    @pyqtSlot()
     def acquire(self):
         # Start acquisition and wait more than exposure time for camera start
+        # self.hcam.startAcquisition()
+        QThread.msleep(1000) # Not sure if necessary with mutex lock
+        logging.info("Camera acquisition started")
+        
         self.isrunning = True
-        self.hcam.startAcquisition()
-        QThread.msleep(1000)
-        print("camera acquisition started")
-
         while self.isrunning:
-            ## Mutex lock here?
-            # The camera does not always output an image
-            try:
-                [frames, dims] = self.hcam.getFrames()
-                self.frame = np.resize(frames[-1].np_array, (dims[1], dims[0]))
-                if self.live:
-                    self.livesignal.emit(self.frame)
-                else:
-                    pass
-            except:
-                pass
-        self.hcam.stopAcquisition()
-        print("camera acquisition stopped")
+            # Mutex lock prevents external access of variables and executes lines in order
+            self.mutex.lock()
+            
+            # Retrieve frames from the camera buffer
+            # [frames, dims] = self.hcam.getFrames()
+            
+            # Resize last frame in the buffer to be displayed
+            # self.frame = np.resize(frames[-1].np_array, (dims[1], dims[0]))
+            self.frame = np.random.rand(2048, 2048)
+            QThread.msleep(200)
+            
+            # Emit a frame every time it is refreshed
+            self.livesignal.emit(self.frame)
+            
+            # Mutex unlock so snap can access last frame
+            self.mutex.unlock()
         
-    def snap(self):
-        # Mutex lock here?
-        last_view = copy(self.frame)
-        print("snap!")
-        self.snapsignal.emit(last_view)
+        # Stop camera acquisition when exiting the thread
+        # self.hcam.stopAcquisition()
+        logging.info("Camera acquisition stopped")
         
-        return last_view
-        
-    def start_canvasupdates(self):
-        self.live = True
-        
-    def stop_canvasupdates(self):
-        self.live = False
-    
-    def __del__(self):
-        self.isrunning = False
-        self.dcam.dcamapi_uninit()
-        self.quit()
-        self.wait()
 
+    def snap(self):
+        # Mutex lock to wait for camera thread to release a frame
+        self.mutex.lock()
+        
+        # copy released frame
+        snapshot = copy(self.frame)
+        
+        # Mutex unlock so the camera thread can continue again
+        self.mutex.unlock()
+        
+        # Emit frame to display
+        self.snapsignal.emit(snapshot)
+        logging.info("snap!")
+
+        return snapshot
 
 
 class AutoPatchThread(QThread):
+    finished = pyqtSignal()
 
-    def __init__(self, camera_handle):
-        self.camera = camera_handle
+    def __init__(self, camera_handle=None, manipulator_handle=None, objective_handle=None):
+        # Class attributes
+        self.camera_handle = camera_handle
+        self.micromanipulator_handle = manipulator_handle
+        self.objective_handle = objective_handle
+        self.pipettetip = [np.nan, np.nan]
         
+        # QThread attributes
         super().__init__()
+        self.isrunning = False
         self.moveToThread(self)
-        
-        # print('Connecting micromanipulator...')
-        # self.micromanipulator_instance = ScientificaPatchStar()
-        # self.manipulator_position_absolute = self.micromanipulator_instance.getPos()
-        
+        self.finished.connect(self.__del__)
+        self.started.connect(self.__del__)
+
     def __del__(self):
+        self.isrunning = False
         self.quit()
         self.wait()
+        
+    def request(self, slot):
+        self.started.disconnect()
+        if slot == "autofocus":
+            self.started.connect(self.autofocus_pipette)
+        elif slot == "detect":
+            self.started.connect(self.detect_pipette_tip)
+        self.isrunning = True
+        self.start()
     
+    @pyqtSlot()
     def detect_pipette_tip(self):
         """ Detects the pipette tip position
         
@@ -130,13 +156,13 @@ class AutoPatchThread(QThread):
         coordinates of the tip in pixels. Note that this algorithm works best
         with a pipette tip in the center of the field of view.
         """
-        print('tip detection started')
+        logging.info('tip detection started')
         UPPER_ANGLE = 97.5      #Only for first calibration
         LOWER_ANGLE = 82.5      #Only for first calibration
         PIPETTEDIAMETER = 16.5  #Only for first calibration
         
         # Make snap
-        image = self.camera.snap()
+        image = self.camera_handle.snap()
         
         # First round of pipette tip detection
         x1, y1 = PipetteTipDetector.locate_tip(image,
@@ -168,14 +194,14 @@ class AutoPatchThread(QThread):
             y2 = np.nan
         
         # Adjusting x2 and y2 with the reference coordinates
-        x = xref + x2
-        y = yref + y2
+        self.pipettetip = [xref + x2, yref + y2]
         
         # Return pipette tip coordinates
-        print('Pipette tip detected @ (x,y) = (%f,%f)' % (x,y))
+        logging.info('Pipette tip detected @ (x,y) = (%f,%f)' % (self.pipettetip[0], self.pipettetip[1]))
         
-        return x, y
+        self.finished.emit()
     
+    @pyqtSlot()
     def autofocus_pipette(self):
         """ Focus pipette tip from above.
         
@@ -185,7 +211,7 @@ class AutoPatchThread(QThread):
         safety measure. Furthermore, we assume a pre-calibrated coordinate
         system and the pipette tip in the FOV center.
         """
-        print('autofocus started')
+        logging.info('autofocus started')
         self.micromanipulator_instance.setZero()
         
         # Parameters to vary
@@ -197,7 +223,7 @@ class AutoPatchThread(QThread):
         [xpos, ypos] = self.detect_pipette_tip()
         
         # Construct Gaussian window
-        I = self.camera.snap()
+        I = self.camera_handle.snap()
         window = PipetteAutofocus.comp_Gaussian_kernel(size=I.shape[1], fwhm=I.shape[1]/4, center=[xpos,ypos])
         
         # Set reference pipette position as origin
@@ -209,11 +235,11 @@ class AutoPatchThread(QThread):
         penaltyhistory = np.zeros(3)
         
         """"Step up three times to compute penalties [p1,p2,p3]"""
-        print('Step up two times')
+        logging.info('Step up two times')
         penalties = np.zeros(3)
         for i in range(3):
             # Capture image
-            I = self.camera.snap()
+            I = self.camera_handle.snap()
             io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
             
             # Apply image window
@@ -228,7 +254,7 @@ class AutoPatchThread(QThread):
             
             # Move pipette up
             if i < 2:
-                print('step up')
+                logging.info('step up')
                 self.micromanipulator_instance.moveAbsZ(reference+(i+1)*optimalstepsize)
             
         """Iteratively find peak in focus penalty values"""
@@ -258,15 +284,15 @@ class AutoPatchThread(QThread):
                 pinbool[i_mdl] = 1
                 pinbool[i_min] = 1
                 
-            print(pinbool)
-            print(reference)
+            logging.info(pinbool)
+            logging.info(reference)
             
             # Move micromanipulator towards local maximum through (7 modes)
             if np.array_equal(pinbool, [0,1,0]):
                 pass
             elif np.array_equal(pinbool, [1,0,1]):
                 self.micromanipulator_instance.moveAbsZ(reference-stepsize)
-                I = self.camera.snap()
+                I = self.camera_handle.snap()
                 io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                 IW = I * window
                 penalties[1] = penalties[0]
@@ -279,14 +305,14 @@ class AutoPatchThread(QThread):
                     stepsize = stepsize/2
                     penalties[1] = penalties[0]
                     self.micromanipulator_instance.moveAbsZ(reference+stepsize)
-                    I = self.camera.snap()
+                    I = self.camera_handle.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
                     self.micromanipulator_instance.moveAbsZ(reference-stepsize)
-                    I = self.camera.snap()
+                    I = self.camera_handle.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -297,7 +323,7 @@ class AutoPatchThread(QThread):
                     stepsize = stepsize*2
                     penalties[1] = penalties[0]
                     self.micromanipulator_instance.moveAbsZ(reference-stepsize)
-                    I = self.camera.snap()
+                    I = self.camera_handle.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -307,7 +333,7 @@ class AutoPatchThread(QThread):
                 else:
                     penalties = np.roll(penalties,1)
                     self.micromanipulator_instance.moveAbsZ(reference-stepsize)
-                    I = self.camera.snap()
+                    I = self.camera_handle.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -319,14 +345,14 @@ class AutoPatchThread(QThread):
                     stepsize = stepsize/2
                     penalties[1] = penalties[2]
                     self.micromanipulator_instance.moveAbsZ(reference+3*stepsize)
-                    I = self.camera.snap()
+                    I = self.camera_handle.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     self.micromanipulator_instance.moveAbsZ(reference+5*stepsize)
-                    I = self.camera.snap()
+                    I = self.camera_handle.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -337,7 +363,7 @@ class AutoPatchThread(QThread):
                     stepsize = stepsize*2
                     penalties[1] = penalties[2]
                     self.micromanipulator_instance.moveAbsZ(reference+2*stepsize)
-                    I = self.camera.snap()
+                    I = self.camera_handle.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -347,7 +373,7 @@ class AutoPatchThread(QThread):
                 else:
                     penalties = np.roll(penalties,-1)
                     self.micromanipulator_instance.moveAbsZ(reference+3*stepsize)
-                    I = self.camera.snap()
+                    I = self.camera_handle.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -358,7 +384,7 @@ class AutoPatchThread(QThread):
                 if stepsize == stepsizemin:
                     penalties = np.roll(penalties,1)
                     self.micromanipulator_instance.moveAbsZ(reference-stepsize)
-                    I = self.camera.snap()
+                    I = self.camera_handle.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -369,14 +395,14 @@ class AutoPatchThread(QThread):
                     stepsize = stepsize/2
                     penalties[1] = penalties[0]
                     self.micromanipulator_instance.moveAbsZ(reference+stepsize)
-                    I = self.camera.snap()
+                    I = self.camera_handle.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
                     self.micromanipulator_instance.moveAbsZ(reference-stepsize)
-                    I = self.camera.snap()
+                    I = self.camera_handle.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -387,7 +413,7 @@ class AutoPatchThread(QThread):
                 if stepsize == stepsizemin:
                     penalties = np.roll(penalties,-1)
                     self.micromanipulator_instance.moveAbsZ(reference+3*stepsize)
-                    I = self.camera.snap()
+                    I = self.camera_handle.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -398,14 +424,14 @@ class AutoPatchThread(QThread):
                     stepsize = stepsize/2
                     penalties[1] = penalties[2]
                     self.micromanipulator_instance.moveAbsZ(reference+3*stepsize)
-                    I = self.camera.snap()
+                    I = self.camera_handle.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, self.micromanipulator_instance.getPos()[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     self.micromanipulator_instance.moveAbsZ(reference+5*stepsize)
-                    I = self.camera.snap()
+                    I = self.camera_handle.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -416,7 +442,7 @@ class AutoPatchThread(QThread):
                 if stepsize == stepsizemax:
                     penalties = np.roll(penalties,1)
                     self.micromanipulator_instance.moveAbsZ(reference-stepsize)
-                    I = self.camera.snap()
+                    I = self.camera_handle.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -426,7 +452,7 @@ class AutoPatchThread(QThread):
                 else:
                     stepsize = 2*stepsize
                     self.micromanipulator_instance.moveAbsZ(reference-stepsize)
-                    I = self.camera.snap()
+                    I = self.camera_handle.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[1] = penalties[0]
@@ -443,7 +469,7 @@ class AutoPatchThread(QThread):
             positions = np.linspace(reference, reference+2*stepsize, 11)
             for idx, pos in enumerate(positions):
                 self.micromanipulator_instance.moveAbsZ(pos)
-                I = self.camera.snap()
+                I = self.camera_handle.snap()
                 io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                 IW = I * window
                 penalties[idx] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
@@ -459,15 +485,9 @@ class AutoPatchThread(QThread):
             # Set reference position one step below maximum penalty position
             reference = positions[i_max] - stepsize
         
-        print('Focus offset found!')
+        logging.info('Focus offset found!')
         np.save(self.savedirectory+'penaltyhistory.txt', penaltyhistory)
         np.save(self.savedirectory+'positionhistory.txt', positionhistory)
-    
-    
-
-
-
-
-
+        self.finished.emit()
 
 
