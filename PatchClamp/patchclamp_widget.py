@@ -89,6 +89,10 @@ class PatchClampUI(QWidget):
         # Button for pipette detection
         request_detection_button = QPushButton(text="Detect pipette", clicked=self.request_detect)
         snapshotLayout.addWidget(request_detection_button, 1, 3, 1, 1)
+        
+        # Button for calibration
+        request_detection_button = QPushButton(text="Calibrate", clicked=self.request_calibrate)
+        snapshotLayout.addWidget(request_detection_button, 1, 4, 1, 1)
 
         snapshotContainer.setLayout(snapshotLayout)
 
@@ -126,9 +130,11 @@ class PatchClampUI(QWidget):
         # make this a toggle function, function should initiate and connect or
         # disconnect and delete.
         if self.connect_micromanipulator_button.isChecked():
-            pass
+            self.micromanipulatorinstance = ScientificaPatchStar(address='COM16', baud=38400)
+            self.autopatch.manipulator_handle = self.micromanipulatorinstance
         else:
-            pass
+            # Make my own close function in the micromanipulator class
+            self.micromanipulatorinstance.close()
     
     def toggle_connect_objective(self):
         # make this a toggle function, function should initiate and connect or
@@ -155,6 +161,10 @@ class PatchClampUI(QWidget):
     def request_detect(self):
         logging.info('Request detection button pushed')
         self.autopatch.request("detect")
+        
+    def request_calibrate(self):
+        logging.info('Request calibrate button pushed')
+        self.autopatch.request("calibrate")
 
     def update_canvaslive(self, image):
         self.canvaslive.setImage(image)
