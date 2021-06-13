@@ -503,8 +503,8 @@ class AutoPatchThread(QThread):
             reference = positions[i_max] - stepsize
         
         logging.info('Focus offset found!')
-        np.save(self.savedirectory+'penaltyhistory.txt', penaltyhistory)
-        np.save(self.savedirectory+'positionhistory.txt', positionhistory)
+        np.savetxt(self.savedirectory+'penaltyhistory.txt', penaltyhistory)
+        np.savetxt(self.savedirectory+'positionhistory.txt', positionhistory)
         self.finished.emit()
     
     @pyqtSlot()
