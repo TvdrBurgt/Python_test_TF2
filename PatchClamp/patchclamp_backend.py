@@ -88,7 +88,7 @@ class CameraThread(QThread):
             # Resize last frame in the buffer to be displayed
             # self.frame = np.resize(frames[-1].np_array, (dims[1], dims[0]))
             self.frame = np.random.rand(2048, 2048)
-            QThread.msleep(200)
+            QThread.msleep(int(self.exposuretime*1000))
             
             # Emit a frame every time it is refreshed
             self.livesignal.emit(self.frame)
@@ -139,16 +139,19 @@ class AutoPatchThread(QThread):
         self.moveToThread(self)
         self.finished.connect(self.stop)
         self.started.connect(self.stop)
-
+    
     def __del__(self):
         self.isrunning = False
-        self.micromanipulator_handle.stop()
-        self.micromanipulator_handle.close()
+        if self.micromanipulator_handle != None:
+            self.micromanipulator_handle.stop()
+            self.micromanipulator_handle.close()
         self.quit()
         self.wait()
         
     def stop(self):
         self.isrunning = False
+        if self.micromanipulator_handle != None:
+            self.micromanipulator_handle.stop()
         self.quit()
         self.wait()
         
@@ -537,11 +540,11 @@ class AutoPatchThread(QThread):
                     self.micromanipulator_handle.moveAbs(step2pos([0,0,0]))
             
             # Reduce array of pipette coordinates to one x and one y
-            if idx == 1:
+            if idx == 0:
                 Ex = [np.nanmean(v)/xstep, np.nanmean(w)/xstep, 0]
-            elif idx == 2:
+            elif idx == 1:
                 Ey = [np.nanmean(v)/ystep, np.nanmean(w)/ystep, 0]
-            elif idx == 3:
+            elif idx == 2:
                 Ez = [np.nanmean(v)/zstep, np.nanmean(w)/zstep, 0]
         
         # Calculate rotation angle: gamma
