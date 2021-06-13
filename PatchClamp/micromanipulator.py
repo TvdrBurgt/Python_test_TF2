@@ -5,8 +5,9 @@ Created on Wed Jun  2 12:58:59 2021
 @author: tvdrb
 """
 
-import serial
+import logging
 import numpy as np
+import serial
 import time
 
 
@@ -85,8 +86,9 @@ class ScientificaPatchStar(serial.Serial):
             if response != '0' & self.isOpen():
                 time.sleep(0.1)
             else:
+                logging.info('PatchStar motors idle')
                 break
-            
+        
         return response
     
     def getPos(self):
@@ -114,7 +116,7 @@ class ScientificaPatchStar(serial.Serial):
         # Convert coordinates to float and apply rotation matrix
         positionarray = self.R @ [float(x), float(y), float(z)]
         
-        return positionarray
+        return positionarray / self.units
     
     def moveAbs(self, x, y, z):
         """
@@ -127,8 +129,8 @@ class ScientificaPatchStar(serial.Serial):
         self.manipcoords = self.Rinv @ [x, y, z]
         
         # Add coordinate origin
-        [x, y, z] = self.origin + self.manipcoords
-        [x, y, z] = [x, y, z]*self.units
+        target = self.origin + self.manipcoords
+        [x, y, z] = target*self.units
         
         command = "ABS %d %d %d" % (x,y,z) + self.ENDOFLINE
         
@@ -150,15 +152,12 @@ class ScientificaPatchStar(serial.Serial):
     
     def moveAbsZ(self, z):
         """
-        Moves the PatchStar to the given absolute position in z. The x and y
-        coordinates do not change.
+        Moves the PatchStar to the given absolute position in z in the camera
+        field of reference. The x and y coordinates do not change.
         """
-        # Target location in camera frame of reference
-        target = [self.camcoords[0], self.camcoords[1], z]
+        return self.moveAbs(self.camcoords[0], self.camcoords[1], z)
         
-        return self.moveAbs(target[0], target[1], target[2])
-        
-    def moveRel(self, x=0, y=0, z=0):
+    def moveRel(self, dx=0, dy=0, dz=0):
         """
         Moves the patchstar relative from the initial position. The function
         calls the absolute movement function - to bypass building up
@@ -166,9 +165,9 @@ class ScientificaPatchStar(serial.Serial):
         position by adding the current position.
         """
         # Target location in camera frame of reference
-        target = self.camcoords + [x, y, z]
+        [x, y, z] = self.camcoords + [dx, dy, dz]
         
-        return self.moveAbs(target[0], target[1], target[2])
+        return self.moveAbs(x, y, z)
     
     def stop(self):
         """

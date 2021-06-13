@@ -516,10 +516,10 @@ class AutoPatchThread(QThread):
         PatchStar always points up.
         """
         # Specify the number of steps and their size for slope detection
-        numsteps = 10
-        xstep = 500           # in micrometer/100
-        ystep = 500           # in micrometer/100
-        zstep = 500           # in micrometer/100
+        numsteps = 0.1
+        xstep = 5           # in micrometer
+        ystep = 5           # in micrometer
+        zstep = 5           # in micrometer
         
         # Set the micromanipulator absolute- and relative position
         manipulator_position_absolute = self.micromanipulator_handle.camcoords
