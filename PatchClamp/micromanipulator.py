@@ -21,17 +21,16 @@ class ScientificaPatchStar(serial.Serial):
         super().__init__(port=address, baudrate=baud, timeout=1)
         
         # Initiate default settings
-        self.CRending = '\r'                    # Carriage return
+        self.ENDOFLINE = '\r'                   # Carriage return
         self.origin = np.array([0, 0, 0])       # Coordinate origin
         self.manipcoords = np.array([0, 0, 0])  # Manipulator coordinate FOR
         self.camcoords = np.array([0, 0, 0])    # Camera coordinate FOR
         self.R = np.identity(3)                 # 3D rotation matrix
         self.Rinv = np.identity(3)              # 3D rotation matrix inverse
+        self.units = 100                        # 1um is 100 units
         
         # Fill-in known settings
         self.origin = self.getPos()
-        self.manipcoords = self.origin
-        self.cameracoords = self.manipcoord
         [self.R, self.Rinv] = self.constructrotationmatrix()
         
     @staticmethod
@@ -55,9 +54,6 @@ class ScientificaPatchStar(serial.Serial):
         R = R_gamma @ R_beta @ R_alpha
         Rinv = np.transpose(R)
         
-        self.R = R
-        self.Rinv = Rinv
-        
         return R, Rinv
     
     def wait_until_finished(self):
@@ -67,7 +63,8 @@ class ScientificaPatchStar(serial.Serial):
         'S' returns the status of the patchstar, '0' means motors are idle
         'P' returns the patchstar coordinates, 'x y z' is the position
         """
-        command = 'S' + self.CRending
+            
+        command = 'S' + self.ENDOFLINE
         
         response = '-1'
         while True:
@@ -77,15 +74,15 @@ class ScientificaPatchStar(serial.Serial):
                 # Wait until all data is written
                 self.flush()
                 # Read PatchStar response until carriage return
-                response = self.read_until(self.CRending.encode('ascii'))
+                response = self.read_until(self.ENDOFLINE.encode('ascii'))
                 # Decodes response to utf-8
                 response = response.decode('utf-8')
                 # Strip off the carriage return
-                response = response.rstrip(self.CRending)
+                response = response.rstrip(self.ENDOFLINE)
             except:
                 print('Busy traffic')
                 
-            if response != '0':
+            if response != '0' & self.isOpen():
                 time.sleep(0.1)
             else:
                 break
@@ -98,26 +95,26 @@ class ScientificaPatchStar(serial.Serial):
             Send: POS or P
             Response: 1321 543 2
         """
-        command = 'P' + self.CRending
+        command = 'P' + self.ENDOFLINE
         
         # Encode the command to ascii and send to PatchStar
         self.write(command.encode('ascii'))
         # Wait until all data is written
         self.flush()
         # Read PatchStar response until carriage return
-        response = self.read_until(self.CRending.encode('ascii'))
+        response = self.read_until(self.ENDOFLINE.encode('ascii'))
         # Decodes response to utf-8
         response = response.decode('utf-8')
         # Strip off the carriage return
-        response = response.rstrip(self.CRending)
+        response = response.rstrip(self.ENDOFLINE)
         
         # Split response by at the tabs
         [x, y, z] = response.split('\t')
         
         # Convert coordinates to float and apply rotation matrix
-        [x, y, z] = self.R @ [float(x), float(y), float(z)]
+        positionarray = self.R @ [float(x), float(y), float(z)]
         
-        return x, y, z
+        return positionarray
     
     def moveAbs(self, x, y, z):
         """
@@ -131,21 +128,22 @@ class ScientificaPatchStar(serial.Serial):
         
         # Add coordinate origin
         [x, y, z] = self.origin + self.manipcoords
+        [x, y, z] = [x, y, z]*self.units
         
-        command = "ABS %d %d %d" % (x,y,z) + self.CRending
+        command = "ABS %d %d %d" % (x,y,z) + self.ENDOFLINE
         
         # Encode the command to ascii and send to PatchStar
         self.write(command.encode('ascii'))
         # Wait until all data is written
         self.flush()
         # Read PatchStar response until carriage return
-        response = self.read_until(self.CRending.encode('ascii'))
+        response = self.read_until(self.ENDOFLINE.encode('ascii'))
         # Decodes response to utf-8
         response = response.decode('utf-8')
         # Strip off the carriage return
-        response = response.rstrip(self.CRending)
+        response = response.rstrip(self.ENDOFLINE)
         
-        # Wait untill move has finished
+        # Wait until move is finished
         self.wait_until_finished()
         
         return response
@@ -158,7 +156,7 @@ class ScientificaPatchStar(serial.Serial):
         # Target location in camera frame of reference
         target = [self.camcoords[0], self.camcoords[1], z]
         
-        return self.moveAbs(target)
+        return self.moveAbs(target[0], target[1], target[2])
         
     def moveRel(self, x=0, y=0, z=0):
         """
@@ -170,25 +168,43 @@ class ScientificaPatchStar(serial.Serial):
         # Target location in camera frame of reference
         target = self.camcoords + [x, y, z]
         
-        return self.moveAbs(target)
+        return self.moveAbs(target[0], target[1], target[2])
     
     def stop(self):
         """
         Stops any motion.
         """
-        command = 'STOP' + self.CRending
+        command = 'STOP' + self.ENDOFLINE
         
         # Encode the command to ascii and send to PatchStar
         self.write(command.encode('ascii'))
         # Wait until all data is written
         self.flush()
         # Read PatchStar response until carriage return
-        response = self.read_until(self.CRending.encode('ascii'))
+        response = self.read_until(self.ENDOFLINE.encode('ascii'))
         # Decodes response to utf-8
         response = response.decode('utf-8')
         # Strip off the carriage return
-        response = response.rstrip(self.CRending)
+        response = response.rstrip(self.ENDOFLINE)
             
         return response
     
-    
+    def debug(self, string):
+        """
+        For debugging purposes only. Input a string corresponding to a command
+        from the Scientifica '3 Axis Linear Card Command List'.
+        """
+        command = string + self.ENDOFLINE
+        
+        # Encode the command to ascii and send to PatchStar
+        self.write(command.encode('ascii'))
+        # Wait until all data is written
+        self.flush()
+        # Read PatchStar response until carriage return
+        response = self.read_until(self.ENDOFLINE.encode('ascii'))
+        # Decodes response to utf-8
+        response = response.decode('utf-8')
+        # Strip off the carriage return
+        response = response.rstrip(self.ENDOFLINE)
+        
+        return response

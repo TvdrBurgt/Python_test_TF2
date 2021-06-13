@@ -18,6 +18,7 @@ import pyqtgraph as pg
 if __name__ == "__main__":
     os.chdir(os.getcwd() + '\\..')
 from PatchClamp.patchclamp_backend import CameraThread, AutoPatchThread
+from PatchClamp.micromanipulator import ScientificaPatchStar
 
 
 class PatchClampUI(QWidget):
@@ -131,7 +132,7 @@ class PatchClampUI(QWidget):
         # disconnect and delete.
         if self.connect_micromanipulator_button.isChecked():
             self.micromanipulatorinstance = ScientificaPatchStar(address='COM16', baud=38400)
-            self.autopatch.manipulator_handle = self.micromanipulatorinstance
+            self.autopatch.micromanipulator_handle = self.micromanipulatorinstance
         else:
             # Make my own close function in the micromanipulator class
             self.micromanipulatorinstance.close()
@@ -185,8 +186,9 @@ class PatchClampUI(QWidget):
         if hasattr(self, 'autopatch'):
             self.autopatch.__del__()
             logging.info('Autopatch stopped successfully')
-        QtWidgets.QApplication.quit()
         event.accept()
+        QtWidgets.QApplication.quit()
+        self.close()
         logging.info('Widget closed successfully')
 
 

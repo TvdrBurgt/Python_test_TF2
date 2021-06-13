@@ -29,6 +29,7 @@ class CameraThread(QThread):
 
     def __init__(self):
         # Class attributes
+        self.exposuretime = 0.01
         self.frame = np.random.rand(2048, 2048)
         # self.initializeCamera()
         
@@ -67,13 +68,13 @@ class CameraThread(QThread):
             # Set the binning
             self.hcam.setPropertyValue("binning", "1x1")
             # Set exposure time
-            self.hcam.setPropertyValue("exposure_time", 0.2)
+            self.hcam.setPropertyValue("exposure_time", self.exposuretime)
     
     @pyqtSlot()
     def acquire(self):
         # Start acquisition and wait more than exposure time for camera start
         # self.hcam.startAcquisition()
-        QThread.msleep(1000) # Not sure if necessary with mutex lock
+        QThread.msleep(int(self.exposuretime*1000)) # Not sure if necessary with mutex lock
         logging.info("Camera acquisition started")
         
         self.isrunning = True
@@ -101,6 +102,10 @@ class CameraThread(QThread):
         
 
     def snap(self):
+        # Wait exposure time so if micromanipulator was still moving it will
+        # output a sharp image.
+        QThread.msleep(int(self.exposuretime*1000))
+        
         # Mutex lock to wait for camera thread to release a frame
         self.mutex.lock()
         
@@ -126,15 +131,23 @@ class AutoPatchThread(QThread):
         self.micromanipulator_handle = manipulator_handle
         self.objective_handle = objective_handle
         self.pipettetip = [np.nan, np.nan]
+        self.savedirectory = r'M:\tnw\ist\do\projects\Neurophotonics\Brinkslab\Data\Thijs\Save directory\\'
         
         # QThread attributes
         super().__init__()
         self.isrunning = False
         self.moveToThread(self)
-        self.finished.connect(self.__del__)
-        self.started.connect(self.__del__)
+        self.finished.connect(self.stop)
+        self.started.connect(self.stop)
 
     def __del__(self):
+        self.isrunning = False
+        self.micromanipulator_handle.stop()
+        self.micromanipulator_handle.close()
+        self.quit()
+        self.wait()
+        
+    def stop(self):
         self.isrunning = False
         self.quit()
         self.wait()
@@ -214,23 +227,21 @@ class AutoPatchThread(QThread):
         system and the pipette tip in the FOV center.
         """
         logging.info('autofocus started')
-        self.micromanipulator_handle.setZero()
         
         # Parameters to vary
-        focusprecision = 10     # focal plane finding precision (micrometers/100)
-        optimalstepsize = 1000  # peak recognizing step size (micrometers/100)
+        focusprecision = 0.1    # focal plane finding precision (micrometers/100)
+        optimalstepsize = 10    # peak recognizing step size (micrometers/100)
         margin = 0.96           # threshold for max values (percentage)
         
         # Get pipette tip position
-        [xpos, ypos] = self.detect_pipette_tip()
+        self.detect_pipette_tip()
+        [xpos, ypos] = self.pipettetip
         
         # Construct Gaussian window
         I = self.camera_handle.snap()
         window = PipetteAutofocus.comp_Gaussian_kernel(size=I.shape[1], fwhm=I.shape[1]/4, center=[xpos,ypos])
         
         # Set reference pipette position as origin
-        # self.micromanipulator_instance.setZero()
-        # reference = self.micromanipulator_instance.getPos()[2]
         reference = self.micromanipulator_handle.camcoords[2]
         
         # Initialize array for storing [positions; penalties]
@@ -258,7 +269,6 @@ class AutoPatchThread(QThread):
             # Move pipette up
             if i < 2:
                 print('step up')
-                # self.micromanipulator_instance.moveAbsZ(reference+(i+1)*optimalstepsize)
                 self.micromanipulator_handle.moveRel(0,0,optimalstepsize)
             
         """Iteratively find peak in focus penalty values"""
@@ -266,7 +276,7 @@ class AutoPatchThread(QThread):
         stepsizemin = optimalstepsize/2
         stepsizemax = optimalstepsize*8
         pinbool = np.zeros(3)
-        while not np.array_equal(pinbool, [0,1,0]):
+        while not np.array_equal(pinbool, [0,1,0]) & self.isrunning:
             # Adjust threshold
             margin = margin*.995 + .005
             
@@ -467,10 +477,10 @@ class AutoPatchThread(QThread):
         
         """Final approach by sampling between the zeros in [0,1,0]"""
         print('Coarse focus found, continue with finetuning')
-        while stepsize > focusprecision:
+        while stepsize > focusprecision & self.isrunning:
             # Sample ten points between outer penalty values
-            penalties = np.zeros(11)
-            positions = np.linspace(reference, reference+2*stepsize, 11)
+            penalties = np.zeros(6)
+            positions = np.linspace(reference, reference+2*stepsize, 6)
             for idx, pos in enumerate(positions):
                 self.micromanipulator_handle.moveAbsZ(pos)
                 I = self.camera_handle.snap()
@@ -518,8 +528,9 @@ class AutoPatchThread(QThread):
             w = np.empty(numsteps)
             
             # Detect pipette tip and move micromanipulator
-            for i in numsteps:
-                v[i], w[i] = self.detect_pipette_tip()
+            for i in range(numsteps):
+                self.detect_pipette_tip()
+                v[i], w[i] = self.pipettetip
                 if i < numsteps:
                     self.micromanipulator_handle.moveAbs(step2pos(np.multiply(step,(i+1))))
                 else:
