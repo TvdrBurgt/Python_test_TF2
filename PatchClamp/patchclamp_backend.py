@@ -75,7 +75,10 @@ class AutoPatchThread(QThread):
         elif slot == "calibrate":
             self.started.connect(self.calibrate_coordsys)
         self.isrunning = True
-        self.start()
+        try:
+            self.start()
+        except:
+            logging.warning('Something wrong with threading')
     
     @pyqtSlot()
     def detect_pipette_tip(self):
