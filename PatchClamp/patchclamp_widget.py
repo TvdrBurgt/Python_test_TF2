@@ -39,17 +39,24 @@ class PatchClampUI(QWidget):
         hardwareLayout = QGridLayout()
         
         # Button for connecting camera
-        self.connect_camera_button = QPushButton(text="Camera", clicked=self.toggle_connect_camera, checkable=True)
+        self.connect_camera_button = QPushButton(text="Camera", clicked=self.toggle_connect_camera)
+        self.connect_camera_button.setCheckable(True)
         
         # Button for connecting micromanipulator
-        self.connect_micromanipulator_button = QPushButton("Micromanipulator", clicked=self.toggle_connect_micromanipulator, checkable=True)
+        self.connect_micromanipulator_button = QPushButton("Micromanipulator", clicked=self.toggle_connect_micromanipulator)
+        self.connect_camera_button.setCheckable(True)
         
         # Button for connecting objective motor
-        self.connect_objective_button = QPushButton("Objective", clicked=self.toggle_connect_objective, checkable=True)
+        self.connect_objective_button = QPushButton("Objective", clicked=self.toggle_connect_objective)
+        self.connect_camera_button.setCheckable(True)
+        
+        # Emergency stop to stop everything and disconnect all
+        emergency_button = QPushButton(text="STOP", clicked=self.emergency_stop)
         
         hardwareLayout.addWidget(self.connect_camera_button, 0, 0, 1, 1)
         hardwareLayout.addWidget(self.connect_micromanipulator_button, 1, 0, 1, 1)
         hardwareLayout.addWidget(self.connect_objective_button, 2, 0, 1, 1)
+        hardwareLayout.addWidget(emergency_button, 3, 0, 1, 1)
         hardwareContainer.setLayout(hardwareLayout)
         
         # ------------------------ Snapshot container ------------------------
@@ -61,43 +68,42 @@ class PatchClampUI(QWidget):
         self.liveWidget = pg.ImageView()
         self.canvaslive = self.liveWidget.getImageItem()
         self.canvaslive.setAutoDownsample(True)
-
         self.liveWidget.ui.roiBtn.hide()
         self.liveWidget.ui.menuBtn.hide()
         self.liveWidget.ui.histogram.hide()
-        snapshotLayout.addWidget(self.liveWidget, 0, 0, 1, 5)
 
         # Display to project snapshots
         self.snapshotWidget = pg.ImageView()
         self.canvassnap = self.snapshotWidget.getImageItem()
         self.canvassnap.setAutoDownsample(True)
-
         self.snapshotWidget.ui.roiBtn.hide()
         self.snapshotWidget.ui.menuBtn.hide()
         self.snapshotWidget.ui.histogram.hide()
-        snapshotLayout.addWidget(self.snapshotWidget, 0, 5, 1, 5)
 
-        # Button for starting camera acquisition. This button is a property of
-        # the container because we need its checkable state in a function.
-        self.request_pause_button = QPushButton(text="Pause live", clicked=self.toggle_live, checkable=True)
-        snapshotLayout.addWidget(self.request_pause_button, 1, 0, 1, 2)
+        # Button for freezing camera view
+        self.request_pause_button = QPushButton(text="Pause live", clicked=self.toggle_live)
+        self.request_pause_button.setCheckable(True)
 
         # Button for making a snapshot
         request_camera_image_button = QPushButton(text="Snap image", clicked=self.request_snap)
-        snapshotLayout.addWidget(request_camera_image_button, 1, 2, 1, 2)
 
         # Button for autofocus
         request_autofocus_button = QPushButton(text="Autofocus", clicked=self.request_autofocus)
-        snapshotLayout.addWidget(request_autofocus_button, 1, 4, 1, 2)
 
         # Button for pipette detection
-        self.request_detect_button = QPushButton(text="Detect pipette", clicked=self.request_detect, checkable=True)
-        snapshotLayout.addWidget(self.request_detect_button, 1, 6, 1, 2)
+        self.request_detect_button = QPushButton(text="Detect pipette", clicked=self.request_detect)
+        self.request_detect_button.setCheckable(True)
         
         # Button for calibration
         request_calibrate_button = QPushButton(text="Calibrate", clicked=self.request_calibrate)
+        
+        snapshotLayout.addWidget(self.liveWidget, 0, 0, 1, 5)
+        snapshotLayout.addWidget(self.snapshotWidget, 0, 5, 1, 5)
+        snapshotLayout.addWidget(self.request_pause_button, 1, 0, 1, 2)
+        snapshotLayout.addWidget(request_camera_image_button, 1, 2, 1, 2)
+        snapshotLayout.addWidget(request_autofocus_button, 1, 4, 1, 2)
+        snapshotLayout.addWidget(self.request_detect_button, 1, 6, 1, 2)
         snapshotLayout.addWidget(request_calibrate_button, 1, 8, 1, 2)
-
         snapshotContainer.setLayout(snapshotLayout)
 
         # -------------------------- Adding to master -------------------------
@@ -150,6 +156,7 @@ class PatchClampUI(QWidget):
             pass
     
     def toggle_live(self, state):
+        logging.info('Toggle live')
         # Request to pause or continue emitting frames from the camera thread
         if self.request_pause_button.isChecked():
             self.camerathread.livesignal.disconnect()
@@ -157,6 +164,7 @@ class PatchClampUI(QWidget):
             self.camerathread.livesignal.connect(self.update_canvaslive)
 
     def request_snap(self):
+        logging.info('Snap button pushed')
         self.camerathread.snap()
         
     def request_autofocus(self):
@@ -193,12 +201,8 @@ class PatchClampUI(QWidget):
         # Disconnect signal so next algorithm can use it
         self.autopatch.finished.disconnect()
         
-    def closeEvent(self, event):
-        """ Close event
-        This method is called when the GUI is shut down. First we need to stop
-        the threads that are steill running, then we accept the close event
-        and quit the widget.
-        """
+    def emergency_stop(self):
+        logging.info('Emergency stop pressed')
         # Disconnect all signals and slots, here or in class?
         if hasattr(self, 'camerathread'):
             self.camerathread.__del__()
@@ -206,6 +210,14 @@ class PatchClampUI(QWidget):
         if hasattr(self, 'autopatch'):
             self.autopatch.__del__()
             logging.info('Autopatch stopped successfully')
+        
+    def closeEvent(self, event):
+        """ Close event
+        This method is called when the GUI is shut down. First we need to stop
+        the threads that are steill running, then we accept the close event
+        and quit the widget.
+        """
+        self.emergency_stop()
         event.accept()
         QtWidgets.QApplication.quit()
         self.close()

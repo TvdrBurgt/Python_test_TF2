@@ -21,7 +21,7 @@ from PatchClamp.ImageProcessing_AutoPatch import PipetteTipDetector, PipetteAuto
 class AutoPatchThread(QThread):
     intermediate = pyqtSignal(np.ndarray)
     finished = pyqtSignal()
-
+    
     def __init__(self, camera_handle=None, manipulator_handle=None, objective_handle=None):
         # Class attributes
         self.camera_handle = camera_handle
@@ -38,6 +38,11 @@ class AutoPatchThread(QThread):
         self.started.connect(self.stop)
     
     def __del__(self):
+        """
+        Before we delete the autopatch backend we need to: interrupt every
+        algorithm that is running as soon as possible, stop active hardware, 
+        disconnect inactive hardware, and quit the thread.
+        """
         self.isrunning = False
         if self.micromanipulator_handle != None:
             self.micromanipulator_handle.stop()
@@ -46,6 +51,11 @@ class AutoPatchThread(QThread):
         self.wait()
         
     def stop(self):
+        """
+        To make sure the algorithm and micromanipulator stop, we reset the
+        button 'isrunning' to False and tell the micromanipulator to be idle.
+        Afterwards, we wait for the thread to quit so it can be reused.
+        """
         self.isrunning = False
         if self.micromanipulator_handle != None:
             self.micromanipulator_handle.stop()
@@ -53,6 +63,10 @@ class AutoPatchThread(QThread):
         self.wait()
         
     def request(self, slot):
+        """
+        Request forms the bridget between frontend and backend. A button press
+        event triggers connecting to one of the pyqtSlots and starts the thread.
+        """
         self.started.disconnect()
         if slot == "autofocus":
             self.started.connect(self.autofocus_pipette)
@@ -126,7 +140,6 @@ class AutoPatchThread(QThread):
         safety measure. Furthermore, we assume a pre-calibrated coordinate
         system and the pipette tip in the FOV center.
         """
-        logging.info('autofocus started')
         
         # Parameters to vary
         focusprecision = 0.1    # focal plane finding precision (micrometers/100)
@@ -379,7 +392,7 @@ class AutoPatchThread(QThread):
                     reference = reference - stepsize
         
         """Final approach by sampling between the zeros in [0,1,0]"""
-        print('Coarse focus found, continue with finetuning')
+        logging.info('Coarse focus found, continue with finetuning')
         while stepsize > focusprecision & self.isrunning:
             # Sample ten points between outer penalty values
             penalties = np.zeros(6)
@@ -424,7 +437,6 @@ class AutoPatchThread(QThread):
         # Set the micromanipulator absolute- and relative position
         manipulator_position_absolute = self.micromanipulator_handle.camcoords
         step2pos = lambda pos: np.add(manipulator_position_absolute, pos)
-        
         
         for idx, step in enumerate([[xstep,0,0], [0,ystep,0], [0,0,zstep]]):
             v = np.empty(numsteps)

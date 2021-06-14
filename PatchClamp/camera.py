@@ -18,7 +18,6 @@ from PyQt5.QtCore import pyqtSignal, pyqtSlot, QThread, QMutex
 if __name__ == "__main__":
     os.chdir(os.getcwd() + '\\..')
 from HamamatsuCam.HamamatsuDCAM import HamamatsuCameraMR, DCAMAPI_INIT
-# from PI_ObjectiveMotor.focuser import PIMotor
 
 
 class CameraThread(QThread):
@@ -97,7 +96,6 @@ class CameraThread(QThread):
         # Stop camera acquisition when exiting the thread
         # self.hcam.stopAcquisition()
         logging.info("Camera acquisition stopped")
-        
 
     def snap(self):
         # Wait exposure time so if micromanipulator was still moving it will
