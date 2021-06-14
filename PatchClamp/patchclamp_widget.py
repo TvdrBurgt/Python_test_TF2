@@ -9,7 +9,9 @@ import os
 import sys
 import logging
 
+from PyQt5.QtCore import Qt
 from PyQt5 import QtWidgets
+from PyQt5.QtGui import QPen
 from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QGroupBox
 import pyqtgraph.exporters
 import pyqtgraph as pg
@@ -17,7 +19,8 @@ import pyqtgraph as pg
 # Change path so the Widget can be run either independently or as part of Tupolev.
 if __name__ == "__main__":
     os.chdir(os.getcwd() + '\\..')
-from PatchClamp.patchclamp_backend import CameraThread, AutoPatchThread
+from PatchClamp.patchclamp_backend import AutoPatchThread
+from PatchClamp.camera import CameraThread
 from PatchClamp.micromanipulator import ScientificaPatchStar
 
 
@@ -62,7 +65,7 @@ class PatchClampUI(QWidget):
         self.liveWidget.ui.roiBtn.hide()
         self.liveWidget.ui.menuBtn.hide()
         self.liveWidget.ui.histogram.hide()
-        snapshotLayout.addWidget(self.liveWidget, 0, 0, 1, 2)
+        snapshotLayout.addWidget(self.liveWidget, 0, 0, 1, 5)
 
         # Display to project snapshots
         self.snapshotWidget = pg.ImageView()
@@ -72,28 +75,28 @@ class PatchClampUI(QWidget):
         self.snapshotWidget.ui.roiBtn.hide()
         self.snapshotWidget.ui.menuBtn.hide()
         self.snapshotWidget.ui.histogram.hide()
-        snapshotLayout.addWidget(self.snapshotWidget, 0, 2, 1, 2)
+        snapshotLayout.addWidget(self.snapshotWidget, 0, 5, 1, 5)
 
         # Button for starting camera acquisition. This button is a property of
         # the container because we need its checkable state in a function.
         self.request_pause_button = QPushButton(text="Pause live", clicked=self.toggle_live, checkable=True)
-        snapshotLayout.addWidget(self.request_pause_button, 1, 0, 1, 1)
+        snapshotLayout.addWidget(self.request_pause_button, 1, 0, 1, 2)
 
         # Button for making a snapshot
         request_camera_image_button = QPushButton(text="Snap image", clicked=self.request_snap)
-        snapshotLayout.addWidget(request_camera_image_button, 1, 1, 1, 1)
+        snapshotLayout.addWidget(request_camera_image_button, 1, 2, 1, 2)
 
         # Button for autofocus
         request_autofocus_button = QPushButton(text="Autofocus", clicked=self.request_autofocus)
-        snapshotLayout.addWidget(request_autofocus_button, 1, 2, 1, 1)
+        snapshotLayout.addWidget(request_autofocus_button, 1, 4, 1, 2)
 
         # Button for pipette detection
-        request_detection_button = QPushButton(text="Detect pipette", clicked=self.request_detect)
-        snapshotLayout.addWidget(request_detection_button, 1, 3, 1, 1)
+        self.request_detect_button = QPushButton(text="Detect pipette", clicked=self.request_detect, checkable=True)
+        snapshotLayout.addWidget(self.request_detect_button, 1, 6, 1, 2)
         
         # Button for calibration
-        request_detection_button = QPushButton(text="Calibrate", clicked=self.request_calibrate)
-        snapshotLayout.addWidget(request_detection_button, 1, 4, 1, 1)
+        request_calibrate_button = QPushButton(text="Calibrate", clicked=self.request_calibrate)
+        snapshotLayout.addWidget(request_calibrate_button, 1, 8, 1, 2)
 
         snapshotContainer.setLayout(snapshotLayout)
 
@@ -110,6 +113,7 @@ class PatchClampUI(QWidget):
         
         # Fire up backend
         self.autopatch = AutoPatchThread()
+        self.autopatch.intermediate.connect(self.update_canvassnap)
         
     def toggle_connect_camera(self):
         if self.connect_camera_button.isChecked():
@@ -154,24 +158,40 @@ class PatchClampUI(QWidget):
 
     def request_snap(self):
         self.camerathread.snap()
-
+        
     def request_autofocus(self):
         logging.info('Request autofocus button pushed')
         self.autopatch.request("autofocus")
 
     def request_detect(self):
         logging.info('Request detection button pushed')
-        self.autopatch.request("detect")
+        if self.request_detect_button.isChecked():
+            self.autopatch.request("detect")
+            self.autopatch.finished.connect(self.draw_crosshair)
+        else:
+            self.snapshotWidget.getView().removeItem(self.r)
         
     def request_calibrate(self):
         logging.info('Request calibrate button pushed')
         self.autopatch.request("calibrate")
-
+        
     def update_canvaslive(self, image):
         self.canvaslive.setImage(image)
-
+        
     def update_canvassnap(self, image):
         self.canvassnap.setImage(image)
+        
+    def draw_crosshair(self):
+        logging.info('Display crosshair')
+        x = self.autopatch.pipettetip[0]
+        y = self.autopatch.pipettetip[1]
+        pen = QPen(Qt.red, 0.1)
+        pen.setWidthF(5)
+        self.r = MyCrosshairOverlay(pos=(x, y), size=25, pen=pen, movable=False)
+        self.snapshotWidget.getView().addItem(self.r)
+        
+        # Disconnect signal so next algorithm can use it
+        self.autopatch.finished.disconnect()
         
     def closeEvent(self, event):
         """ Close event
@@ -190,6 +210,13 @@ class PatchClampUI(QWidget):
         QtWidgets.QApplication.quit()
         self.close()
         logging.info('Widget closed successfully')
+
+class MyCrosshairOverlay(pg.CrosshairROI):
+    def __init__(self, pos=None, size=None, **kargs):
+        self._shape = None
+        pg.ROI.__init__(self, pos, size, **kargs)
+        self.sigRegionChanged.connect(self.invalidate)
+        self.aspectLocked = True
 
 
 if __name__ == "__main__":

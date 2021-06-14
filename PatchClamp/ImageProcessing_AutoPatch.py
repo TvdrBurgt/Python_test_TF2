@@ -5,7 +5,6 @@ Created on Fri Apr 16 11:56:47 2021
 @author: tvdrb
 """
 
-import logging
 import numpy as np
 from skimage import filters, feature, transform
 
@@ -27,15 +26,12 @@ class PipetteTipDetector:
             ypos        = y position of the pipette tip
         """
         # Gaussian blur
-        logging.info('I)\t Gaussian blurring...')
         IB = filters.gaussian(I, blursize)
         
         # Canny edge detection
-        logging.info('II)\t Canny edge detection...')
         BW = feature.canny(IB, sigma=10, low_threshold=0.9, high_threshold=0.7, use_quantiles=True)
         
         # Double-sided Hough transform
-        logging.info('III) Calculating Hough transform...')
         if np.abs(upper_angle-lower_angle) < angle_range:
             theta1 = upper_angle + np.linspace(angle_range/2, -np.abs(upper_angle-lower_angle)/2, num_angles)
             theta2 = lower_angle + np.linspace(np.abs(upper_angle-lower_angle)/2, -angle_range/2, num_angles)
@@ -51,7 +47,6 @@ class PipetteTipDetector:
         T1, T2 = np.hsplit(T,2)
         
         # extract most common lines in the image from the double-sided Hough transform
-        logging.info('IV)\t Finding most common lines from Hough transform...')
         _, Tcommon1, Rcommon1 = transform.hough_line_peaks(H1,T1,R,num_peaks=num_peaks,threshold=0)
         _, Tcommon2, Rcommon2 = transform.hough_line_peaks(H2,T2,R,num_peaks=num_peaks,threshold=0)
         # find the average value so we end up with two lines
@@ -61,13 +56,11 @@ class PipetteTipDetector:
         dist2 = np.mean(Rcommon2)
         
         # find intersection between X1*cos(T1)+Y1*sin(T1)=R1 and X2*cos(T2)+Y2*sin(T2)=R2
-        logging.info('V)\t Calculating preliminary pipette point...')
         LHS = np.array([[np.cos(angle1), np.sin(angle1)], [np.cos(angle2), np.sin(angle2)]])
         RHS = np.array([dist1, dist2])
         xpos, ypos = np.linalg.solve(LHS, RHS)
         
         # account for xposition overestimation bias
-        logging.info('VI)\t Correcting for pipette diameter...')
         deltax = (diameter*np.sin((angle1+angle2)/2))/(2*np.tan((angle1-angle2)/2))
         deltay = -(diameter*np.cos((angle1+angle2)/2))/(2*np.tan((angle1-angle2)/2))
         xpos = xpos - deltax
