@@ -432,7 +432,7 @@ class AutoPatchThread(QThread):
         PatchStar always points up.
         """
         # Specify the number of steps and their size for slope detection
-        numsteps = 0.1
+        numsteps = 10
         xstep = 5           # in micrometer
         ystep = 5           # in micrometer
         zstep = 5           # in micrometer

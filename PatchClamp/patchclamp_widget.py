@@ -92,7 +92,7 @@ class PatchClampUI(QWidget):
 
         # Button for pipette detection
         self.request_detect_button = QPushButton(text="Detect pipette", clicked=self.request_detect)
-        self.request_detect_button.setCheckable(True)
+        # self.request_detect_button.setCheckable(True)
         
         # Button for calibration
         request_calibrate_button = QPushButton(text="Calibrate", clicked=self.request_calibrate)
@@ -119,7 +119,6 @@ class PatchClampUI(QWidget):
         
         # Fire up backend
         self.autopatch = AutoPatchThread()
-        self.autopatch.intermediate.connect(self.update_canvassnap)
         
     def toggle_connect_camera(self):
         if self.connect_camera_button.isChecked():
@@ -169,13 +168,16 @@ class PatchClampUI(QWidget):
         
     def request_autofocus(self):
         logging.info('Request autofocus button pushed')
+        self.autopatch.intermediate.connect(self.update_canvassnap)
+        self.autopatch.intermediate.connect(lambda: self.autopatch.intermediate.disconnect())
         self.autopatch.request("autofocus")
 
     def request_detect(self):
         logging.info('Request detection button pushed')
         if self.request_detect_button.isChecked():
-            self.autopatch.request("detect")
             self.autopatch.finished.connect(self.draw_crosshair)
+            self.autopatch.finished.connect(lambda: self.autopatch.finished.disconnect())
+            self.autopatch.request("detect")
         else:
             self.snapshotWidget.getView().removeItem(self.r)
         
@@ -197,10 +199,7 @@ class PatchClampUI(QWidget):
         pen.setWidthF(5)
         self.r = MyCrosshairOverlay(pos=(x, y), size=25, pen=pen, movable=False)
         self.snapshotWidget.getView().addItem(self.r)
-        
-        # Disconnect signal so next algorithm can use it
-        self.autopatch.finished.disconnect()
-        
+    
     def emergency_stop(self):
         logging.info('Emergency stop pressed')
         # Disconnect all signals and slots, here or in class?
