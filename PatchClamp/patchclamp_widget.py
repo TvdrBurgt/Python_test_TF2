@@ -121,6 +121,7 @@ class PatchClampUI(QWidget):
         # Fire up backend and establish feedback communication
         self.autopatch = AutoPatchThread()
         self.autopatch.sketches.connect(self.update_canvassnap)
+        self.autopatch.drawings.connect(self.draw)
         self.autopatch.crosshair.connect(self.draw_crosshair)
         self.autopatch.drawsignal.connect(self.draw_lines)
         
@@ -194,8 +195,8 @@ class PatchClampUI(QWidget):
         
     def draw_crosshair(self, position):
         logging.info('Display crosshair')
-        vertical = pg.ROI(pos=(position[0],position[1]-15), size=[1,30], pen=QPen(Qt.yellow, 0), movable=False)
-        horizontal = pg.ROI(pos=(position[0]-15,position[1]), size=[30,1], pen=QPen(Qt.yellow, 0), movable=False)
+        vertical = pg.ROI(pos=(position[0],position[1]-15), size=[1,30], pen=QPen(Qt.yellow, 0))
+        horizontal = pg.ROI(pos=(position[0]-15,position[1]), size=[30,1], pen=QPen(Qt.yellow, 0))
         
         if hasattr(self, 'crosshairs'):
             self.crosshairs.append(vertical)
@@ -219,6 +220,22 @@ class PatchClampUI(QWidget):
         else:
             self.lines = [axis]
         self.snapshotWidget.getView().addItem(self.lines[-1])
+        
+    # def draw(self, description, position, geometry):
+    #     logging.info('Draw something')
+    #     [x, y, z] = position
+    #     [dx, dy, dz] = geometry
+        
+    #     if description == "cross":
+    #         vertical = pg.ROI(pos=(x,y-15), size=[1,30], pen=QPen(Qt.yellow, 0))
+    #         horizontal = pg.ROI(pos=(x-15,y), size=[30,1], pen=QPen(Qt.yellow, 0))
+    #     elif description == "line":
+    #         # line = pg.ROI(pos=(x,y), size=[dx,dy], pen=QPen(Qt.green, 0))
+    #         line = pg.ROI(pos=(x,y), size=[np.sign(dx)*200*np.linalg.norm(geometry),np.sign(dy)], pen=QPen(Qt.green, 0))
+    #         line.rotate(np.rad2deg(np.arctan(dy/dx)))
+    #     else:
+    #         pass
+        
         
     def emergency_stop(self):
         logging.info('Emergency stop pressed')

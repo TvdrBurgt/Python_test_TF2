@@ -21,7 +21,6 @@ from PatchClamp.ImageProcessing_AutoPatch import PipetteTipDetector, PipetteAuto
 class AutoPatchThread(QThread):
     finished = pyqtSignal()
     sketches = pyqtSignal(list)
-    # drawings = pyqtSignal(tuple)
     crosshair = pyqtSignal(np.ndarray)
     drawsignal = pyqtSignal(tuple)
     
@@ -462,15 +461,12 @@ class AutoPatchThread(QThread):
             if idx == 0:
                 logging.info('Calibrated X-axis')
                 Ex = [np.nanmean(v)/xstep, np.nanmean(w)/xstep, 0]
-                self.drawsignal.emit(np.array(reference, Ex))
             elif idx == 1:
                 logging.info('Calibrated Y-axis')
                 Ey = [np.nanmean(v)/ystep, np.nanmean(w)/ystep, 0]
-                self.drawsignal.emit(np.array(reference, Ey))
             elif idx == 2:
                 logging.info('Calibrated Z-axis')
                 Ez = [np.nanmean(v)/zstep, np.nanmean(w)/zstep, 0]
-                self.drawsignal.emit(np.array(reference, Ez))
         
         # Calculate rotation angle: gamma
         gamma = np.arctan(-Ex[0]/Ex[1])
@@ -493,6 +489,12 @@ class AutoPatchThread(QThread):
         self.micromanipulator_handle.R = R @ self.micromanipulator_handle.R # Is this order correct?
         self.micromanipulator_handle.Rinv = Rinv @ self.micromanipulator_handle.Rinv # Is this order correct?
         
+        self.drawsignal.emit(np.array([reference, R @ Ex]))
+        self.drawsignal.emit(np.array([reference, R @ Ey]))
+        self.drawsignal.emit(np.array([reference, R @ Ez]))
+        # self.draw.emit('line', reference, R @ Ex)
+        # self.draw.emit('line', reference, R @ Ey)
+        # self.draw.emit('line', reference, R @ Ez)
         self.finished.emit()
 
 

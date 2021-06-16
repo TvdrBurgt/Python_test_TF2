@@ -31,7 +31,7 @@ class ScientificaPatchStar(serial.Serial):
         self.units = 100                        # 1um is 100 units
         
         # Fill-in known settings
-        self.origin = self.getPos()
+        self.origin = self.getPos() #Not updating this makes algorithms fail when manually moving micromanipulator
         [self.R, self.Rinv] = self.constructrotationmatrix()
         
     @staticmethod
