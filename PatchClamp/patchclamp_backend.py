@@ -19,8 +19,11 @@ from PatchClamp.ImageProcessing_AutoPatch import PipetteTipDetector, PipetteAuto
 
 
 class AutoPatchThread(QThread):
-    intermediate = pyqtSignal(np.ndarray)
     finished = pyqtSignal()
+    sketches = pyqtSignal(list)
+    # drawings = pyqtSignal(tuple)
+    crosshair = pyqtSignal(np.ndarray)
+    drawsignal = pyqtSignal(tuple)
     
     def __init__(self, camera_handle=None, manipulator_handle=None, objective_handle=None):
         # Class attributes
@@ -75,13 +78,10 @@ class AutoPatchThread(QThread):
         elif slot == "calibrate":
             self.started.connect(self.calibrate_coordsys)
         self.isrunning = True
-        try:
-            self.start()
-        except:
-            logging.warning('Something wrong with threading')
+        self.start()
     
     @pyqtSlot()
-    def detect_pipette_tip(self):
+    def detect_pipette_tip(self, emit_when_finished=True):
         """ Detects the pipette tip position
         
         This method detects the pipette tip in a FOV and returns the x- and y-
@@ -109,6 +109,7 @@ class AutoPatchThread(QThread):
         
         # Crop image
         cropped_image, xref, yref, faultylocalisation = PipetteTipDetector.crop_image(image, x1, y1)
+        self.sketches.emit(cropped_image)
         
         # Second round of pipette tip detection
         if not faultylocalisation:
@@ -129,12 +130,15 @@ class AutoPatchThread(QThread):
         self.pipettetip = [xref + x2, yref + y2]
         
         # Return pipette tip coordinates
-        logging.info('Pipette tip detected @ (x,y) = (%f,%f)' % (self.pipettetip[0], self.pipettetip[1]))
+        logging.info('Pipette tip detected @ (x,y) = (%f,%f)' % (xref + x2, yref + y2))
         
-        self.finished.emit()
+        self.sketches.emit(image)
+        self.crosshair.emit(np.array([xref + x2, yref + y2]))
+        if emit_when_finished:
+            self.finished.emit()
     
     @pyqtSlot()
-    def autofocus_pipette(self):
+    def autofocus_pipette(self, emit_when_finished=True):
         """ Focus pipette tip from above.
         
         This method bring the pipette tip into focus by approaching the focal
@@ -150,7 +154,7 @@ class AutoPatchThread(QThread):
         margin = 0.96           # threshold for max values (percentage)
         
         # Get pipette tip position
-        self.detect_pipette_tip()
+        self.detect_pipette_tip(emit_when_finished=False)
         
         # Construct Gaussian window around pipete tip
         I = self.camera_handle.snap()
@@ -158,7 +162,7 @@ class AutoPatchThread(QThread):
         
         # Emit Gaussian windowed field of view
         IW = I * window
-        self.intermediate.emit(IW)
+        self.sketches.emit(IW)
         
         # Set reference pipette position as origin
         reference = self.micromanipulator_handle.camcoords[2]
@@ -421,10 +425,11 @@ class AutoPatchThread(QThread):
         logging.info('Focus offset found!')
         np.savetxt(self.savedirectory+'penaltyhistory.txt', penaltyhistory)
         np.savetxt(self.savedirectory+'positionhistory.txt', positionhistory)
+        
         self.finished.emit()
     
     @pyqtSlot()
-    def calibrate_coordsys(self):
+    def calibrate_coordsys(self, emit_when_finished=True):
         """ Calibrate PatchStar coordinate system.
         
         This method returns the rotation angles that align the coordinate-
@@ -437,9 +442,8 @@ class AutoPatchThread(QThread):
         ystep = 5           # in micrometer
         zstep = 5           # in micrometer
         
-        # Set the micromanipulator absolute- and relative position
-        manipulator_position_absolute = self.micromanipulator_handle.camcoords
-        step2pos = lambda pos: np.add(manipulator_position_absolute, pos)
+        # Set the reference position of the micromanipulator
+        reference = self.micromanipulator_handle.manipcoords
         
         for idx, step in enumerate([[xstep,0,0], [0,ystep,0], [0,0,zstep]]):
             v = np.empty(numsteps)
@@ -447,20 +451,26 @@ class AutoPatchThread(QThread):
             
             # Detect pipette tip and move micromanipulator
             for i in range(numsteps):
-                self.detect_pipette_tip()
+                self.detect_pipette_tip(emit_when_finished=False)
                 v[i], w[i] = self.pipettetip
                 if i < numsteps:
-                    self.micromanipulator_handle.moveAbs(step2pos(np.multiply(step,(i+1))))
+                    self.micromanipulator_handle.moveRel(step[0], step[1], step[2])
                 else:
-                    self.micromanipulator_handle.moveAbs(step2pos([0,0,0]))
+                    self.micromanipulator_handle.moveAbs(reference[0], reference[1], reference[2])
             
-            # Reduce array of pipette coordinates to one x and one y
+            # Average array of pipette coordinates to get mean [dx,dy] per step
             if idx == 0:
+                logging.info('Calibrated X-axis')
                 Ex = [np.nanmean(v)/xstep, np.nanmean(w)/xstep, 0]
+                self.drawsignal.emit(np.array(reference, Ex))
             elif idx == 1:
+                logging.info('Calibrated Y-axis')
                 Ey = [np.nanmean(v)/ystep, np.nanmean(w)/ystep, 0]
+                self.drawsignal.emit(np.array(reference, Ey))
             elif idx == 2:
+                logging.info('Calibrated Z-axis')
                 Ez = [np.nanmean(v)/zstep, np.nanmean(w)/zstep, 0]
+                self.drawsignal.emit(np.array(reference, Ez))
         
         # Calculate rotation angle: gamma
         gamma = np.arctan(-Ex[0]/Ex[1])
@@ -476,10 +486,12 @@ class AutoPatchThread(QThread):
         alpha = np.arcsin(Ez[0]*np.sin(gamma) + Ez[1]*np.cos(gamma))
         beta = (-Ez[0]*np.cos(gamma) + Ez[1]*np.sin(gamma))/np.cos(alpha)
         
-        # Apply full rotation matrix and verify Ey maps to y-axis
-        self.micromanipulator_handle.constructrotationmatrix(alpha, beta, gamma)
-        Ey_rotated = self.micromanipulator_handle.Rinv.dot(Ey)
-        logging.info(Ey_rotated)
+        # Construct full rotation matrix
+        [R, Rinv] = self.micromanipulator_handle.constructrotationmatrix(alpha, beta, gamma)
+        
+        # Apply rotation matrix to the rotation matrix that is already there
+        self.micromanipulator_handle.R = R @ self.micromanipulator_handle.R # Is this order correct?
+        self.micromanipulator_handle.Rinv = Rinv @ self.micromanipulator_handle.Rinv # Is this order correct?
         
         self.finished.emit()
 

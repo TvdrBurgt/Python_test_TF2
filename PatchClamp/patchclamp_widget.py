@@ -7,6 +7,7 @@ Created on Mon Apr 12 10:37:51 2021
 
 import os
 import sys
+import numpy as np
 import logging
 
 from PyQt5.QtCore import Qt
@@ -92,7 +93,7 @@ class PatchClampUI(QWidget):
 
         # Button for pipette detection
         self.request_detect_button = QPushButton(text="Detect pipette", clicked=self.request_detect)
-        # self.request_detect_button.setCheckable(True)
+        self.request_detect_button.setCheckable(True)
         
         # Button for calibration
         request_calibrate_button = QPushButton(text="Calibrate", clicked=self.request_calibrate)
@@ -117,8 +118,11 @@ class PatchClampUI(QWidget):
         # ---------------------------- End of GUI -----------------------------
         # =====================================================================
         
-        # Fire up backend
+        # Fire up backend and establish feedback communication
         self.autopatch = AutoPatchThread()
+        self.autopatch.sketches.connect(self.update_canvassnap)
+        self.autopatch.crosshair.connect(self.draw_crosshair)
+        self.autopatch.drawsignal.connect(self.draw_lines)
         
     def toggle_connect_camera(self):
         if self.connect_camera_button.isChecked():
@@ -161,25 +165,22 @@ class PatchClampUI(QWidget):
             self.camerathread.livesignal.disconnect()
         else:
             self.camerathread.livesignal.connect(self.update_canvaslive)
-
+        
     def request_snap(self):
         logging.info('Snap button pushed')
         self.camerathread.snap()
         
     def request_autofocus(self):
         logging.info('Request autofocus button pushed')
-        self.autopatch.intermediate.connect(self.update_canvassnap)
-        self.autopatch.intermediate.connect(lambda: self.autopatch.intermediate.disconnect())
         self.autopatch.request("autofocus")
-
+        
     def request_detect(self):
         logging.info('Request detection button pushed')
         if self.request_detect_button.isChecked():
-            self.autopatch.finished.connect(self.draw_crosshair)
-            self.autopatch.finished.connect(lambda: self.autopatch.finished.disconnect())
             self.autopatch.request("detect")
         else:
-            self.snapshotWidget.getView().removeItem(self.r)
+            self.snapshotWidget.getView().removeItem(self.crosshairs[-1])
+            self.snapshotWidget.getView().removeItem(self.crosshairs[-2])
         
     def request_calibrate(self):
         logging.info('Request calibrate button pushed')
@@ -191,15 +192,34 @@ class PatchClampUI(QWidget):
     def update_canvassnap(self, image):
         self.canvassnap.setImage(image)
         
-    def draw_crosshair(self):
+    def draw_crosshair(self, position):
         logging.info('Display crosshair')
-        x = self.autopatch.pipettetip[0]
-        y = self.autopatch.pipettetip[1]
-        pen = QPen(Qt.red, 0.1)
-        pen.setWidthF(5)
-        self.r = MyCrosshairOverlay(pos=(x, y), size=25, pen=pen, movable=False)
-        self.snapshotWidget.getView().addItem(self.r)
+        vertical = pg.ROI(pos=(position[0],position[1]-15), size=[1,30], pen=QPen(Qt.yellow, 0), movable=False)
+        horizontal = pg.ROI(pos=(position[0]-15,position[1]), size=[30,1], pen=QPen(Qt.yellow, 0), movable=False)
+        
+        if hasattr(self, 'crosshairs'):
+            self.crosshairs.append(vertical)
+            self.crosshairs.append(horizontal)
+        else:
+            self.crosshairs = [vertical, horizontal]
+        self.snapshotWidget.getView().addItem(self.crosshairs[-1])
+        self.snapshotWidget.getView().addItem(self.crosshairs[-2])
     
+    def draw_lines(self, data):
+        logging.info('Display calibration line')
+        position = data[0]
+        slope = data[1]
+        dx = slope[0]
+        dy = slope[1]
+        axis = pg.ROI(pos=(position[0],position[1]), size=[np.sign(dx)*200*np.linalg.norm(slope),np.sign(dy)], pen=QPen(Qt.green, 0), movable=False)
+        axis.rotate(np.rad2deg(np.arctan(dy/dx)))
+        
+        if hasattr(self, 'lines'):
+            self.lines.append(axis)
+        else:
+            self.lines = [axis]
+        self.snapshotWidget.getView().addItem(self.lines[-1])
+        
     def emergency_stop(self):
         logging.info('Emergency stop pressed')
         # Disconnect all signals and slots, here or in class?
@@ -221,13 +241,6 @@ class PatchClampUI(QWidget):
         QtWidgets.QApplication.quit()
         self.close()
         logging.info('Widget closed successfully')
-
-class MyCrosshairOverlay(pg.CrosshairROI):
-    def __init__(self, pos=None, size=None, **kargs):
-        self._shape = None
-        pg.ROI.__init__(self, pos, size, **kargs)
-        self.sigRegionChanged.connect(self.invalidate)
-        self.aspectLocked = True
 
 
 if __name__ == "__main__":
