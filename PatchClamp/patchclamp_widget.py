@@ -45,11 +45,11 @@ class PatchClampUI(QWidget):
         
         # Button for connecting micromanipulator
         self.connect_micromanipulator_button = QPushButton("Micromanipulator", clicked=self.toggle_connect_micromanipulator)
-        self.connect_camera_button.setCheckable(True)
+        self.connect_micromanipulator_button.setCheckable(True)
         
         # Button for connecting objective motor
         self.connect_objective_button = QPushButton("Objective", clicked=self.toggle_connect_objective)
-        self.connect_camera_button.setCheckable(True)
+        self.connect_objective_button.setCheckable(True)
         
         # Emergency stop to stop everything and disconnect all
         emergency_button = QPushButton(text="STOP", clicked=self.emergency_stop)
