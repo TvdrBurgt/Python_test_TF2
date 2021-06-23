@@ -58,6 +58,8 @@ class CameraThread(QThread):
         if n_cameras > 0:
             self.hcam = HamamatsuCameraMR(camera_id=0)
             
+            # Set pixeltype to 8-bits for later deep learning consideration
+            self.hcam.setPropertyValue("image_pixeltype", "MONO8")
             # Enable defect correction
             self.hcam.setPropertyValue("defect_correct_mode", 2)
             # Set the readout speed to fast

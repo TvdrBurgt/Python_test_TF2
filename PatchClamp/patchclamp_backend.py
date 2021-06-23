@@ -20,15 +20,15 @@ from PatchClamp.ImageProcessing_AutoPatch import PipetteTipDetector, PipetteAuto
 
 class AutoPatchThread(QThread):
     finished = pyqtSignal()
-    sketches = pyqtSignal(list)
+    sketches = pyqtSignal(np.ndarray)
     crosshair = pyqtSignal(np.ndarray)
-    drawsignal = pyqtSignal(tuple)
+    drawsignal = pyqtSignal(np.ndarray)
     
     def __init__(self, camera_handle=None, manipulator_handle=None, objective_handle=None):
         # Class attributes
-        self.camera_handle = camera_handle
-        self.micromanipulator_handle = manipulator_handle
-        self.objective_handle = objective_handle
+        self.camera_instance = camera_handle
+        self.manipulator_instance = manipulator_handle
+        self.objective_instance = objective_handle
         self.pipettetip = [np.nan, np.nan]
         self.savedirectory = r'M:\tnw\ist\do\projects\Neurophotonics\Brinkslab\Data\Thijs\Save directory\\'
         
@@ -46,9 +46,9 @@ class AutoPatchThread(QThread):
         disconnect inactive hardware, and quit the thread.
         """
         self.isrunning = False
-        if self.micromanipulator_handle != None:
-            self.micromanipulator_handle.stop()
-            self.micromanipulator_handle.close()
+        if self.manipulator_instance != None:
+            self.manipulator_instance.stop()
+            self.manipulator_instance.close()
         self.quit()
         self.wait()
         
@@ -59,8 +59,8 @@ class AutoPatchThread(QThread):
         Afterwards, we wait for the thread to quit so it can be reused.
         """
         self.isrunning = False
-        if self.micromanipulator_handle != None:
-            self.micromanipulator_handle.stop()
+        if self.manipulator_instance != None:
+            self.manipulator_instance.stop()
         self.quit()
         self.wait()
         
@@ -93,7 +93,7 @@ class AutoPatchThread(QThread):
         PIPETTEDIAMETER = 16.5  #Only for first calibration
         
         # Make snap
-        image = self.camera_handle.snap()
+        image = self.camera_instance.snap()
         
         # First round of pipette tip detection
         x1, y1 = PipetteTipDetector.locate_tip(image,
@@ -156,7 +156,7 @@ class AutoPatchThread(QThread):
         self.detect_pipette_tip(emit_when_finished=False)
         
         # Construct Gaussian window around pipete tip
-        I = self.camera_handle.snap()
+        I = self.camera_instance.snap()
         window = PipetteAutofocus.comp_Gaussian_kernel(size=I.shape[1], fwhm=I.shape[1]/4, center=self.pipettetip)
         
         # Emit Gaussian windowed field of view
@@ -164,7 +164,7 @@ class AutoPatchThread(QThread):
         self.sketches.emit(IW)
         
         # Set reference pipette position as origin
-        reference = self.micromanipulator_handle.camcoords[2]
+        reference = self.manipulator_instance.camcoords[2]
         
         # Initialize array for storing [positions; penalties]
         positionhistory = np.zeros(3)
@@ -175,7 +175,7 @@ class AutoPatchThread(QThread):
         penalties = np.zeros(3)
         for i in range(3):
             # Capture image
-            I = self.camera_handle.snap()
+            I = self.camera_instance.snap()
             io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
             
             # Apply image window
@@ -185,20 +185,20 @@ class AutoPatchThread(QThread):
             penalties[i] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
             
             # Save position and penalty in history
-            positionhistory[i] = self.micromanipulator_handle.camcoords[2]
+            positionhistory[i] = self.manipulator_instance.camcoords[2]
             penaltyhistory[i] = penalties[i]
             
             # Move pipette up
             if i < 2:
                 print('step up')
-                self.micromanipulator_handle.moveRel(0,0,optimalstepsize)
+                self.manipulator_instance.moveRel(0,0,optimalstepsize)
             
         """Iteratively find peak in focus penalty values"""
         stepsize = optimalstepsize
         stepsizemin = optimalstepsize/2
         stepsizemax = optimalstepsize*8
         pinbool = np.zeros(3)
-        while not np.array_equal(pinbool, [0,1,0]) & self.isrunning:
+        while not np.array_equal(pinbool, [0,1,0]) and self.isrunning:
             # Adjust threshold
             margin = margin*.995 + .005
             
@@ -227,189 +227,189 @@ class AutoPatchThread(QThread):
             if np.array_equal(pinbool, [0,1,0]):
                 pass
             elif np.array_equal(pinbool, [1,0,1]):
-                self.micromanipulator_handle.moveAbsZ(reference-stepsize)
-                I = self.camera_handle.snap()
+                self.manipulator_instance.moveAbsZ(reference-stepsize)
+                I = self.camera_instance.snap()
                 io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                 IW = I * window
                 penalties[1] = penalties[0]
                 penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                positionhistory = np.append(positionhistory, self.micromanipulator_handle.camcoords[2])
+                positionhistory = np.append(positionhistory, self.manipulator_instance.camcoords[2])
                 penaltyhistory = np.append(penaltyhistory, penalties[0])
                 reference = reference - stepsize
             elif np.array_equal(pinbool, [1,0,0]):
                 if stepsize > optimalstepsize:
                     stepsize = stepsize/2
                     penalties[1] = penalties[0]
-                    self.micromanipulator_handle.moveAbsZ(reference+stepsize)
-                    I = self.camera_handle.snap()
+                    self.manipulator_instance.moveAbsZ(reference+stepsize)
+                    I = self.camera_instance.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_handle.camcoords[2])
+                    positionhistory = np.append(positionhistory, self.manipulator_instance.camcoords[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
-                    self.micromanipulator_handle.moveAbsZ(reference-stepsize)
-                    I = self.camera_handle.snap()
+                    self.manipulator_instance.moveAbsZ(reference-stepsize)
+                    I = self.camera_instance.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_handle.camcoords[2])
+                    positionhistory = np.append(positionhistory, self.manipulator_instance.camcoords[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     reference = reference - stepsize
                 elif stepsize < optimalstepsize:
                     stepsize = stepsize*2
                     penalties[1] = penalties[0]
-                    self.micromanipulator_handle.moveAbsZ(reference-stepsize)
-                    I = self.camera_handle.snap()
+                    self.manipulator_instance.moveAbsZ(reference-stepsize)
+                    I = self.camera_instance.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_handle.camcoords[2])
+                    positionhistory = np.append(positionhistory, self.manipulator_instance.camcoords[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     reference = reference - stepsize
                 else:
                     penalties = np.roll(penalties,1)
-                    self.micromanipulator_handle.moveAbsZ(reference-stepsize)
-                    I = self.camera_handle.snap()
+                    self.manipulator_instance.moveAbsZ(reference-stepsize)
+                    I = self.camera_instance.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_handle.camcoords[2])
+                    positionhistory = np.append(positionhistory, self.manipulator_instance.camcoords[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     reference = reference - stepsize
             elif np.array_equal(pinbool, [0,0,1]):
                 if stepsize > optimalstepsize:
                     stepsize = stepsize/2
                     penalties[1] = penalties[2]
-                    self.micromanipulator_handle.moveAbsZ(reference+3*stepsize)
-                    I = self.camera_handle.snap()
+                    self.manipulator_instance.moveAbsZ(reference+3*stepsize)
+                    I = self.camera_instance.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_handle.camcoords[2])
+                    positionhistory = np.append(positionhistory, self.manipulator_instance.camcoords[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
-                    self.micromanipulator_handle.moveAbsZ(reference+5*stepsize)
-                    I = self.camera_handle.snap()
+                    self.manipulator_instance.moveAbsZ(reference+5*stepsize)
+                    I = self.camera_instance.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_handle.camcoords[2])
+                    positionhistory = np.append(positionhistory, self.manipulator_instance.camcoords[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
                     reference = reference + 3*stepsize
                 elif stepsize < optimalstepsize:
                     stepsize = stepsize*2
                     penalties[1] = penalties[2]
-                    self.micromanipulator_handle.moveAbsZ(reference+2*stepsize)
-                    I = self.camera_handle.snap()
+                    self.manipulator_instance.moveAbsZ(reference+2*stepsize)
+                    I = self.camera_instance.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_handle.camcoords[2])
+                    positionhistory = np.append(positionhistory, self.manipulator_instance.camcoords[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
                     reference = reference
                 else:
                     penalties = np.roll(penalties,-1)
-                    self.micromanipulator_handle.moveAbsZ(reference+3*stepsize)
-                    I = self.camera_handle.snap()
+                    self.manipulator_instance.moveAbsZ(reference+3*stepsize)
+                    I = self.camera_instance.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_handle.camcoords[2])
+                    positionhistory = np.append(positionhistory, self.manipulator_instance.camcoords[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
                     reference = reference + stepsize
             elif np.array_equal(pinbool, [1,1,0]):
                 if stepsize == stepsizemin:
                     penalties = np.roll(penalties,1)
-                    self.micromanipulator_handle.moveAbsZ(reference-stepsize)
-                    I = self.camera_handle.snap()
+                    self.manipulator_instance.moveAbsZ(reference-stepsize)
+                    I = self.camera_instance.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_handle.camcoords[2])
+                    positionhistory = np.append(positionhistory, self.manipulator_instance.camcoords[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     reference = reference - stepsize
                 else:
                     stepsize = stepsize/2
                     penalties[1] = penalties[0]
-                    self.micromanipulator_handle.moveAbsZ(reference+stepsize)
-                    I = self.camera_handle.snap()
+                    self.manipulator_instance.moveAbsZ(reference+stepsize)
+                    I = self.camera_instance.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_handle.camcoords[2])
+                    positionhistory = np.append(positionhistory, self.manipulator_instance.camcoords[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
-                    self.micromanipulator_handle.moveAbsZ(reference-stepsize)
-                    I = self.camera_handle.snap()
+                    self.manipulator_instance.moveAbsZ(reference-stepsize)
+                    I = self.camera_instance.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_handle.camcoords[2])
+                    positionhistory = np.append(positionhistory, self.manipulator_instance.camcoords[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     reference = reference - stepsize
             elif np.array_equal(pinbool, [0,1,1]):
                 if stepsize == stepsizemin:
                     penalties = np.roll(penalties,-1)
-                    self.micromanipulator_handle.moveAbsZ(reference+3*stepsize)
-                    I = self.camera_handle.snap()
+                    self.manipulator_instance.moveAbsZ(reference+3*stepsize)
+                    I = self.camera_instance.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_handle.camcoords[2])
+                    positionhistory = np.append(positionhistory, self.manipulator_instance.camcoords[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
                     reference = reference + stepsize
                 else:
                     stepsize = stepsize/2
                     penalties[1] = penalties[2]
-                    self.micromanipulator_handle.moveAbsZ(reference+3*stepsize)
-                    I = self.camera_handle.snap()
+                    self.manipulator_instance.moveAbsZ(reference+3*stepsize)
+                    I = self.camera_instance.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_handle.camcoords[2])
+                    positionhistory = np.append(positionhistory, self.manipulator_instance.camcoords[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
-                    self.micromanipulator_handle.moveAbsZ(reference+5*stepsize)
-                    I = self.camera_handle.snap()
+                    self.manipulator_instance.moveAbsZ(reference+5*stepsize)
+                    I = self.camera_instance.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[2] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_handle.camcoords[2])
+                    positionhistory = np.append(positionhistory, self.manipulator_instance.camcoords[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
                     reference = reference + 3*stepsize
             elif np.array_equal(pinbool, [1,1,1]):
                 if stepsize == stepsizemax:
                     penalties = np.roll(penalties,1)
-                    self.micromanipulator_handle.moveAbsZ(reference-stepsize)
-                    I = self.camera_handle.snap()
+                    self.manipulator_instance.moveAbsZ(reference-stepsize)
+                    I = self.camera_instance.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_handle.camcoords[2])
+                    positionhistory = np.append(positionhistory, self.manipulator_instance.camcoords[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     reference = reference - stepsize
                 else:
                     stepsize = 2*stepsize
-                    self.micromanipulator_handle.moveAbsZ(reference-stepsize)
-                    I = self.camera_handle.snap()
+                    self.manipulator_instance.moveAbsZ(reference-stepsize)
+                    I = self.camera_instance.snap()
                     io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * window
                     penalties[1] = penalties[0]
                     penalties[0] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, self.micromanipulator_handle.camcoords[2])
+                    positionhistory = np.append(positionhistory, self.manipulator_instance.camcoords[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
                     reference = reference - stepsize
         
         """Final approach by sampling between the zeros in [0,1,0]"""
         logging.info('Coarse focus found, continue with finetuning')
-        while stepsize > focusprecision & self.isrunning:
+        while stepsize > focusprecision and self.isrunning:
             # Sample ten points between outer penalty values
             penalties = np.zeros(6)
             positions = np.linspace(reference, reference+2*stepsize, 6)
             for idx, pos in enumerate(positions):
-                self.micromanipulator_handle.moveAbsZ(pos)
-                I = self.camera_handle.snap()
+                self.manipulator_instance.moveAbsZ(pos)
+                I = self.camera_instance.snap()
                 io.imsave(self.savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                 IW = I * window
                 penalties[idx] = PipetteAutofocus.comp_variance_of_Laplacian(IW)
-                positionhistory = np.append(positionhistory, self.micromanipulator_handle.camcoords[2])
+                positionhistory = np.append(positionhistory, self.manipulator_instance.camcoords[2])
                 penaltyhistory = np.append(penaltyhistory, penalties[idx])
             
             # Locate maximum penalty value
@@ -442,7 +442,7 @@ class AutoPatchThread(QThread):
         zstep = 5           # in micrometer
         
         # Set the reference position of the micromanipulator
-        reference = self.micromanipulator_handle.manipcoords
+        reference = self.manipulator_instance.manipcoords
         
         for idx, step in enumerate([[xstep,0,0], [0,ystep,0], [0,0,zstep]]):
             v = np.empty(numsteps)
@@ -453,9 +453,9 @@ class AutoPatchThread(QThread):
                 self.detect_pipette_tip(emit_when_finished=False)
                 v[i], w[i] = self.pipettetip
                 if i < numsteps:
-                    self.micromanipulator_handle.moveRel(step[0], step[1], step[2])
+                    self.manipulator_instance.moveRel(step[0], step[1], step[2])
                 else:
-                    self.micromanipulator_handle.moveAbs(reference[0], reference[1], reference[2])
+                    self.manipulator_instance.moveAbs(reference[0], reference[1], reference[2])
             
             # Average array of pipette coordinates to get mean [dx,dy] per step
             if idx == 0:
@@ -472,22 +472,22 @@ class AutoPatchThread(QThread):
         gamma = np.arctan(-Ex[0]/Ex[1])
         
         # Choose between gamma and gamma-pi and rotate accordingly
-        self.micromanipulator_handle.constructrotationmatrix(0, 0, gamma)
-        Ey_gammarotated = self.micromanipulator_handle.Rinv.dot(Ey)
+        self.manipulator_instance.constructrotationmatrix(0, 0, gamma)
+        Ey_gammarotated = self.manipulator_instance.Rinv.dot(Ey)
         if Ey_gammarotated[1] < 0:
             gamma = gamma - np.pi
-            self.micromanipulator_handle.constructrotationmatrix(0, 0, gamma)
+            self.manipulator_instance.constructrotationmatrix(0, 0, gamma)
         
         # Calculate rotation angles: alpha, beta
         alpha = np.arcsin(Ez[0]*np.sin(gamma) + Ez[1]*np.cos(gamma))
         beta = (-Ez[0]*np.cos(gamma) + Ez[1]*np.sin(gamma))/np.cos(alpha)
         
         # Construct full rotation matrix
-        [R, Rinv] = self.micromanipulator_handle.constructrotationmatrix(alpha, beta, gamma)
+        [R, Rinv] = self.manipulator_instance.constructrotationmatrix(alpha, beta, gamma)
         
         # Apply rotation matrix to the rotation matrix that is already there
-        self.micromanipulator_handle.R = R @ self.micromanipulator_handle.R # Is this order correct?
-        self.micromanipulator_handle.Rinv = Rinv @ self.micromanipulator_handle.Rinv # Is this order correct?
+        self.manipulator_instance.R = R @ self.manipulator_instance.R # Is this order correct?
+        self.manipulator_instance.Rinv = Rinv @ self.manipulator_instance.Rinv # Is this order correct?
         
         self.drawsignal.emit(np.array([reference, R @ Ex]))
         self.drawsignal.emit(np.array([reference, R @ Ey]))

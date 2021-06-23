@@ -83,7 +83,7 @@ class ScientificaPatchStar(serial.Serial):
             except:
                 print('Busy traffic')
                 
-            if response != '0' & self.isOpen():
+            if response != '0' and self.isOpen():
                 time.sleep(0.1)
             else:
                 logging.info('PatchStar motors idle')
@@ -114,7 +114,7 @@ class ScientificaPatchStar(serial.Serial):
         [x, y, z] = response.split('\t')
         
         # Convert coordinates to float and apply rotation matrix
-        positionarray = self.R @ [float(x), float(y), float(z)]
+        positionarray = self.R @ np.array([float(x), float(y), float(z)])
         
         return positionarray / self.units
     
@@ -125,8 +125,8 @@ class ScientificaPatchStar(serial.Serial):
             Response: A (if move allowed else E)
         """
         # Transform camera- to micromanipulator frame of reference
-        self.camcoords = [x, y, z]
-        self.manipcoords = self.Rinv @ [x, y, z]
+        self.camcoords = np.array([x, y, z])
+        self.manipcoords = self.Rinv @ np.array([x, y, z])
         
         # Add coordinate origin
         target = self.origin + self.manipcoords
@@ -165,7 +165,7 @@ class ScientificaPatchStar(serial.Serial):
         position by adding the current position.
         """
         # Target location in camera frame of reference
-        [x, y, z] = self.camcoords + [dx, dy, dz]
+        [x, y, z] = self.camcoords + np.array([dx, dy, dz])
         
         return self.moveAbs(x, y, z)
     

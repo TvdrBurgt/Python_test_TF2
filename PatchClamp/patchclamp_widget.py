@@ -121,7 +121,7 @@ class PatchClampUI(QWidget):
         # Fire up backend and establish feedback communication
         self.autopatch = AutoPatchThread()
         self.autopatch.sketches.connect(self.update_canvassnap)
-        self.autopatch.drawings.connect(self.draw)
+        # self.autopatch.drawings.connect(self.draw)
         self.autopatch.crosshair.connect(self.draw_crosshair)
         self.autopatch.drawsignal.connect(self.draw_lines)
         
@@ -129,7 +129,7 @@ class PatchClampUI(QWidget):
         if self.connect_camera_button.isChecked():
             # Create instance and pass on to backend
             self.camerathread = CameraThread()
-            self.autopatch.camera_handle = self.camerathread
+            self.autopatch.camera_instance = self.camerathread
             
             # Connect canvasses to camera signals
             self.camerathread.livesignal.connect(self.update_canvaslive)
