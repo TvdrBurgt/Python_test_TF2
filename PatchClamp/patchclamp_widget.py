@@ -146,9 +146,10 @@ class PatchClampUI(QWidget):
         # disconnect and delete.
         if self.connect_micromanipulator_button.isChecked():
             self.micromanipulatorinstance = ScientificaPatchStar(address='COM16', baud=38400)
-            self.autopatch.micromanipulator_handle = self.micromanipulatorinstance
+            self.autopatch.manipulator_instance = self.micromanipulatorinstance
         else:
             # Make my own close function in the micromanipulator class
+            self.micromanipulatorinstance.stop()
             self.micromanipulatorinstance.close()
     
     def toggle_connect_objective(self):
@@ -254,9 +255,9 @@ class PatchClampUI(QWidget):
         and quit the widget.
         """
         self.emergency_stop()
-        event.accept()
-        QtWidgets.QApplication.quit()
-        self.close()
+        # event.accept()
+        QtWidgets.QApplication.quit() # minimally required to return kernel on my laptop
+        # self.close()
         logging.info('Widget closed successfully')
 
 

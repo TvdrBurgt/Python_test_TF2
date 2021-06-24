@@ -17,7 +17,7 @@ from PyQt5.QtCore import pyqtSignal, pyqtSlot, QThread, QMutex
 
 if __name__ == "__main__":
     os.chdir(os.getcwd() + '\\..')
-from HamamatsuCam.HamamatsuDCAM import HamamatsuCameraMR, DCAMAPI_INIT
+from HamamatsuCam.HamamatsuDCAM import HamamatsuCamera, DCAMAPI_INIT
 
 
 class CameraThread(QThread):
@@ -39,7 +39,6 @@ class CameraThread(QThread):
 
     def __del__(self):
         self.isrunning = False
-        # self.dcam.dcamapi_uninit()
         self.quit()
         self.wait()
         
@@ -56,10 +55,10 @@ class CameraThread(QThread):
         print("found:", n_cameras, "cameras")
 
         if n_cameras > 0:
-            self.hcam = HamamatsuCameraMR(camera_id=0)
+            self.hcam = HamamatsuCamera(camera_id=0)
             
-            # Set pixeltype to 8-bits for later deep learning consideration
-            self.hcam.setPropertyValue("image_pixeltype", "MONO8")
+            # # Set pixeltype to 8-bits for later deep learning consideration but does not work
+            # self.hcam.setPropertyValue("image_pixeltype", "MONO8")
             # Enable defect correction
             self.hcam.setPropertyValue("defect_correct_mode", 2)
             # Set the readout speed to fast
@@ -97,6 +96,8 @@ class CameraThread(QThread):
         
         # Stop camera acquisition when exiting the thread
         # self.hcam.stopAcquisition()
+        # self.hcam.shutdown() #put after uninit() if it gives error
+        # self.dcam.dcamapi_uninit()
         logging.info("Camera acquisition stopped")
 
     def snap(self):
