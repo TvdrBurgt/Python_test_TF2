@@ -13,26 +13,31 @@ import logging
 
 from PyQt5.QtCore import Qt
 from PyQt5 import QtWidgets
-from PyQt5.QtGui import QPen
+from PyQt5.QtGui import QPen, QColor
 from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QDoubleSpinBox, QGroupBox, QLabel
 import pyqtgraph.exporters
 import pyqtgraph as pg
 
 
+import matplotlib.pyplot as plt
 
 
 class PatchClampUI(QWidget):
     def __init__(self):
         super().__init__()
-
-        # =====================================================================
-        # ---------------------------- Start of GUI ---------------------------
-        # =====================================================================
+        """
+        =======================================================================
+        ----------------------------- Start of GUI ----------------------------
+        =======================================================================
+        """
+        """
         # ---------------------- General widget settings ---------------------
+        """
         self.setWindowTitle("Automatic Patchclamp")
         
-        
-        # ------------------------- Hardware container ------------------------
+        """
+        -------------------------- Hardware container -------------------------
+        """
         hardwareContainer = QGroupBox()
         hardwareLayout = QGridLayout()
         
@@ -68,35 +73,67 @@ class PatchClampUI(QWidget):
         hardwareLayout.addWidget(self.STOP_button, 5, 0, 1, 1)
         hardwareContainer.setLayout(hardwareLayout)
         
-        # ------------------------ Camera view display ------------------------
-        viewContainer = QGroupBox()
-        viewContainer.setMinimumSize(600, 600)
-        viewLayout = QGridLayout()
-        
-        # Display to project live camera view
-        viewWidget = pg.ImageView()
-        self.view = viewWidget.getImageItem()
-        # self.view.setAutoDownsample(True)
-        viewWidget.ui.roiBtn.hide()
-        viewWidget.ui.menuBtn.hide()
-        viewWidget.ui.histogram.hide()
-        
-        # Button for pausing camera view
-        self.request_pause_button = QPushButton(text="Pause live", clicked=self.mockfunction)
-        self.request_pause_button.setCheckable(True)
-        
-        viewLayout.addWidget(viewWidget, 0, 0, 1, 1)
-        viewLayout.addWidget(self.request_pause_button, 1, 0, 1, 1)
-        viewContainer.setLayout(viewLayout)
-        
-        # ------------------------- Live data display ------------------------
+        """
+        ------------------------- Camera view display -------------------------
+        """
         liveContainer = QGroupBox()
-        liveContainer.setMinimumSize(400,600)
+        liveContainer.setMinimumSize(600, 600)
         liveLayout = QGridLayout()
         
+        # Display to project live camera view
+        liveWidget = pg.ImageView()
+        liveWidget.ui.roiBtn.hide()
+        liveWidget.ui.menuBtn.hide()
+        liveWidget.ui.histogram.hide()
+        self.liveView = liveWidget.getView()
+        self.liveImageItem = liveWidget.getImageItem()
+        # self.canvas.setAutoDownsample(True)
+        
+        # Button for pausing camera view
+        self.request_pause_button = QPushButton(text="Pause live", clicked=self.request_togglelive)
+        self.request_pause_button.setCheckable(True)
+        
+        liveLayout.addWidget(liveWidget, 0, 0, 1, 1)
+        liveLayout.addWidget(self.request_pause_button, 1, 0, 1, 1)
+        liveContainer.setLayout(liveLayout)
+        
+        """
+        -------------------------- Sensory output display -------------------------
+        """
+        sensorContainer = QGroupBox()
+        sensorContainer.setMinimumSize(400,600)
+        sensorLayout = QGridLayout()
+        
+        # Display to project current graph
+        currentWidget = pg.ImageView()
+        self.currentgraph = currentWidget.getImageItem()
+        self.currentgraph.setAutoDownsample(True)
+        currentWidget.ui.roiBtn.hide()
+        currentWidget.ui.menuBtn.hide()
+        currentWidget.ui.histogram.hide()
+        
+        # Display to project pressure graph
+        pressureWidget = pg.ImageView()
+        self.pressuregraph = pressureWidget.getImageItem()
+        self.pressuregraph.setAutoDownsample(True)
+        pressureWidget.ui.roiBtn.hide()
+        pressureWidget.ui.menuBtn.hide()
+        pressureWidget.ui.histogram.hide()
+        
+        sensorLayout.addWidget(currentWidget, 0, 0, 1, 1)
+        sensorLayout.addWidget(pressureWidget, 1, 0, 1, 1)
+        sensorContainer.setLayout(sensorLayout)
         
         
-        # --------------------- Algorithm control buttons ---------------------
+        # w = pg.GraphicsLayoutWidget()
+        # p1 = w.addPlot(row=0, col=0)
+        # p2 = w.addPlot(row=0, col=1)
+        # v = w.addViewBox(row=1, col=0, colspan=2)
+        
+        
+        """
+        ---------------------- Algorithm control buttons ----------------------
+        """
         algorithmContainer = QGroupBox()
         algorithmLayout = QGridLayout()
         
@@ -107,7 +144,10 @@ class PatchClampUI(QWidget):
         request_hardcalibrationxyz_button = QPushButton(text="Calibrate XYZ", clicked=self.mockfunction)
         
         # Button for target selection
-        request_selecttarget_button = QPushButton(text="Select target", clicked=self.mockfunction)
+        request_selecttarget_button = QPushButton(text="Select target", clicked=self.request_selecttarget)
+        
+        # Button for confirming selected target
+        request_confirmtarget_button = QPushButton(text="Confirm target", clicked=self.request_confirmtarget)
         
         # Button for pipette tip detection in XY
         request_detecttip_button = QPushButton(text="Detect tip", clicked=self.mockfunction)
@@ -131,7 +171,7 @@ class PatchClampUI(QWidget):
         self.set_pressure_button.setDecimals(0)
         self.set_pressure_button.setValue(0)
         self.set_pressure_button.setSingleStep(1)
-            
+        
         # Button to release pressure instantaneous
         request_releasepressure_button = QPushButton(text="Release pressure", clicked=self.mockfunction)
         
@@ -140,7 +180,8 @@ class PatchClampUI(QWidget):
         
         algorithmLayout.addWidget(request_hardcalibrationxy_button, 0, 0, 1, 1)
         algorithmLayout.addWidget(request_hardcalibrationxyz_button, 1, 0, 1, 1)
-        algorithmLayout.addWidget(request_selecttarget_button, 0, 1, 2, 1)
+        algorithmLayout.addWidget(request_selecttarget_button, 0, 1, 1, 1)
+        algorithmLayout.addWidget(request_confirmtarget_button, 1, 1, 1, 1)
         algorithmLayout.addWidget(request_detecttip_button, 0, 2, 2, 1)
         algorithmLayout.addWidget(request_autofocustip, 0, 3, 2, 1)
         algorithmLayout.addWidget(request_gigaseal_button, 0, 4, 2, 1)
@@ -152,21 +193,27 @@ class PatchClampUI(QWidget):
         algorithmLayout.addWidget(request_applypressure_button, 1, 8, 1, 1)
         algorithmContainer.setLayout(algorithmLayout)
         
-        # -------------------------- Adding to master -------------------------
+        """
+        --------------------------- Adding to master --------------------------
+        """
         master = QGridLayout()
         master.addWidget(hardwareContainer, 0, 0, 1, 1)
-        master.addWidget(viewContainer, 0, 1, 1, 1)
-        master.addWidget(liveContainer, 0, 2, 1, 1)
+        master.addWidget(liveContainer, 0, 1, 1, 1)
+        master.addWidget(sensorContainer, 0, 2, 1, 1)
         master.addWidget(algorithmContainer, 1, 0, 1, 3)
-        
 
         self.setLayout(master)
         
+        """
+        =======================================================================
+        ----------------------------- End of GUI ------------------------------
+        =======================================================================
+        """
         
-        
-        # =====================================================================
-        # ---------------------------- End of GUI -----------------------------
-        # =====================================================================
+        """
+        Instantiate backend
+        """
+        # self.backend = smartpatcher()
         
         
         
@@ -175,15 +222,57 @@ class PatchClampUI(QWidget):
         print("Button pushed")
         
         
+    def request_togglelive(self):
+        if self.request_pause_button.isChecked():
+            I = plt.imread("./testimage.tif")
+            self.liveImageItem.setImage(I)
+        else:
+            self.liveImageItem.setImage(image=np.zeros((2048,2048)))
+        
+        
+    def request_selecttarget(self):
+        """
+        The user drags a circular ROI on top of the target cell. The ROI center
+        is the landing spot. We first check if a target already exists, if so
+        we recycle it.
+        """
+        # Check if other targets exist, if yes, set .translatable to True and change pen color to QColor(255,255,255)
+        
+        targetROI = pg.CircleROI(pos=(0,0), radius=60, movable=True)
+        self.liveView.addItem(targetROI)
+        
+        
+    def request_confirmtarget(self):
+        """
+        If a target is selected, we save the center coordinates of the ROI in
+        the camera field of reference.
+        """
+        if type(self.liveView.addedItems[-1]) is pg.CircleROI:
+            x,y = self.liveView.addedItems[-1].state['pos'] + self.liveView.addedItems[-1].state['size'] / 2
+            self.liveView.addedItems[-1].translatable = False
+            self.liveView.addedItems[-1].setPen(QPen(QColor(193,245,240), 0))
+            print(x,y) # self.backend.set_target(x,y)
+            
+        
+        
+    # def request_clearviewItems(self):
+    #     numberofitems = len(self.liveView.addedItems)
+    #     if numberofitems > 3:
+    #         for i in range(3,numberofitems):
+    #             self.liveView.removeItem(self.liveView.addedItems[-1])
+        
+        
     def closeEvent(self, event):
         """ Close event
         This method is called when the GUI is shut down. First we need to stop
-        the threads that are still running, then we accept the close event
+        the threads that are still running, then we disconnect all hardware to
+        be reused in the main widget, only then we accept the close event.
         and quit the widget.
         """
+        event.accept()
         
-        QtWidgets.QApplication.quit() # minimally required to return kernel on my laptop
-        # event.accept()
+        # Frees the console by quitting the application entirely
+        QtWidgets.QApplication.quit() # remove when part of Tupolev!!
         
         
         
