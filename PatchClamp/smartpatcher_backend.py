@@ -7,12 +7,10 @@ Created on Sat Aug  7 18:21:18 2021
 
 
 import os
-import ctypes
 import datetime
 import logging
 import numpy as np
 
-from copy import copy
 from skimage import io
 
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QThread
@@ -30,9 +28,20 @@ class SmartPatcher(QObject):
         self.micromanipulator = manipulator_handle
         self.objectivemotor = objective_handle
         
+    @property
+    def camerathread(self):
+        return self._camerathread
+    
+    @camerathread.setter
+    def camerathread(self, camera):
+        self._camerathread = camera
+        if self._camerathread != None:
+            self._camerathread.start()
         
-    def set_camerathread(self, camera):
-        self.camerathread = camera
+    @camerathread.deleter
+    def camerathread(self):
+        self._camerathread.stop()
+        self._camerathread = None
         
     def set_amplifierthread(self, patchamplifier):
         self.amplifierthread = patchamplifier

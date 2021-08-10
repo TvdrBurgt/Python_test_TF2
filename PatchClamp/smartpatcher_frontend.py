@@ -18,9 +18,12 @@ from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QDoubleSpinBox, Q
 import pyqtgraph.exporters
 import pyqtgraph as pg
 
-
 import matplotlib.pyplot as plt
-from smartpatcher_backend import SmartPatcher
+
+if __name__ == "__main__":
+    os.chdir(os.getcwd() + '\\..')
+    from PatchClamp.camerathread import CameraThread
+    from PatchClamp.smartpatcher_backend import SmartPatcher
 
 
 class PatchClampUI(QWidget):
@@ -43,7 +46,7 @@ class PatchClampUI(QWidget):
         hardwareLayout = QGridLayout()
         
         # Button to (dis)connect camera
-        self.connect_camera_button = QPushButton(text="Camera", clicked=self.mockfunction)
+        self.connect_camera_button = QPushButton(text="Camera", clicked=self.request_toggleconnectcamera)
         self.connect_camera_button.setCheckable(True)
         
         # Button to (dis)connect objective motor
@@ -78,7 +81,7 @@ class PatchClampUI(QWidget):
         ------------------------- Camera view display -------------------------
         """
         liveContainer = QGroupBox()
-        liveContainer.setMinimumSize(600, 600)
+        liveContainer.setMinimumSize(1200, 600)
         liveLayout = QGridLayout()
         
         # Display to project live camera view
@@ -88,14 +91,27 @@ class PatchClampUI(QWidget):
         liveWidget.ui.histogram.hide()
         self.liveView = liveWidget.getView()
         self.liveImageItem = liveWidget.getImageItem()
-        # self.canvas.setAutoDownsample(True)
+        self.liveImageItem.setAutoDownsample(True)
         
         # Button for pausing camera view
         self.request_pause_button = QPushButton(text="Pause live", clicked=self.request_togglelive)
         self.request_pause_button.setCheckable(True)
         
+        # Display to project snaphots on
+        snapWidget = pg.ImageView()
+        snapWidget.ui.roiBtn.hide()
+        snapWidget.ui.menuBtn.hide()
+        snapWidget.ui.histogram.hide()
+        self.snapImageItem = snapWidget.getImageItem()
+        self.snapImageItem.setAutoDownsample(True)
+        
+        # Button for snapshotting
+        self.request_snap_button = QPushButton(text="Take snapshot", clicked=self.request_snap)
+        
         liveLayout.addWidget(liveWidget, 0, 0, 1, 1)
+        liveLayout.addWidget(snapWidget, 0, 1, 1, 1)
         liveLayout.addWidget(self.request_pause_button, 1, 0, 1, 1)
+        liveLayout.addWidget(self.request_snap_button, 1, 1, 1, 1)
         liveContainer.setLayout(liveLayout)
         
         """
@@ -106,34 +122,12 @@ class PatchClampUI(QWidget):
         sensorLayout = QGridLayout()
         
         sensorWidget = pg.GraphicsLayoutWidget()
-        visuals = sensorWidget.addViewBox(0, 0, 1, 1)
-        current = sensorWidget.addPlot(1, 0, 1, 1)
-        pressure = sensorWidget.addPlot(2, 0, 1, 1)
+        self.algorithm = sensorWidget.addPlot(1, 0, 1, 1)
+        self.current = sensorWidget.addPlot(2, 0, 1, 1)
+        self.pressure = sensorWidget.addPlot(3, 0, 1, 1)
         
-        # # Display to project current graph
-        # currentWidget = pg.ImageView()
-        # self.currentgraph = currentWidget.getImageItem()
-        # self.currentgraph.setAutoDownsample(True)
-        # currentWidget.ui.roiBtn.hide()
-        # currentWidget.ui.menuBtn.hide()
-        # currentWidget.ui.histogram.hide()
-        
-        # # Display to project pressure graph
-        # pressureWidget = pg.ImageView()
-        # self.pressuregraph = pressureWidget.getImageItem()
-        # self.pressuregraph.setAutoDownsample(True)
-        # pressureWidget.ui.roiBtn.hide()
-        # pressureWidget.ui.menuBtn.hide()
-        # pressureWidget.ui.histogram.hide()
-        
-        # sensorLayout.addWidget(currentWidget, 0, 0, 1, 1)
-        # sensorLayout.addWidget(pressureWidget, 1, 0, 1, 1)
         sensorLayout.addWidget(sensorWidget)
         sensorContainer.setLayout(sensorLayout)
-        
-        
-        
-        
         
         """
         ---------------------- Algorithm control buttons ----------------------
@@ -235,12 +229,45 @@ class PatchClampUI(QWidget):
         print("Button pushed")
         
         
-    def request_togglelive(self):
-        if self.request_pause_button.isChecked():
-            I = plt.imread("./testimage.tif")
-            self.liveImageItem.setImage(I)
+    def request_toggleconnectcamera(self):
+        """
+        We initiate the camera by creating the CameraThread object, then we
+        connect signals with slots to govern inter-thread communication, i.e.
+        to recieve images to display. Afterwards we move the camera thread to
+        the backend where the thread is immediately started.
+        """
+        if self.connect_camera_button.isChecked():
+            camerathread = CameraThread()
+            
+            self.signal_camera_live = camerathread.livesignal
+            self.signal_camera_snap = camerathread.snapsignal
+            self.signal_camera_live.connect(self.update_live)
+            self.signal_camera_snap.connect(self.update_snap)
+            
+            self.backend.camerathread = camerathread
         else:
-            self.liveImageItem.setImage(image=np.zeros((2048,2048)))
+            del self.backend.camerathread
+            del self.signal_camera_live
+            del self.signal_camera_snap
+        
+        
+    def request_togglelive(self):
+        if hasattr(self, 'signal_camera_live'):
+            if self.request_pause_button.isChecked():
+                self.signal_camera_live.disconnect()
+            else:
+                self.signal_camera_live.connect(self.update_live)
+        else:
+            self.request_pause_button.setChecked(False)
+        
+        
+    def request_snap(self):
+        if self.backend.camerathread != None:
+            self.backend.camerathread.snap()
+        else:
+            # raise ValueError('no camera connected')
+            I = plt.imread("PatchClamp/testimage.tif")
+            self.update_snap(I)
         
         
     def request_selecttarget(self):
@@ -272,7 +299,14 @@ class PatchClampUI(QWidget):
             self.liveView.addedItems[idx].setPen(QPen(QColor(193,245,240), 0))
             self.backend.target_coordinates = np.array([x,y])
         
-        
+    
+    def update_live(self, image):
+        self.liveImageItem.setImage(image)
+
+    def update_snap(self, image):
+        self.snapImageItem.setImage(image)
+    
+    
     def closeEvent(self, event):
         """ Close event
         This method is called when the GUI is shut down. First we need to stop
