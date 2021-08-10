@@ -20,6 +20,7 @@ import pyqtgraph as pg
 
 
 import matplotlib.pyplot as plt
+from smartpatcher_backend import SmartPatcher
 
 
 class PatchClampUI(QWidget):
@@ -104,31 +105,34 @@ class PatchClampUI(QWidget):
         sensorContainer.setMinimumSize(400,600)
         sensorLayout = QGridLayout()
         
-        # Display to project current graph
-        currentWidget = pg.ImageView()
-        self.currentgraph = currentWidget.getImageItem()
-        self.currentgraph.setAutoDownsample(True)
-        currentWidget.ui.roiBtn.hide()
-        currentWidget.ui.menuBtn.hide()
-        currentWidget.ui.histogram.hide()
+        sensorWidget = pg.GraphicsLayoutWidget()
+        visuals = sensorWidget.addViewBox(0, 0, 1, 1)
+        current = sensorWidget.addPlot(1, 0, 1, 1)
+        pressure = sensorWidget.addPlot(2, 0, 1, 1)
         
-        # Display to project pressure graph
-        pressureWidget = pg.ImageView()
-        self.pressuregraph = pressureWidget.getImageItem()
-        self.pressuregraph.setAutoDownsample(True)
-        pressureWidget.ui.roiBtn.hide()
-        pressureWidget.ui.menuBtn.hide()
-        pressureWidget.ui.histogram.hide()
+        # # Display to project current graph
+        # currentWidget = pg.ImageView()
+        # self.currentgraph = currentWidget.getImageItem()
+        # self.currentgraph.setAutoDownsample(True)
+        # currentWidget.ui.roiBtn.hide()
+        # currentWidget.ui.menuBtn.hide()
+        # currentWidget.ui.histogram.hide()
         
-        sensorLayout.addWidget(currentWidget, 0, 0, 1, 1)
-        sensorLayout.addWidget(pressureWidget, 1, 0, 1, 1)
+        # # Display to project pressure graph
+        # pressureWidget = pg.ImageView()
+        # self.pressuregraph = pressureWidget.getImageItem()
+        # self.pressuregraph.setAutoDownsample(True)
+        # pressureWidget.ui.roiBtn.hide()
+        # pressureWidget.ui.menuBtn.hide()
+        # pressureWidget.ui.histogram.hide()
+        
+        # sensorLayout.addWidget(currentWidget, 0, 0, 1, 1)
+        # sensorLayout.addWidget(pressureWidget, 1, 0, 1, 1)
+        sensorLayout.addWidget(sensorWidget)
         sensorContainer.setLayout(sensorLayout)
         
         
-        # w = pg.GraphicsLayoutWidget()
-        # p1 = w.addPlot(row=0, col=0)
-        # p2 = w.addPlot(row=0, col=1)
-        # v = w.addViewBox(row=1, col=0, colspan=2)
+        
         
         
         """
@@ -211,9 +215,18 @@ class PatchClampUI(QWidget):
         """
         
         """
-        Instantiate backend
+        =======================================================================
+        ------------------------ Start up roi manager -------------------------
+        =======================================================================
         """
-        # self.backend = smartpatcher()
+        self.roimanager = ROIManagerGUI(offset=len(self.liveView.addedItems))
+        
+        """
+        =======================================================================
+        -------------------------- Start up backend ---------------------------
+        =======================================================================
+        """
+        self.backend = SmartPatcher()
         
         
         
@@ -233,13 +246,18 @@ class PatchClampUI(QWidget):
     def request_selecttarget(self):
         """
         The user drags a circular ROI on top of the target cell. The ROI center
-        is the landing spot. We first check if a target already exists, if so
-        we recycle it.
+        is the target. We first check if a target already exists, if so, we
+        recycle it.
         """
-        # Check if other targets exist, if yes, set .translatable to True and change pen color to QColor(255,255,255)
-        
-        targetROI = pg.CircleROI(pos=(0,0), radius=60, movable=True)
-        self.liveView.addItem(targetROI)
+        if not self.roimanager.contains('target'):
+            target = pg.CircleROI(pos=(0,0), radius=60, movable=True, pen=QPen(QColor(255,255,0), 0))
+            self.roimanager.addROI('target')
+            self.liveView.addItem(target)
+        else:
+            idx = self.roimanager.giveROIindex('target')[-1]
+            self.liveView.addedItems[idx].translatable = True
+            self.liveView.addedItems[idx].setPen(QPen(QColor(255,255,0), 0))
+            self.backend.target_coordinates = np.array([None,None])
         
         
     def request_confirmtarget(self):
@@ -247,19 +265,12 @@ class PatchClampUI(QWidget):
         If a target is selected, we save the center coordinates of the ROI in
         the camera field of reference.
         """
-        if type(self.liveView.addedItems[-1]) is pg.CircleROI:
-            x,y = self.liveView.addedItems[-1].state['pos'] + self.liveView.addedItems[-1].state['size'] / 2
-            self.liveView.addedItems[-1].translatable = False
-            self.liveView.addedItems[-1].setPen(QPen(QColor(193,245,240), 0))
-            print(x,y) # self.backend.set_target(x,y)
-            
-        
-        
-    # def request_clearviewItems(self):
-    #     numberofitems = len(self.liveView.addedItems)
-    #     if numberofitems > 3:
-    #         for i in range(3,numberofitems):
-    #             self.liveView.removeItem(self.liveView.addedItems[-1])
+        if self.roimanager.contains('target'):
+            idx = self.roimanager.giveROIindex('target')[-1]
+            x,y = self.liveView.addedItems[idx].state['pos'] + self.liveView.addedItems[idx].state['size'] / 2
+            self.liveView.addedItems[idx].translatable = False
+            self.liveView.addedItems[idx].setPen(QPen(QColor(193,245,240), 0))
+            self.backend.target_coordinates = np.array([x,y])
         
         
     def closeEvent(self, event):
@@ -275,11 +286,61 @@ class PatchClampUI(QWidget):
         QtWidgets.QApplication.quit() # remove when part of Tupolev!!
         
         
+
+
+class ROIManagerGUI:
+    def __init__(self, offset):
+        self.offset = offset
+        self.ROInumber = 0
+        self.ROIdictionary = {}
+    
+    def addROI(self, name):
+        if name in self.ROIdictionary:
+            self.ROIdictionary[name] = self.ROIdictionary[name] + [self.ROInumber]
+            self.ROInumber += 1
+        else:
+            self.ROIdictionary[name] = [self.ROInumber]
+            self.ROInumber += 1
         
+    def removeROI(self, name, args=None):
+        if args == 'all':
+            self.ROInumber -= len(self.ROIdictionary[name])
+            del self.ROIdictionary[name]
+        elif type(args) == int:
+            entries = len(self.ROIdictionary[name])
+            if entries > args:
+                self.ROInumber -= args
+                self.ROIdictionary[name] = self.ROIdictionary[name][:-args]
+            elif entries == args:
+                self.ROInumber -= entries
+                del self.ROIdictionary[name]
+            else:
+                raise ValueError('list out of range')
         
-        
+    def giveROIindex(self, name):
+        return [x+self.offset for x in self.ROIdictionary[name][:]]
+                
+    def contains(self, name):
+        if name in self.ROIdictionary:
+            return True
+        else:
+            return False
+
+
+
+
 
 if __name__ == "__main__":
+    
+    def start_logger():
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(message)s",
+            handlers=[
+                # logging.FileHandler("autopatch.log"),   # uncomment to write to .log
+                logging.StreamHandler()
+            ]
+        )
     
     def run_app():
         app = QtWidgets.QApplication(sys.argv)
@@ -289,5 +350,6 @@ if __name__ == "__main__":
         mainwin = PatchClampUI()
         mainwin.show()
         app.exec_()
-    
+        
+    start_logger()
     run_app()
