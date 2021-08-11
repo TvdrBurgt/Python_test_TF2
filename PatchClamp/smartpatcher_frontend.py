@@ -11,7 +11,6 @@ import sys
 import numpy as np
 import logging
 
-from PyQt5.QtCore import Qt
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QPen, QColor
 from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QDoubleSpinBox, QGroupBox, QLabel
@@ -22,8 +21,10 @@ import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
     os.chdir(os.getcwd() + '\\..')
-    from PatchClamp.camerathread import CameraThread
     from PatchClamp.smartpatcher_backend import SmartPatcher
+    from PatchClamp.camerathread import CameraThread
+    from PatchClamp.micromanipulator import ScientificaPatchStar
+    
 
 
 class PatchClampUI(QWidget):
@@ -46,7 +47,7 @@ class PatchClampUI(QWidget):
         hardwareLayout = QGridLayout()
         
         # Button to (dis)connect camera
-        self.connect_camera_button = QPushButton(text="Camera", clicked=self.request_toggleconnectcamera)
+        self.connect_camera_button = QPushButton(text="Camera", clicked=self.connect_camera)
         self.connect_camera_button.setCheckable(True)
         
         # Button to (dis)connect objective motor
@@ -54,7 +55,7 @@ class PatchClampUI(QWidget):
         self.connect_objectivemotor_button.setCheckable(True)
         
         # Button to (dis)connect micromanipulator
-        self.connect_micromanipulator_button = QPushButton(text="Micromanipulator", clicked=self.mockfunction)
+        self.connect_micromanipulator_button = QPushButton(text="Micromanipulator", clicked=self.connect_micromanipulator)
         self.connect_micromanipulator_button.setCheckable(True)
         
         # Button to (dis)connect amplifier
@@ -94,7 +95,7 @@ class PatchClampUI(QWidget):
         self.liveImageItem.setAutoDownsample(True)
         
         # Button for pausing camera view
-        self.request_pause_button = QPushButton(text="Pause live", clicked=self.request_togglelive)
+        self.request_pause_button = QPushButton(text="Pause live", clicked=self.toggle_pauselive)
         self.request_pause_button.setCheckable(True)
         
         # Display to project snaphots on
@@ -135,31 +136,14 @@ class PatchClampUI(QWidget):
         algorithmContainer = QGroupBox()
         algorithmLayout = QGridLayout()
         
-        # Button for hard calibration in XY
         request_hardcalibrationxy_button = QPushButton(text="Calibrate XY", clicked=self.mockfunction)
-        
-        # Button for hard calibration in XYZ
         request_hardcalibrationxyz_button = QPushButton(text="Calibrate XYZ", clicked=self.mockfunction)
-        
-        # Button for target selection
         request_selecttarget_button = QPushButton(text="Select target", clicked=self.request_selecttarget)
-        
-        # Button for confirming selected target
         request_confirmtarget_button = QPushButton(text="Confirm target", clicked=self.request_confirmtarget)
-        
-        # Button for pipette tip detection in XY
         request_detecttip_button = QPushButton(text="Detect tip", clicked=self.mockfunction)
-        
-        # Button for pipette tip autofocus
         request_autofocustip = QPushButton(text="Autofocus tip", clicked=self.mockfunction)
-        
-        # Button for gigaseal formation
         request_gigaseal_button = QPushButton(text="Gigaseal", clicked=self.mockfunction)
-        
-        # Button for break-in
         request_breakin_button = QPushButton(text="Break-in", clicked=self.mockfunction)
-        
-        # Button for ZAP
         request_zap_button = QPushButton(text="ZAP", clicked=self.mockfunction)
         
         # Button to set pressure
@@ -204,15 +188,10 @@ class PatchClampUI(QWidget):
         
         """
         =======================================================================
-        ----------------------------- End of GUI ------------------------------
-        =======================================================================
-        """
-        
-        """
-        =======================================================================
         ------------------------ Start up roi manager -------------------------
         =======================================================================
         """
+        
         self.roimanager = ROIManagerGUI(offset=len(self.liveView.addedItems))
         
         """
@@ -220,7 +199,14 @@ class PatchClampUI(QWidget):
         -------------------------- Start up backend ---------------------------
         =======================================================================
         """
+        
         self.backend = SmartPatcher()
+        
+        """
+        =======================================================================
+        ----------------------------- End of GUI ------------------------------
+        =======================================================================
+        """
         
         
         
@@ -229,7 +215,22 @@ class PatchClampUI(QWidget):
         print("Button pushed")
         
         
-    def request_toggleconnectcamera(self):
+        
+    def connect_micromanipulator(self):
+        """
+        We initiate the micromanipulator by creating the ScientificaPatchStar
+        serial object. Creating the object object automatically opens the USB
+        port that the device is connected to, similarly, deleting the object
+        stops micromanipulator movement and closes the port.
+        """
+        if self.connect_micromanipulator_button.isChecked():
+            micromanipulator = ScientificaPatchStar(address='COM16', baud=38400)
+            self.backend.micromanipulator = micromanipulator
+        else:
+            del self.backend.micromanipulator
+        
+        
+    def connect_camera(self):
         """
         We initiate the camera by creating the CameraThread object, then we
         connect signals with slots to govern inter-thread communication, i.e.
@@ -251,7 +252,7 @@ class PatchClampUI(QWidget):
             del self.signal_camera_snap
         
         
-    def request_togglelive(self):
+    def toggle_pauselive(self):
         if hasattr(self, 'signal_camera_live'):
             if self.request_pause_button.isChecked():
                 self.signal_camera_live.disconnect()
@@ -265,9 +266,9 @@ class PatchClampUI(QWidget):
         if self.backend.camerathread != None:
             self.backend.camerathread.snap()
         else:
-            # raise ValueError('no camera connected')
             I = plt.imread("PatchClamp/testimage.tif")
             self.update_snap(I)
+            raise ValueError('no camera connected')
         
         
     def request_selecttarget(self):
@@ -302,7 +303,8 @@ class PatchClampUI(QWidget):
     
     def update_live(self, image):
         self.liveImageItem.setImage(image)
-
+        
+        
     def update_snap(self, image):
         self.snapImageItem.setImage(image)
     
@@ -328,6 +330,9 @@ class ROIManagerGUI:
         self.ROInumber = 0
         self.ROIdictionary = {}
     
+    def giveROIindex(self, name):
+        return [x+self.offset for x in self.ROIdictionary[name][:]]
+    
     def addROI(self, name):
         if name in self.ROIdictionary:
             self.ROIdictionary[name] = self.ROIdictionary[name] + [self.ROInumber]
@@ -350,9 +355,6 @@ class ROIManagerGUI:
                 del self.ROIdictionary[name]
             else:
                 raise ValueError('list out of range')
-        
-    def giveROIindex(self, name):
-        return [x+self.offset for x in self.ROIdictionary[name][:]]
                 
     def contains(self, name):
         if name in self.ROIdictionary:

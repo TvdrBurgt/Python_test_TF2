@@ -37,7 +37,7 @@ if __name__ == "__main__":
 #         super().__init__()
 #         self.isrunning = False
 #         self.moveToThread(self)
-#         self.started.connect(self.acquire)
+#         self.started.connect(self.live)
         
 #     def stop(self):
 #         self.isrunning = False
@@ -45,13 +45,13 @@ if __name__ == "__main__":
 #         self.quit()
 #         self.wait()
         
-#     def get_snap(self):
+#     def snap(self):
 #         snap = copy(self.camera.Live_image)
 #         self.snapsignal.emit(snap)
 #         return snap
         
 #     @pyqtSlot()
-#     def acquire(self):
+#     def live(self):
 #         self.isrunning = True
 #         self.camera.LIVE()
 #         while self.isrunning:
@@ -73,7 +73,7 @@ class CameraThread(QThread):
         super().__init__()
         self.isrunning = False
         self.moveToThread(self)
-        self.started.connect(self.acquire)
+        self.started.connect(self.live)
         
     def stop(self):
         self.isrunning = False
@@ -86,7 +86,7 @@ class CameraThread(QThread):
         return snap
         
     @pyqtSlot()
-    def acquire(self):
+    def live(self):
         logging.info('camera thread started')
         
         self.isrunning = True
