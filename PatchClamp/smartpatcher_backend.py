@@ -10,24 +10,31 @@ import os
 import datetime
 import logging
 import numpy as np
-
-from skimage import io
-
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QThread
+
+from PatchClamp.workers import Worker
 
 
 class SmartPatcher(QObject):
     
-    def __init__(self, manipulator_handle=None, objective_handle=None):
+    def __init__(self):
         # Algorithm constants
-        self.target_coordinates = np.array([None, None])
+        self._pipette_orientation = None                     # in radians
+        self._pipette_diameter = None                        # in microns
+        self._pipette_coordinates = np.array([None, None])   # [X, Y] in pixels
+        self._target_coordinates = np.array([None, None])    # [X, Y] in pixels
         
         # Hardware devices
-        self.camerathread = None
-        self.amplifierthread = None
-        self.pressurethread = None
-        self.micromanipulator = manipulator_handle
-        self.objectivemotor = objective_handle
+        self._camerathread = None
+        self._amplifierthread = None
+        self._pressurethread = None
+        self._micromanipulator = None
+        self._objectivemotor = None
+        
+        # Worker thread
+        self.worker = Worker()
+        # self.thread = QThread()
+        # self.worker.moveToThread(self.thread)
     
     @property
     def camerathread(self):
@@ -36,8 +43,7 @@ class SmartPatcher(QObject):
     @camerathread.setter
     def camerathread(self, camerathread_handle):
         self._camerathread = camerathread_handle
-        if self._camerathread != None:
-            self._camerathread.start()
+        self._camerathread.start()
     
     @camerathread.deleter
     def camerathread(self):
@@ -71,6 +77,60 @@ class SmartPatcher(QObject):
     
     
     @property
+    def pipette_orientation(self):
+        return self._pipette_orientation
+    
+    @pipette_orientation.setter
+    def pipette_orientation(self, angle):
+        logging.info('Set pipette orientation: \phi =' + str(angle))
+        if type(angle) == float or type(angle) == int:
+            self._pipette_orientation = angle
+        else:
+            raise ValueError('micromanipulator orientation should be a float or integer')
+    
+    @pipette_orientation.deleter
+    def pipette_orientation(self):
+        self._pipette_orientation = None
+    
+    
+    @property
+    def pipette_diameter(self):
+        return self._pipette_diameter
+    
+    @pipette_diameter.setter
+    def pipette_diameter(self, diameter):
+        logging.info('Set pipette opening diameter: D =' + str(diameter))
+        if type(diameter) == float or type(diameter) == int:
+            self._pipette_diameter = diameter
+        else:
+            raise ValueError('Pipette opening diameter should be a float or integer')
+    
+    @pipette_diameter.deleter
+    def pipette_diameter(self):
+        self._pipette_diameter = None
+    
+    
+    @property
+    def pipette_coordinates(self):
+        return self._pipette_coordinates
+    
+    @pipette_coordinates.setter
+    def pipette_coordinates(self, coords):
+        logging.info('Set pipette coordinates: [x,y,z]=' + str(coords))
+        if type(coords) is np.ndarray:
+            if len(coords) == 2:
+                self._pipette_coordinates = coords
+            else:
+                raise ValueError('length of pipette coordinates must be 2 or 3')
+        else:
+            raise ValueError('pipette coordinates should be a numpy.ndarray')
+    
+    @pipette_coordinates.deleter
+    def pipette_coordinates(self):
+        self._pipette_coordinates = np.array([None, None])
+    
+    
+    @property
     def target_coordinates(self):
         return self._target_coordinates
     
@@ -87,7 +147,6 @@ class SmartPatcher(QObject):
     
     @target_coordinates.deleter
     def target_coordinates(self):
-        del self._target_coordinates
-        
+        self._pipette_coordinates = np.array([None, None])
     
     

@@ -49,7 +49,7 @@ class ScientificaPatchStar(serial.Serial):
         """
         def wrapper(self, *args, **kwargs):
             # Execute move
-            result = func(*args, **kwargs)
+            result = func(self, *args, **kwargs)
             
             # Wait until motors are idle
             response = '-1'

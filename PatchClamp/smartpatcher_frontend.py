@@ -136,7 +136,7 @@ class PatchClampUI(QWidget):
         algorithmContainer = QGroupBox()
         algorithmLayout = QGridLayout()
         
-        request_hardcalibrationxy_button = QPushButton(text="Calibrate XY", clicked=self.mockfunction)
+        request_hardcalibrationxy_button = QPushButton(text="Calibrate XY", clicked=self.request_hardcalibrationxy)
         request_hardcalibrationxyz_button = QPushButton(text="Calibrate XYZ", clicked=self.mockfunction)
         request_selecttarget_button = QPushButton(text="Select target", clicked=self.request_selecttarget)
         request_confirmtarget_button = QPushButton(text="Confirm target", clicked=self.request_confirmtarget)
@@ -196,11 +196,14 @@ class PatchClampUI(QWidget):
         
         """
         =======================================================================
-        -------------------------- Start up backend ---------------------------
+        -------------- Start up backend and connect signals/slots--------------
         =======================================================================
         """
         
         self.backend = SmartPatcher()
+        self.backend.worker.draw.connect(self.mocksignal)
+        self.backend.worker.progress.connect(self.mocksignal)
+        self.backend.worker.finished.connect(self.mocksignal)
         
         """
         =======================================================================
@@ -208,12 +211,12 @@ class PatchClampUI(QWidget):
         =======================================================================
         """
         
-        
+    def mocksignal(self):
+        print('signal connected')
         
         
     def mockfunction(self):
         print("Button pushed")
-        
         
         
     def connect_micromanipulator(self):
@@ -238,7 +241,7 @@ class PatchClampUI(QWidget):
         the backend where the thread is immediately started.
         """
         if self.connect_camera_button.isChecked():
-            camerathread = CameraThread()
+            camerathread = CameraThread(camerahandle=None)
             
             self.signal_camera_live = camerathread.livesignal
             self.signal_camera_snap = camerathread.snapsignal
@@ -270,7 +273,16 @@ class PatchClampUI(QWidget):
             self.update_snap(I)
             raise ValueError('no camera connected')
         
+    
+    def request_hardcalibrationxy(self):
+        print('Place pipette tip inside the circle')
         
+        tip = pg.CircleROI(pos=(1009,1009), radius=30, movable=False, resizable=False ,pen=QPen(QColor(255,0,255), 0))
+        tip.setZValue(10)
+        self.roimanager.addROI('tip')
+        self.liveView.addItem(tip)
+    
+    
     def request_selecttarget(self):
         """
         The user drags a circular ROI on top of the target cell. The ROI center
@@ -279,6 +291,7 @@ class PatchClampUI(QWidget):
         """
         if not self.roimanager.contains('target'):
             target = pg.CircleROI(pos=(0,0), radius=60, movable=True, pen=QPen(QColor(255,255,0), 0))
+            target.setZValue(10)
             self.roimanager.addROI('target')
             self.liveView.addItem(target)
         else:
