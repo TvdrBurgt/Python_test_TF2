@@ -33,8 +33,24 @@ class SmartPatcher(QObject):
         
         # Worker thread
         self.worker = Worker()
-        # self.thread = QThread()
-        # self.worker.moveToThread(self.thread)
+        self.thread = QThread()
+        self.worker.moveToThread(self.thread)
+        self.worker.finished.connect(self.thread.quit)
+    
+    def request(self, name):
+        logging.info('Reqeusted algorithm: ' + name)
+        if self.thread.isRunning() == True:
+            logging.info('Thread is still running')
+        else:
+            if name == 'softcalibration':
+                self.thread.started.connect(self.worker.softcalibration)
+            elif name == 'hardcalibration':
+                self.thread.started.connect(self.worker.mockfunction)
+            elif name == 'autofocus':
+                self.thread.started.connect(self.worker.mockfunction)
+            self.thread.start()
+        logging.info('QThread isFinished: ' + str(self.thread.isFinished()))
+        logging.info('QThread isRunning: ' + str(self.thread.isRunning()))
     
     @property
     def camerathread(self):

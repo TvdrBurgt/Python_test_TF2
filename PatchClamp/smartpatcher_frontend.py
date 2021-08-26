@@ -136,11 +136,11 @@ class PatchClampUI(QWidget):
         algorithmContainer = QGroupBox()
         algorithmLayout = QGridLayout()
         
-        request_hardcalibrationxy_button = QPushButton(text="Calibrate XY", clicked=self.request_hardcalibrationxy)
+        request_hardcalibrationxy_button = QPushButton(text="Calibrate XY", clicked=self.mockfunction)
         request_hardcalibrationxyz_button = QPushButton(text="Calibrate XYZ", clicked=self.mockfunction)
         request_selecttarget_button = QPushButton(text="Select target", clicked=self.request_selecttarget)
         request_confirmtarget_button = QPushButton(text="Confirm target", clicked=self.request_confirmtarget)
-        request_detecttip_button = QPushButton(text="Detect tip", clicked=self.mockfunction)
+        request_detecttip_button = QPushButton(text="Detect tip", clicked=self.request_softcalibration)
         request_autofocustip = QPushButton(text="Autofocus tip", clicked=self.mockfunction)
         request_gigaseal_button = QPushButton(text="Gigaseal", clicked=self.mockfunction)
         request_breakin_button = QPushButton(text="Break-in", clicked=self.mockfunction)
@@ -201,7 +201,7 @@ class PatchClampUI(QWidget):
         """
         
         self.backend = SmartPatcher()
-        self.backend.worker.draw.connect(self.mocksignal)
+        self.backend.worker.draw.connect(self.draw_roi)
         self.backend.worker.progress.connect(self.mocksignal)
         self.backend.worker.finished.connect(self.mocksignal)
         
@@ -212,7 +212,9 @@ class PatchClampUI(QWidget):
         """
         
     def mocksignal(self):
-        print('signal connected')
+        print('Algorithm finished')
+        logging.info('QThread isFinished: ' + str(self.backend.thread.isFinished()))
+        logging.info('QThread isRunning: ' + str(self.backend.thread.isRunning()))
         
         
     def mockfunction(self):
@@ -274,13 +276,16 @@ class PatchClampUI(QWidget):
             raise ValueError('no camera connected')
         
     
-    def request_hardcalibrationxy(self):
-        print('Place pipette tip inside the circle')
+    # def request_hardcalibrationxy(self):
+    #     print('Place pipette tip inside the circle')
         
-        tip = pg.CircleROI(pos=(1009,1009), radius=30, movable=False, resizable=False ,pen=QPen(QColor(255,0,255), 0))
-        tip.setZValue(10)
-        self.roimanager.addROI('tip')
-        self.liveView.addItem(tip)
+    #     tip = pg.CircleROI(pos=(1009,1009), radius=30, movable=False, resizable=False ,pen=QPen(QColor(255,0,255), 0))
+    #     tip.setZValue(10)
+    #     self.roimanager.addROI('tip')
+    #     self.liveView.addItem(tip)
+    
+    def request_softcalibration(self):
+        self.backend.request(name='softcalibration')
     
     
     def request_selecttarget(self):
@@ -313,6 +318,23 @@ class PatchClampUI(QWidget):
             self.liveView.addedItems[idx].setPen(QPen(QColor(193,245,240), 0))
             self.backend.target_coordinates = np.array([x,y])
         
+    
+    def draw_roi(self, *args):
+        label,xpos,ypos = args[0][0:3]
+        if label == 'cross':
+            vertical = pg.ROI(pos=(xpos,ypos-15), size=[1,30], pen=QPen(QColor(0,255,0), 0))
+            horizontal = pg.ROI(pos=(xpos-15,ypos), size=[30,1], pen=QPen(QColor(0,255,0), 0))
+            vertical.setZValue(10)
+            horizontal.setZValue(10)
+            self.roimanager.addROI('cross' + '_vertical')
+            self.roimanager.addROI('cross' + '_horizontal')
+            self.liveView.addItem(vertical)
+            self.liveView.addItem(horizontal)
+        elif label == 'image':
+            self.update_snap(args)
+        else:
+            print(label + ' is not a known draw-label')
+    
     
     def update_live(self, image):
         self.liveImageItem.setImage(image)
