@@ -67,7 +67,7 @@ class PatchClampUI(QWidget):
         self.connect_pressurecontroller_button.setCheckable(True)
         
         # Button to stop all hardware in motion
-        self.STOP_button = QPushButton(text="Emergency STOP", clicked=self.mockfunction)
+        self.STOP_button = QPushButton(text="Emergency STOP", clicked=self.STOP)
         self.STOP_button.setCheckable(True)
         
         hardwareLayout.addWidget(self.connect_camera_button, 0, 0, 1, 1)
@@ -342,6 +342,14 @@ class PatchClampUI(QWidget):
         
     def update_snap(self, image):
         self.snapImageItem.setImage(image)
+    
+    
+    def STOP(self):
+        if self.STOP_button.isChecked():
+            self.backend.STOP = True
+        else:
+            self.backend.STOP = False
+        
     
     
     def closeEvent(self, event):

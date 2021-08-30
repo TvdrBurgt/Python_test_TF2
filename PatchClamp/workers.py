@@ -42,12 +42,17 @@ class Worker(QObject):
             micromanipulator_handle.moveRel(x=5, y=0, z=0)
             image_right = camera_handle.snap()
             
+            # emergency stop
+            if self.STOP == True:
+                break
+            
             # pipette tip detection algorithm
             x1, y1 = ia.detectPipettetip(image_left, image_right, diameter=16, orientation=0)
             W = ia.makeGaussian(size=image_left.shape, mu=(x1,y1), sigma=(image_left.shape[0]//12,image_left.shape[1]//12))
             x, y = ia.detectPipettetip(np.multiply(image_left,W), np.multiply(image_right,W), diameter=20, orientation=0)
             tipcoords[i,:] = x,y
             self.draw.emit(['cross',x,y])
+            
             
         # move pipette back to initial coordinates and ask user to correct bias
         micromanipulator_handle.moveAbs(reference)

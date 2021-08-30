@@ -36,21 +36,27 @@ class SmartPatcher(QObject):
         self.thread = QThread()
         self.worker.moveToThread(self.thread)
         self.worker.finished.connect(self.thread.quit)
+        
+        # Emergency stop
+        self.STOP = False
     
     def request(self, name):
-        logging.info('Reqeusted algorithm: ' + name)
-        if self.thread.isRunning() == True:
-            logging.info('Thread is still running')
+        if self.STOP == True:
+            logging.info('Emergency stop active')
         else:
-            if name == 'softcalibration':
-                self.thread.started.connect(self.worker.softcalibration)
-            elif name == 'hardcalibration':
-                self.thread.started.connect(self.worker.mockfunction)
-            elif name == 'autofocus':
-                self.thread.started.connect(self.worker.mockfunction)
-            self.thread.start()
-        logging.info('QThread isFinished: ' + str(self.thread.isFinished()))
-        logging.info('QThread isRunning: ' + str(self.thread.isRunning()))
+            logging.info('Reqeusted algorithm: ' + name)
+            if self.thread.isRunning() == True:
+                logging.info('Thread is still running')
+            else:
+                if name == 'softcalibration':
+                    self.thread.started.connect(self.worker.softcalibration)
+                elif name == 'hardcalibration':
+                    self.thread.started.connect(self.worker.mockfunction)
+                elif name == 'autofocus':
+                    self.thread.started.connect(self.worker.mockfunction)
+                self.thread.start()
+            logging.info('QThread isFinished: ' + str(self.thread.isFinished()))
+            logging.info('QThread isRunning: ' + str(self.thread.isRunning()))
     
     @property
     def camerathread(self):
@@ -165,4 +171,31 @@ class SmartPatcher(QObject):
     def target_coordinates(self):
         self._pipette_coordinates = np.array([None, None])
     
+    
+    @property
+    def STOP(self):
+        return self._STOP
+    
+    @STOP.setter
+    def STOP(self, state):
+        """
+        # 1. Stop QThreads
+        # 2. Stop hardware from moving
+        # 3. Set pressure to ATM
+        # 4. Set current/voltage to 0
+        """
+        if state == True:
+            self._STOP = True
+            logging.info('Emergency stop active')
+            self.worker.STOP = True
+            if self.micromanipulator != None:
+                self._micromanipulator.stop()
+                self._micromanipulator.stop()
+                self._micromanipulator.stop()
+        elif state == False:
+            self._STOP = False
+            logging.info('Emergency stop standby')
+            self.worker.STOP = False
+        else:
+            raise ValueError('Emergency stop should be either TRUE or False')
     
