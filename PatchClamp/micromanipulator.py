@@ -78,6 +78,18 @@ class ScientificaPatchStar(serial.Serial):
         return positionarray
     
     
+    def setZero(self):
+        """
+        This sets the current position to (0,0,0) as long as the motion device
+        is not moving.
+            Send: ZERO
+            Response: A (if set is allowed else E)
+        """
+        response = self.send_and_recieve('ZERO')
+        
+        return response
+    
+    
     @wait_until_finished
     def moveAbs(self, x, y, z):
         """

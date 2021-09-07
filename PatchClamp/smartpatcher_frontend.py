@@ -97,6 +97,7 @@ class PatchClampUI(QWidget):
         # Button for pausing camera view
         self.request_pause_button = QPushButton(text="Pause live", clicked=self.toggle_pauselive)
         self.request_pause_button.setCheckable(True)
+        request_clear_drawings = QPushButton(text="Clear phantoms", clicked=self.clearROIs)
         
         # Display to project snaphots on
         snapWidget = pg.ImageView()
@@ -109,10 +110,11 @@ class PatchClampUI(QWidget):
         # Button for snapshotting
         self.request_snap_button = QPushButton(text="Take snapshot", clicked=self.request_snap)
         
-        liveLayout.addWidget(liveWidget, 0, 0, 1, 1)
-        liveLayout.addWidget(snapWidget, 0, 1, 1, 1)
+        liveLayout.addWidget(liveWidget, 0, 0, 1, 2)
+        liveLayout.addWidget(snapWidget, 0, 2, 1, 2)
         liveLayout.addWidget(self.request_pause_button, 1, 0, 1, 1)
-        liveLayout.addWidget(self.request_snap_button, 1, 1, 1, 1)
+        liveLayout.addWidget(request_clear_drawings, 1, 1, 1, 1)
+        liveLayout.addWidget(self.request_snap_button, 1, 2, 1, 2)
         liveContainer.setLayout(liveLayout)
         
         """
@@ -136,8 +138,8 @@ class PatchClampUI(QWidget):
         algorithmContainer = QGroupBox()
         algorithmLayout = QGridLayout()
         
-        request_hardcalibrationxy_button = QPushButton(text="Calibrate XY", clicked=self.mockfunction)
-        request_hardcalibrationxyz_button = QPushButton(text="Calibrate XYZ", clicked=self.mockfunction)
+        request_hardcalibrationxy_button = QPushButton(text="Calibrate XY", clicked=self.request_hardcalibration_xy)
+        request_hardcalibrationxyz_button = QPushButton(text="Calibrate XYZ", clicked=self.request_hardcalibration_xyz)
         request_selecttarget_button = QPushButton(text="Select target", clicked=self.request_selecttarget)
         request_confirmtarget_button = QPushButton(text="Confirm target", clicked=self.request_confirmtarget)
         request_detecttip_button = QPushButton(text="Detect tip", clicked=self.request_softcalibration)
@@ -213,12 +215,13 @@ class PatchClampUI(QWidget):
         
     def mocksignal(self):
         print('Algorithm finished')
-        logging.info('QThread isFinished: ' + str(self.backend.thread.isFinished()))
-        logging.info('QThread isRunning: ' + str(self.backend.thread.isRunning()))
+        logging.info('QThread isFinished: ' + str(self.backend.worker.isFinished()))
+        logging.info('QThread isRunning: ' + str(self.backend.worker.isRunning()))
         
         
     def mockfunction(self):
         print("Button pushed")
+        self.backend.request(name='mockworker')
         
         
     def connect_micromanipulator(self):
@@ -276,13 +279,12 @@ class PatchClampUI(QWidget):
             raise ValueError('no camera connected')
         
     
-    # def request_hardcalibrationxy(self):
-    #     print('Place pipette tip inside the circle')
+    def request_hardcalibration_xy(self):
+        self.backend.request(name='hardcalibration', mode='XY')
         
-    #     tip = pg.CircleROI(pos=(1009,1009), radius=30, movable=False, resizable=False ,pen=QPen(QColor(255,0,255), 0))
-    #     tip.setZValue(10)
-    #     self.roimanager.addROI('tip')
-    #     self.liveView.addItem(tip)
+    def request_hardcalibration_xyz(self):
+        self.backend.request(name='hardcalibration', mode='XYZ')
+    
     
     def request_softcalibration(self):
         self.backend.request(name='softcalibration')
@@ -292,10 +294,17 @@ class PatchClampUI(QWidget):
         """
         The user drags a circular ROI on top of the target cell. The ROI center
         is the target. We first check if a target already exists, if so, we
-        recycle it.
+        recycle it. If the target ROI got removed then we place it back to its
+        last known position.
         """
+        coords = self.backend.target_coordinates
+        if all(values is None for values in coords):
+            coords = (0,0)
+        else:
+            coords = (coords[0]-60,coords[1]-60)
+            
         if not self.roimanager.contains('target'):
-            target = pg.CircleROI(pos=(0,0), radius=60, movable=True, pen=QPen(QColor(255,255,0), 0))
+            target = pg.CircleROI(pos=coords, radius=60, movable=True, pen=QPen(QColor(255,255,0), 0))
             target.setZValue(10)
             self.roimanager.addROI('target')
             self.liveView.addItem(target)
@@ -303,7 +312,7 @@ class PatchClampUI(QWidget):
             idx = self.roimanager.giveROIindex('target')[-1]
             self.liveView.addedItems[idx].translatable = True
             self.liveView.addedItems[idx].setPen(QPen(QColor(255,255,0), 0))
-            self.backend.target_coordinates = np.array([None,None])
+            # self.backend.target_coordinates = np.array([None,None,None])
         
         
     def request_confirmtarget(self):
@@ -316,12 +325,13 @@ class PatchClampUI(QWidget):
             x,y = self.liveView.addedItems[idx].state['pos'] + self.liveView.addedItems[idx].state['size'] / 2
             self.liveView.addedItems[idx].translatable = False
             self.liveView.addedItems[idx].setPen(QPen(QColor(193,245,240), 0))
-            self.backend.target_coordinates = np.array([x,y])
+            self.backend.target_coordinates = np.array([x,y,np.nan])
         
     
     def draw_roi(self, *args):
-        label,xpos,ypos = args[0][0:3]
+        label = args[0][0]
         if label == 'cross':
+            xpos,ypos = args[0][1:3]
             vertical = pg.ROI(pos=(xpos,ypos-15), size=[1,30], pen=QPen(QColor(0,255,0), 0))
             horizontal = pg.ROI(pos=(xpos-15,ypos), size=[30,1], pen=QPen(QColor(0,255,0), 0))
             vertical.setZValue(10)
@@ -330,10 +340,23 @@ class PatchClampUI(QWidget):
             self.roimanager.addROI('cross' + '_horizontal')
             self.liveView.addItem(vertical)
             self.liveView.addItem(horizontal)
+        elif label == 'line':
+            xpos,ypos,orientation = args[0][1:4]
+            horizontal = pg.ROI(pos=(xpos-15,ypos), angle=orientation, size=[500,1], pen=QPen(QColor(0,255,0), 0))
+            horizontal.setZValue(10)
+            self.roimanager.addROI('line')
+            self.liveView.addItem(horizontal)
         elif label == 'image':
-            self.update_snap(args)
+            img = args[0][1]
+            self.update_snap(img)
         else:
             print(label + ' is not a known draw-label')
+    
+    
+    def clearROIs(self):
+        self.roimanager.removeallROIs()
+        for roi in self.liveView.addedItems[self.roimanager.offset::]:
+            self.liveView.removeItem(roi)
     
     
     def update_live(self, image):
@@ -398,6 +421,11 @@ class ROIManagerGUI:
                 del self.ROIdictionary[name]
             else:
                 raise ValueError('list out of range')
+                
+    def removeallROIs(self):
+        name = list(self.ROIdictionary)
+        for name in name:
+            self.removeROI(name, 'all')
                 
     def contains(self, name):
         if name in self.ROIdictionary:

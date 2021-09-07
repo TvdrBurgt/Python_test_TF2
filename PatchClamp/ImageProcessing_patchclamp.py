@@ -49,29 +49,23 @@ class PatchClampImageProcessing:
             ypos        = y position of the pipette tip
         """
         # Gaussian blur
-        print('I)')
         LB = filters.gaussian(Ia, 1)
         RB = filters.gaussian(Ib, 1)
         
         # Image subtraction
-        print('II)')
         IB = LB - RB
         
         # Canny edge detection
-        print('III)')
         BW = feature.canny(IB, sigma=3, low_threshold=0.99, high_threshold=0, use_quantiles=True)
         
         # Hough transform
-        print('IV)')
         angle_range = np.linspace(0, np.pi, 500) + np.deg2rad(orientation)
         H, T, R = transform.hough_line(BW, angle_range)
         
         # Find Hough peaks
-        print('V)')
         _, Tpeaks, Rpeaks = transform.hough_line_peaks(H,T,R, num_peaks=5, threshold=0)
         
         # Cluster peaks
-        print('VI)')
         idx_lowT = np.argmin(Tpeaks)
         idx_highT = np.argmax(Tpeaks)
         initial_clusters = np.array([[Tpeaks[idx_lowT],Rpeaks[idx_lowT]], [Tpeaks[idx_highT],Rpeaks[idx_highT]]])
@@ -79,9 +73,7 @@ class PatchClampImageProcessing:
         centroids, labels = cluster.vq.kmeans2(data, k=initial_clusters, iter=10, minit='matrix')
         centroid1, centroid2 = centroids
         
-        
         # Find intersection between X1*cos(T1)+Y1*sin(T1)=R1 and X2*cos(T2)+Y2*sin(T2)=R2
-        print('VII)')
         if centroid1[0] > centroid2[0]:
             angle1,dist1 = centroid1
             angle2,dist2 = centroid2
@@ -93,10 +85,25 @@ class PatchClampImageProcessing:
         xpos, ypos = np.linalg.solve(LHS, RHS)
         
         # Bias correction
-        print('VIII)')
         H = diameter/(2*np.tan((angle1-angle2)/2))
         alpha = (angle1+angle2)/2 - np.pi/2
         xpos = xpos - H*np.cos(alpha)
         ypos = ypos - H*np.sin(alpha)
         
         return xpos, ypos
+    
+    @staticmethod
+    def comp_variance_of_Laplacian(I):
+        """
+        Computes a sharpness score that is minimal for sharp images.
+        """
+        # average images
+        I_average = filters.gaussian(I, 4)
+        
+        # calculate laplacian
+        I_laplace = filters.laplace(I_average, 3)
+        
+        # calculate variance
+        score = np.var(I_laplace)
+        
+        return score

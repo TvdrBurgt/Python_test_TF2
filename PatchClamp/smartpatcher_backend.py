@@ -6,11 +6,9 @@ Created on Sat Aug  7 18:21:18 2021
 """
 
 
-import os
-import datetime
 import logging
 import numpy as np
-from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QThread
+from PyQt5.QtCore import QObject, QThread
 
 from PatchClamp.workers import Worker
 
@@ -18,11 +16,18 @@ from PatchClamp.workers import Worker
 class SmartPatcher(QObject):
     
     def __init__(self):
+        # Hardware constants
+        self.pixel_size = 244.8                     # in nanometers
+        self.pipette_orientation = 0                # in radians
+        self.pipette_diameter = 16                  # in pixels
+        
         # Algorithm constants
-        self._pipette_orientation = None                     # in radians
-        self._pipette_diameter = None                        # in microns
-        self._pipette_coordinates = np.array([None, None])   # [X, Y] in pixels
-        self._target_coordinates = np.array([None, None])    # [X, Y] in pixels
+        self._R = np.eye(3)                         # rotation matrix
+        self._operation_mode = 'Default'            # specifies worker mode
+        self._pipette_coordinates_pair = np.array(  # [micromanipulator, camera]
+            [[None,None,None], [None,None,None]])
+        self._target_coordinates = np.array(        # [X, Y, Z] in pixels
+            [None,None,None])
         
         # Hardware devices
         self._camerathread = None
@@ -32,31 +37,38 @@ class SmartPatcher(QObject):
         self._objectivemotor = None
         
         # Worker thread
-        self.worker = Worker()
-        self.thread = QThread()
-        self.worker.moveToThread(self.thread)
-        self.worker.finished.connect(self.thread.quit)
+        self.worker = Worker(parent=self)
         
         # Emergency stop
         self.STOP = False
+        self.num = 0
     
-    def request(self, name):
+    def request(self, name, mode='default'):
         if self.STOP == True:
             logging.info('Emergency stop active')
         else:
             logging.info('Reqeusted algorithm: ' + name)
-            if self.thread.isRunning() == True:
+            if self.worker.isRunning() == True:
                 logging.info('Thread is still running')
             else:
+                # disconnect the started method to prevent double execution
+                try:
+                    self.worker.started.disconnect()
+                except:
+                    logging.info('Thread is free to use')
+                # workers can use operation modes for extra variable input
+                self.operation_mode = mode
+                # connected the started method to an executable algorithm
                 if name == 'softcalibration':
-                    self.thread.started.connect(self.worker.softcalibration)
+                    self.worker.started.connect(self.worker.softcalibration)
                 elif name == 'hardcalibration':
-                    self.thread.started.connect(self.worker.mockfunction)
-                elif name == 'autofocus':
-                    self.thread.started.connect(self.worker.mockfunction)
-                self.thread.start()
-            logging.info('QThread isFinished: ' + str(self.thread.isFinished()))
-            logging.info('QThread isRunning: ' + str(self.thread.isRunning()))
+                    self.worker.started.connect(self.worker.hardcalibration)
+                elif name == 'mockworker':
+                    self.worker.started.connect(self.worker.mockworker)
+                # start worker
+                self.worker.start()
+            logging.info('QThread isFinished: ' + str(self.worker.isFinished()))
+            logging.info('QThread isRunning: ' + str(self.worker.isRunning()))
     
     @property
     def camerathread(self):
@@ -99,13 +111,30 @@ class SmartPatcher(QObject):
     
     
     @property
+    def pixel_size(self):
+        return self._pixel_size
+    
+    @pixel_size.setter
+    def pixel_size(self, size):
+        logging.info('Set pixel size to: ' + str(size))
+        if type(size) == float or type(size) == int:
+            self._pixel_size = size
+        else:
+            raise ValueError('pixelsize should be a float or integer')
+    
+    @pixel_size.deleter
+    def pixel_size(self):
+        self._pixel_size = None
+    
+    
+    @property
     def pipette_orientation(self):
         return self._pipette_orientation
     
     @pipette_orientation.setter
     def pipette_orientation(self, angle):
-        logging.info('Set pipette orientation: \phi =' + str(angle))
         if type(angle) == float or type(angle) == int:
+            logging.info('Set pipette orientation: ' + str(angle) + ' degrees')
             self._pipette_orientation = angle
         else:
             raise ValueError('micromanipulator orientation should be a float or integer')
@@ -121,8 +150,8 @@ class SmartPatcher(QObject):
     
     @pipette_diameter.setter
     def pipette_diameter(self, diameter):
-        logging.info('Set pipette opening diameter: D =' + str(diameter))
         if type(diameter) == float or type(diameter) == int:
+            logging.info('Set pipette opening diameter: D = ' + str(diameter))
             self._pipette_diameter = diameter
         else:
             raise ValueError('Pipette opening diameter should be a float or integer')
@@ -133,23 +162,66 @@ class SmartPatcher(QObject):
     
     
     @property
-    def pipette_coordinates(self):
-        return self._pipette_coordinates
+    def R(self):
+        return self._R
     
-    @pipette_coordinates.setter
-    def pipette_coordinates(self, coords):
-        logging.info('Set pipette coordinates: [x,y,z]=' + str(coords))
+    @R.setter
+    def R(self, alpha, beta, gamma):
+        if type(alpha) and type(beta) and type(gamma) == float or int:
+            logging.info('Set rotation angles alpha beta gamma:', alpha,beta,gamma)
+            R_alpha = np.array([[1, 0, 0],
+                                [0, np.cos(alpha), np.sin(alpha)],
+                                [0, -np.sin(alpha), np.cos(alpha)]])
+            R_beta = np.array([[np.cos(beta), 0, -np.sin(beta)],
+                               [0, 1, 0],
+                               [np.sin(beta), 0, np.cos(beta)]])
+            R_gamma = np.array([[np.cos(gamma), np.sin(gamma), 0],
+                                [-np.sin(gamma), np.cos(gamma), 0],
+                                [0, 0, 1]])
+            self._R = R_gamma @ R_beta @ R_alpha
+        else:
+            raise ValueError('rotation matrix must be a numpy.ndarray')
+    
+    @R.deleter
+    def R(self):
+        self._R = np.eye(3)
+    
+    
+    @property
+    def operation_mode(self):
+        return self._operation_mode
+    
+    @operation_mode.setter
+    def operation_mode(self, mode):
+        if type(mode) == str:
+            logging.info('Set operation mode for workers to: ' + mode)
+            self._operation_mode = mode
+        else:
+            raise ValueError('operation mode for workers should be a string')
+    
+    @operation_mode.deleter
+    def operation_mode(self):
+        self._operation_mode = 'default'
+    
+    
+    @property
+    def pipette_coordinates_pair(self):
+        return self._pipette_coordinates_pair
+    
+    @pipette_coordinates_pair.setter
+    def pipette_coordinates_pair(self, coords):
         if type(coords) is np.ndarray:
-            if len(coords) == 2:
-                self._pipette_coordinates = coords
+            logging.info('Couple pipette coordinates:\n[X,Y,Z] = ' + str(coords[0,:]) + '\n[row,col,obj] = ' + str(coords[1,:]))
+            if coords.shape == (2,3):
+                self._pipette_coordinates_pair = coords
             else:
-                raise ValueError('length of pipette coordinates must be 2 or 3')
+                raise ValueError('coordinates-pair size should be 2x3')
         else:
             raise ValueError('pipette coordinates should be a numpy.ndarray')
     
-    @pipette_coordinates.deleter
-    def pipette_coordinates(self):
-        self._pipette_coordinates = np.array([None, None])
+    @pipette_coordinates_pair.deleter
+    def pipette_coordinates_pair(self):
+        self._pipette_coordinates_pair = np.array([None, None])
     
     
     @property
@@ -158,12 +230,12 @@ class SmartPatcher(QObject):
     
     @target_coordinates.setter
     def target_coordinates(self, coords):
-        logging.info('Set target coordinates: [x,y,z]=' + str(coords))
+        logging.info('Set target coordinates:\n[row,col,obj] = ' + str(coords))
         if type(coords) is np.ndarray:
-            if len(coords) == 2:
+            if coords.shape == (3,):
                 self._target_coordinates = coords
             else:
-                raise ValueError('length of target coordinates must be 2 or 3')
+                raise ValueError('length of target coordinates must be 3')
         else:
             raise ValueError('target coordinates should be a numpy.ndarray')
     
