@@ -37,38 +37,47 @@ class SmartPatcher(QObject):
         self._objectivemotor = None
         
         # Worker thread
-        self.worker = Worker(parent=self)
+        self.worker = Worker(self)
+        self.thread = QThread()
+        self.worker.moveToThread(self.thread)
+        self.worker.finished.connect(self.thread.quit)
         
         # Emergency stop
         self.STOP = False
-        self.num = 0
     
     def request(self, name, mode='default'):
         if self.STOP == True:
             logging.info('Emergency stop active')
         else:
             logging.info('Reqeusted algorithm: ' + name)
-            if self.worker.isRunning() == True:
+            if self.thread.isRunning() == True:
                 logging.info('Thread is still running')
             else:
                 # disconnect the started method to prevent double execution
                 try:
-                    self.worker.started.disconnect()
+                    self.thread.started.disconnect()
                 except:
                     logging.info('Thread is free to use')
+                    
                 # workers can use operation modes for extra variable input
                 self.operation_mode = mode
+                
+                # update the worker with the latest parameter settings
+                self.worker.parent = self
+                
                 # connected the started method to an executable algorithm
                 if name == 'softcalibration':
-                    self.worker.started.connect(self.worker.softcalibration)
+                    self.thread.started.connect(self.worker.softcalibration)
                 elif name == 'hardcalibration':
-                    self.worker.started.connect(self.worker.hardcalibration)
+                    self.thread.started.connect(self.worker.hardcalibration)
                 elif name == 'mockworker':
-                    self.worker.started.connect(self.worker.mockworker)
+                    self.thread.started.connect(self.worker.mockworker)
+                
                 # start worker
-                self.worker.start()
-            logging.info('QThread isFinished: ' + str(self.worker.isFinished()))
-            logging.info('QThread isRunning: ' + str(self.worker.isRunning()))
+                self.thread.start()
+                
+            logging.info('QThread isFinished: ' + str(self.thread.isFinished()))
+            logging.info('QThread isRunning: ' + str(self.thread.isRunning()))
     
     @property
     def camerathread(self):
@@ -84,11 +93,30 @@ class SmartPatcher(QObject):
         self._camerathread.stop()
         self._camerathread = None
     
-    def set_amplifierthread(self, patchamplifier):
-        self.amplifierthread = patchamplifier
+    @property
+    def amplifierthread(self):
+        return self._amplifierthread
     
-    def set_pressurethread(self, pressurecontroller):
-        self.pressurethread = pressurecontroller
+    @amplifierthread.setter
+    def amplifierthread(self, patchamplifier):
+        self._amplifierthread = patchamplifier
+    
+    @amplifierthread.deleter
+    def amplifierthread(self):
+        self._amplifierthread = None
+    
+    
+    @property
+    def pressurethread(self):
+        return self._pressurethread
+    
+    @pressurethread.setter
+    def pressurethread(self, pressurecontroller):
+        self._pressurethread = pressurecontroller
+    
+    @pressurethread.deleter
+    def pressurethread(self):
+        self._pressurethread = None
         
         
     @property
@@ -104,10 +132,19 @@ class SmartPatcher(QObject):
         self._micromanipulator.stop()
         self._micromanipulator.close()
         self._micromanipulator = None
-        
-        
-    def set_objectivemotor(self, objective):
-        self.objectivemotor = objective
+    
+    
+    @property
+    def objectivemotor(self):
+        return self._objectivemotor
+    
+    @objectivemotor.setter
+    def objectivemotor(self, objective):
+        self._objectivemotor = objective
+    
+    @objectivemotor.deleter
+    def objectivemotor(self):
+        self._objectivemotor = None
     
     
     @property

@@ -10,23 +10,29 @@ import logging
 import datetime
 import numpy as np
 from skimage import io
-from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
 
 from PatchClamp.ImageProcessing_patchclamp import PatchClampImageProcessing as ia
 
 
-class Worker(QThread):
+class Worker(QObject):
     draw = pyqtSignal(list)
     progress = pyqtSignal()
     finished = pyqtSignal()
     
     def __init__(self, parent):
-        self.parent = parent
-        
-        # QThread attributes
         super().__init__()
-        self.moveToThread(self)
-        self.finished.connect(self.quit)
+        self.parent = parent
+        self.STOP = False
+        
+    @property
+    def parent(self):
+        return self._parent
+    
+    @parent.setter
+    def parent(self, parent):
+        self._parent = parent
+    
     
     @pyqtSlot()
     def mockworker(self):
@@ -69,11 +75,11 @@ class Worker(QThread):
                          camera y-axis)
             pixelsize   (pixel size in nanometers)
         """
-        micromanipulator = self.parent.micromanipulator_handle
-        camera = self.parent.camera_handle
-        mode = self.parent.operation_mode
-        D = self.parent.diameter
-        O = self.parent.orientation
+        micromanipulator = self._parent.micromanipulator_handle
+        camera = self._parent.camera_handle
+        mode = self._parent.operation_mode
+        D = self._parent.diameter
+        O = self._parent.orientation
         
         # algorithm variables
         stepsize = 10   # in microns
@@ -127,11 +133,11 @@ class Worker(QThread):
         
         # set rotation angles or calculate pixelsize
         if mode == 'XY':
-            self.parent.R(alpha=0, beta=0, gamma=gamma)
+            self._parent.R(alpha=0, beta=0, gamma=gamma)
             self.draw.emit(['cross',tipcoords[0,3,0],tipcoords[0,3,1],-np.rad2deg(gamma)])
             self.draw.emit(['cross',tipcoords[0,3,0],tipcoords[0,3,1],-np.rad2deg(gamma-np.pi/2)])
         elif mode == 'XYZ':
-            self.parent.R(alpha=alpha, beta=beta, gamma=gamma)
+            self._parent.R(alpha=alpha, beta=beta, gamma=gamma)
             self.draw.emit(['cross',tipcoords[0,3,0],tipcoords[0,3,1],-np.rad2deg(gamma)])
             self.draw.emit(['cross',tipcoords[0,3,0],tipcoords[0,3,1],-np.rad2deg(gamma-np.pi/2)])
         elif mode == 'pixelsize':
@@ -150,7 +156,7 @@ class Worker(QThread):
             sample_var = np.var(sample)
             
             # set pixelsize to backend
-            self.parent.pixelsize = sample_mean
+            self._parent.pixelsize = sample_mean
             logging.info('pixelsize estimation precision: s.d. = ' + str(np.sqrt(sample_var)))
             
             # real = np.random.rand(2,7,2)+1555
@@ -180,10 +186,10 @@ class Worker(QThread):
             pipette_coordinates_pair    np.array([reference (in microns);
                                                   tip coordinates (in pixels)])
         """
-        micromanipulator = self.parent.micromanipulator_handle
-        camera = self.parent.camera_handle
-        D = self.parent.diameter
-        O = self.parent.orientation
+        micromanipulator = self._parent.micromanipulator_handle
+        camera = self._parent.camera_handle
+        D = self._parent.diameter
+        O = self._parent.orientation
         
         positions = np.array([[-100,-50,0],
                               [0,-50,0],
@@ -202,7 +208,7 @@ class Worker(QThread):
             image_right = camera.snap()
             
             # emergency stop
-            if self.parent.STOP == True:
+            if self.STOP == True:
                 break
             
             # pipette tip detection algorithm
@@ -229,8 +235,8 @@ class Worker(QThread):
     
     @pyqtSlot()
     def autofocus_tip(self, camera_handle=None, micromanipulator_handle=None):
-        micromanipulator = self.parent.micromanipulator_handle
-        camera = self.parent.camera_handle
+        micromanipulator = self._parent.micromanipulator_handle
+        camera = self._parent.camera_handle
         
         # algorithm variables
         focusprecision = 0.1    # focal plane finding precision (in microns)
@@ -508,8 +514,8 @@ class Worker(QThread):
     
     # @pyqtSlot()
     # def request_imagexygrid(self):
-    #     micromanipulator = self.parent.micromanipulator_handle
-    #     camera = self.parent.camera_handle
+    #     micromanipulator = self._parent.micromanipulator_handle
+    #     camera = self._parent.camera_handle
     #     savedirectory = r'M:\tnw\ist\do\projects\Neurophotonics\Brinkslab\Data\Thijs\Save directory\\'
     #     x,y,z = micromanipulator.getPos()
     #     stepsize = 50

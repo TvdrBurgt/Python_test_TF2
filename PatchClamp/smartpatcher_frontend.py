@@ -215,8 +215,8 @@ class PatchClampUI(QWidget):
         
     def mocksignal(self):
         print('Algorithm finished')
-        logging.info('QThread isFinished: ' + str(self.backend.worker.isFinished()))
-        logging.info('QThread isRunning: ' + str(self.backend.worker.isRunning()))
+        logging.info('QThread isFinished: ' + str(self.backend.thread.isFinished()))
+        logging.info('QThread isRunning: ' + str(self.backend.thread.isRunning()))
         
         
     def mockfunction(self):
