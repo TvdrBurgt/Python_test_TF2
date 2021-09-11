@@ -5,11 +5,10 @@ Created on Fri Aug  6 15:15:38 2021
 @author: tvdrb
 """
 
-
-import os
 import sys
 import numpy as np
 import logging
+import matplotlib.pyplot as plt
 
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QPen, QColor
@@ -17,13 +16,10 @@ from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QDoubleSpinBox, Q
 import pyqtgraph.exporters
 import pyqtgraph as pg
 
-import matplotlib.pyplot as plt
-
-if __name__ == "__main__":
-    os.chdir(os.getcwd() + '\\..')
-    from PatchClamp.smartpatcher_backend import SmartPatcher
-    from PatchClamp.camerathread import CameraThread
-    from PatchClamp.micromanipulator import ScientificaPatchStar
+sys.path.append('../')
+from PatchClamp.smartpatcher_backend import SmartPatcher
+from PatchClamp.camerathread import CameraThread
+from PatchClamp.micromanipulator import ScientificaPatchStar
     
 
 
