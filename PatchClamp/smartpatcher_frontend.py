@@ -5,6 +5,7 @@ Created on Fri Aug  6 15:15:38 2021
 @author: tvdrb
 """
 
+import time
 import sys
 import numpy as np
 import logging
@@ -323,6 +324,9 @@ class PatchClampUI(QWidget):
             self.liveView.addedItems[idx].setPen(QPen(QColor(193,245,240), 0))
             self.backend.target_coordinates = np.array([x,y,np.nan])
         
+    # def quick_update_graph(self, value):
+    #     self.
+    
     
     def draw_roi(self, *args):
         label = args[0][0]
@@ -376,6 +380,13 @@ class PatchClampUI(QWidget):
             self.backend.STOP = False
         
     
+    def moveEvent(self, event):
+        super(PatchClampUI, self).moveEvent(event)
+        try:
+            self.signal_camera_live.disconnect()
+        except:
+            pass
+    
     
     def closeEvent(self, event):
         """ Close event
@@ -384,6 +395,8 @@ class PatchClampUI(QWidget):
         be reused in the main widget, only then we accept the close event.
         and quit the widget.
         """
+        # del self.backend.camerathread
+        
         event.accept()
         
         # Frees the console by quitting the application entirely
