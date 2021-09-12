@@ -139,7 +139,7 @@ class PatchClampUI(QWidget):
         request_selecttarget_button = QPushButton(text="Select target", clicked=self.request_selecttarget)
         request_confirmtarget_button = QPushButton(text="Confirm target", clicked=self.request_confirmtarget)
         request_detecttip_button = QPushButton(text="Detect tip", clicked=self.request_softcalibration)
-        request_autofocustip = QPushButton(text="Autofocus tip", clicked=self.mockfunction)
+        request_autofocustip = QPushButton(text="Autofocus tip", clicked=self.request_autofocustip)
         request_gigaseal_button = QPushButton(text="Gigaseal", clicked=self.mockfunction)
         request_breakin_button = QPushButton(text="Break-in", clicked=self.mockfunction)
         request_zap_button = QPushButton(text="ZAP", clicked=self.mockfunction)
@@ -270,7 +270,7 @@ class PatchClampUI(QWidget):
         if self.backend.camerathread != None:
             self.backend.camerathread.snap()
         else:
-            I = plt.imread("PatchClamp/testimage.tif")
+            I = plt.imread("testimage.tif")
             self.update_snap(I)
             raise ValueError('no camera connected')
         
@@ -281,10 +281,11 @@ class PatchClampUI(QWidget):
     def request_hardcalibration_xyz(self):
         self.backend.request(name='hardcalibration', mode='XYZ')
     
-    
     def request_softcalibration(self):
         self.backend.request(name='softcalibration')
     
+    def request_autofocustip(self):
+        self.backend.request(name='autofocustip')
     
     def request_selecttarget(self):
         """
@@ -308,7 +309,6 @@ class PatchClampUI(QWidget):
             idx = self.roimanager.giveROIindex('target')[-1]
             self.liveView.addedItems[idx].translatable = True
             self.liveView.addedItems[idx].setPen(QPen(QColor(255,255,0), 0))
-            # self.backend.target_coordinates = np.array([None,None,None])
         
         
     def request_confirmtarget(self):
@@ -328,19 +328,25 @@ class PatchClampUI(QWidget):
         label = args[0][0]
         if label == 'cross':
             xpos,ypos = args[0][1:3]
-            vertical = pg.ROI(pos=(xpos,ypos-15), size=[1,30], pen=QPen(QColor(0,255,0), 0))
-            horizontal = pg.ROI(pos=(xpos-15,ypos), size=[30,1], pen=QPen(QColor(0,255,0), 0))
+            vertical = pg.ROI(pos=(xpos,ypos-15), size=[1,30], pen=(1,3))
+            horizontal = pg.ROI(pos=(xpos-15,ypos), size=[30,1], pen=(1,3))
             vertical.setZValue(10)
             horizontal.setZValue(10)
             self.roimanager.addROI('cross' + '_vertical')
             self.roimanager.addROI('cross' + '_horizontal')
             self.liveView.addItem(vertical)
             self.liveView.addItem(horizontal)
-        elif label == 'line':
+        elif label == 'calibrationline':
             xpos,ypos,orientation = args[0][1:4]
-            horizontal = pg.ROI(pos=(xpos-15,ypos), angle=orientation, size=[500,1], pen=QPen(QColor(0,255,0), 0))
+            if len(self.roimanager.giveROIindex('calibrationline')) == 0:
+                P = (0,3)
+            elif len(self.roimanager.giveROIindex('calibrationline')) == 1:
+                P = (2,3)
+            else:
+                P = (1,3)
+            horizontal = pg.ROI(pos=(xpos-15,ypos), angle=orientation, size=[500,1], pen=P)
             horizontal.setZValue(10)
-            self.roimanager.addROI('line')
+            self.roimanager.addROI('calibrationline')
             self.liveView.addItem(horizontal)
         elif label == 'image':
             img = args[0][1]
@@ -393,7 +399,11 @@ class ROIManagerGUI:
         self.ROIdictionary = {}
     
     def giveROIindex(self, name):
-        return [x+self.offset for x in self.ROIdictionary[name][:]]
+        if self.contains(name):
+            index_array = [x+self.offset for x in self.ROIdictionary[name][:]]
+        else:
+            index_array = []
+        return index_array
     
     def addROI(self, name):
         if name in self.ROIdictionary:

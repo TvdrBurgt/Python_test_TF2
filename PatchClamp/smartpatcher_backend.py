@@ -62,14 +62,22 @@ class SmartPatcher(QObject):
                 # workers can use operation modes for extra variable input
                 self.operation_mode = mode
                 
-                # update the worker with the latest parameter settings
-                self.worker.parent = self
-                
                 # connected the started method to an executable algorithm
                 if name == 'softcalibration':
-                    self.thread.started.connect(self.worker.softcalibration)
+                    if self.camerathread == None or self.micromanipulator == None:
+                        raise ValueError('Camera and/or micromanipulator not connected')
+                    else:
+                        self.thread.started.connect(self.worker.softcalibration)
                 elif name == 'hardcalibration':
-                    self.thread.started.connect(self.worker.hardcalibration)
+                    if self.camerathread == None or self.micromanipulator == None:
+                        raise ValueError('Camera and/or micromanipulator not connected')
+                    else:
+                        self.thread.started.connect(self.worker.hardcalibration)
+                elif name == 'autofocustip':
+                    if self.camerathread == None or self.micromanipulator == None:
+                        raise ValueError('Camera and/or micromanipulator not connected')
+                    else:
+                        self.thread.started.connect(self.worker.autofocus_tip)
                 elif name == 'mockworker':
                     self.thread.started.connect(self.worker.mockworker)
                 
@@ -78,6 +86,7 @@ class SmartPatcher(QObject):
                 
             logging.info('QThread isFinished: ' + str(self.thread.isFinished()))
             logging.info('QThread isRunning: ' + str(self.thread.isRunning()))
+    
     
     @property
     def camerathread(self):
@@ -121,10 +130,12 @@ class SmartPatcher(QObject):
         
     @property
     def micromanipulator(self):
+        logging.info('micromanipulator get')
         return self._micromanipulator
     
     @micromanipulator.setter
     def micromanipulator(self, micromanipulator_handle):
+        logging.info('micromanipulator set')
         self._micromanipulator = micromanipulator_handle
     
     @micromanipulator.deleter
@@ -203,9 +214,10 @@ class SmartPatcher(QObject):
         return self._R
     
     @R.setter
-    def R(self, alpha, beta, gamma):
+    def R(self, alphabetagamma):
+        alpha,beta,gamma = alphabetagamma
         if type(alpha) and type(beta) and type(gamma) == float or int:
-            logging.info('Set rotation angles alpha beta gamma:', alpha,beta,gamma)
+            logging.info('Set rotation angles alpha beta gamma: '+str(alpha)+' '+str(beta)+' '+str(gamma))
             R_alpha = np.array([[1, 0, 0],
                                 [0, np.cos(alpha), np.sin(alpha)],
                                 [0, -np.sin(alpha), np.cos(alpha)]])
