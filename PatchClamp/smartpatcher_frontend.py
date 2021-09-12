@@ -380,12 +380,12 @@ class PatchClampUI(QWidget):
             self.backend.STOP = False
         
     
-    def moveEvent(self, event):
-        super(PatchClampUI, self).moveEvent(event)
-        try:
-            self.signal_camera_live.disconnect()
-        except:
-            pass
+    # def moveEvent(self, event):
+    #     super(PatchClampUI, self).moveEvent(event)
+    #     try:
+    #         self.signal_camera_live.disconnect()
+    #     except:
+    #         pass
     
     
     def closeEvent(self, event):
@@ -395,7 +395,7 @@ class PatchClampUI(QWidget):
         be reused in the main widget, only then we accept the close event.
         and quit the widget.
         """
-        # del self.backend.camerathread
+        del self.backend.camerathread
         
         event.accept()
         
