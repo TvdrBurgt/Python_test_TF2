@@ -91,13 +91,13 @@ class ScientificaPatchStar(serial.Serial):
     
     
     @wait_until_finished
-    def moveAbs(self, x, y, z):
+    def moveAbs(self, pos):
         """
         Moves the patchstar to the given absolute position, example:
             Send: ABS 100 26 3
             Response: A (if move allowed else E)
         """
-        x, y, z = np.array([x, y, z]) * self.units
+        x, y, z = pos * self.units
         
         response = self.send_and_recieve('ABS %d %d %d' % (x,y,z))
         

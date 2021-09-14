@@ -82,7 +82,7 @@ class Worker(QObject):
         O = self._parent.pipette_orientation
         
         # algorithm variables
-        stepsize = 10   # in microns
+        stepsize = 25   # in microns
         
         # modes of operation
         if mode == 'XY':
@@ -101,9 +101,9 @@ class Worker(QObject):
         
         # move hardware to retrieve tip coordinates
         for i in range(dimension):
-            for j in positions:
+            for j, pos in enumerate(positions):
                 # snap images for pipettet tip detection
-                micromanipulator.moveAbs(reference+directions[i]*positions[j])
+                micromanipulator.moveAbs(reference+directions[i]*pos)
                 image_left = camera.snap()
                 micromanipulator.moveRel(dx=5)
                 image_right = camera.snap()
@@ -121,7 +121,8 @@ class Worker(QObject):
         micromanipulator.moveAbs(reference)
         
         # reduce tip coordinates to a unit step mean deviation
-        E = np.mean(tipcoords,1)/stepsize
+        tipcoords_diff = np.diff(tipcoords,axis=1)
+        E = np.mean(tipcoords_diff,axis=1)/stepsize
         
         # calculate rotation angles
         if E[0,0] > 0:
@@ -145,8 +146,8 @@ class Worker(QObject):
             pixcoords = tipcoords[0:2,:,0:2]
             realcoords = np.tile(np.nan, (2,len(positions),2))
             for i in range(dimension):
-                for j in positions:
-                    realcoords[i,j] = reference+directions[i]*positions[j]
+                for j, pos in enumerate(positions):
+                    realcoords[i,j] = reference+directions[i]*pos
             
             # couple micrometer distance with pixeldistance and take the mean
             diff_realcoords = np.abs(np.diff(realcoords, axis=1))   # in microns
