@@ -395,12 +395,13 @@ class PatchClampUI(QWidget):
         be reused in the main widget, only then we accept the close event.
         and quit the widget.
         """
-        del self.backend.camerathread
+        if not self.backend.camerathread == None:
+            del self.backend.camerathread
         
         event.accept()
         
         # Frees the console by quitting the application entirely
-        # QtWidgets.QApplication.quit() # remove when part of Tupolev!!
+        QtWidgets.QApplication.quit() # remove when part of Tupolev!!
         
         
 

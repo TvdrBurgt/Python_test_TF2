@@ -103,7 +103,8 @@ class Worker(QObject):
         for i in range(dimension):
             for j, pos in enumerate(positions):
                 # snap images for pipettet tip detection
-                micromanipulator.moveAbs(reference+directions[i]*pos)
+                x,y,z = reference+directions[i]*pos
+                micromanipulator.moveAbs(x,y,z)
                 image_left = camera.snap()
                 micromanipulator.moveRel(dx=5)
                 image_right = camera.snap()
@@ -118,7 +119,8 @@ class Worker(QObject):
                 self.draw.emit(['cross',x,y])
         
         # move hardware back to start position
-        micromanipulator.moveAbs(reference)
+        x,y,z = reference
+        micromanipulator.moveAbs(x,y,z)
         
         # reduce tip coordinates to a unit step mean deviation
         tipcoords_diff = np.diff(tipcoords,axis=1)
@@ -203,7 +205,8 @@ class Worker(QObject):
         
         for i in range(0, positions.shape[0]):
             # snap images for pipettet tip detection
-            micromanipulator.moveAbs(reference+positions[i])
+            x,y,z = reference+positions[i]
+            micromanipulator.moveAbs(x,y,z)
             image_left = camera.snap()
             micromanipulator.moveRel(dx=5)
             image_right = camera.snap()
@@ -223,7 +226,8 @@ class Worker(QObject):
         
         # user bias correction
         tipcoord = np.mean(tipcoords, axis=0)
-        micromanipulator.moveAbs(reference)
+        x,y,z = reference
+        micromanipulator.moveAbs(x,y,z)
         userbias = np.array([0, 0])     #should come from human input!
         tipcoord += userbias
         self.draw.emit(['cross',tipcoord[0],tipcoord[1]])
@@ -313,7 +317,8 @@ class Worker(QObject):
                 np.savetxt(savedirectory+'penaltyhistory.txt', penaltyhistory)
                 np.savetxt(savedirectory+'positionhistory.txt', positionhistory)
             elif np.array_equal(pinbool, [1,0,1]):
-                micromanipulator.moveAbs(reference-np.ndarray(0,0,stepsize))
+                x,y,z = reference-np.ndarray(0,0,stepsize)
+                micromanipulator.moveAbs(x,y,z)
                 I = camera.snap()
                 io.imsave(savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                 IW = I * W
@@ -326,14 +331,16 @@ class Worker(QObject):
                 if stepsize > optimalstepsize:
                     stepsize = stepsize/2
                     penalties[1] = penalties[0]
-                    micromanipulator.moveAbs(reference+np.ndarray(0,0,stepsize))
+                    x,y,z = reference+np.ndarray(0,0,stepsize)
+                    micromanipulator.moveAbs(x,y,z)
                     I = camera.snap()
                     io.imsave(savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * W
                     penalties[2] = ia.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
-                    micromanipulator.moveAbs(reference-np.ndarray(0,0,stepsize))
+                    x,y,z = reference-np.ndarray(0,0,stepsize)
+                    micromanipulator.moveAbs(x,y,z)
                     I = camera.snap()
                     io.imsave(savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * W
@@ -344,7 +351,8 @@ class Worker(QObject):
                 elif stepsize < optimalstepsize:
                     stepsize = stepsize*2
                     penalties[1] = penalties[0]
-                    micromanipulator.moveAbs(reference-np.ndarray(0,0,stepsize))
+                    x,y,z = reference-np.ndarray(0,0,stepsize)
+                    micromanipulator.moveAbs(x,y,z)
                     I = camera.snap()
                     io.imsave(savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * W
@@ -354,7 +362,8 @@ class Worker(QObject):
                     reference = reference - np.ndarray([0,0,stepsize])
                 else:
                     penalties = np.roll(penalties,1)
-                    micromanipulator.moveAbs(reference-np.ndarray(0,0,stepsize))
+                    x,y,z = reference-np.ndarray(0,0,stepsize)
+                    micromanipulator.moveAbs(x,y,z)
                     I = camera.snap()
                     io.imsave(savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * W
@@ -366,14 +375,16 @@ class Worker(QObject):
                 if stepsize > optimalstepsize:
                     stepsize = stepsize/2
                     penalties[1] = penalties[2]
-                    micromanipulator.moveAbs(reference+3*np.ndarray(0,0,stepsize))
+                    x,y,z = reference+3*np.ndarray(0,0,stepsize)
+                    micromanipulator.moveAbs(x,y,z)
                     I = camera.snap()
                     io.imsave(savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * W
                     penalties[0] = ia.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
-                    micromanipulator.moveAbs(reference+5*np.ndarray(0,0,stepsize))
+                    x,y,z = reference+5*np.ndarray(0,0,stepsize)
+                    micromanipulator.moveAbs(x,y,z)
                     I = camera.snap()
                     io.imsave(savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * W
@@ -384,7 +395,8 @@ class Worker(QObject):
                 elif stepsize < optimalstepsize:
                     stepsize = stepsize*2
                     penalties[1] = penalties[2]
-                    micromanipulator.moveAbs(reference+2*np.ndarray(0,0,stepsize))
+                    x,y,z = reference+2*np.ndarray(0,0,stepsize)
+                    micromanipulator.moveAbs(x,y,z)
                     I = camera.snap()
                     io.imsave(savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * W
@@ -394,7 +406,8 @@ class Worker(QObject):
                     reference = reference
                 else:
                     penalties = np.roll(penalties,-1)
-                    micromanipulator.moveAbs(reference+3*np.ndarray(0,0,stepsize))
+                    x,y,z = reference+3*np.ndarray(0,0,stepsize)
+                    micromanipulator.moveAbs(x,y,z)
                     I = camera.snap()
                     io.imsave(savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * W
@@ -405,7 +418,8 @@ class Worker(QObject):
             elif np.array_equal(pinbool, [1,1,0]):
                 if stepsize == stepsizemin:
                     penalties = np.roll(penalties,1)
-                    micromanipulator.moveAbs(reference-np.ndarray(0,0,stepsize))
+                    x,y,z = reference-np.ndarray(0,0,stepsize)
+                    micromanipulator.moveAbs(x,y,z)
                     I = camera.snap()
                     io.imsave(savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * W
@@ -416,14 +430,16 @@ class Worker(QObject):
                 else:
                     stepsize = stepsize/2
                     penalties[1] = penalties[0]
-                    micromanipulator.moveAbs(reference+np.ndarray(0,0,stepsize))
+                    x,y,z = reference+np.ndarray(0,0,stepsize)
+                    micromanipulator.moveAbs(x,y,z)
                     I = camera.snap()
                     io.imsave(savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * W
                     penalties[2] = ia.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[2])
-                    micromanipulator.moveAbs(reference-np.ndarray(0,0,stepsize))
+                    x,y,z = reference-np.ndarray(0,0,stepsize)
+                    micromanipulator.moveAbs(x,y,z)
                     I = camera.snap()
                     io.imsave(savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * W
@@ -434,7 +450,8 @@ class Worker(QObject):
             elif np.array_equal(pinbool, [0,1,1]):
                 if stepsize == stepsizemin:
                     penalties = np.roll(penalties,-1)
-                    micromanipulator.moveAbs(reference+3*np.ndarray(0,0,stepsize))
+                    x,y,z = reference+3*np.ndarray(0,0,stepsize)
+                    micromanipulator.moveAbs(x,y,z)
                     I = camera.snap()
                     io.imsave(savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * W
@@ -445,14 +462,16 @@ class Worker(QObject):
                 else:
                     stepsize = stepsize/2
                     penalties[1] = penalties[2]
-                    micromanipulator.moveAbs(reference+3*np.ndarray(0,0,stepsize))
+                    x,y,z = reference+3*np.ndarray(0,0,stepsize)
+                    micromanipulator.moveAbs(x,y,z)
                     I = camera.snap()
                     io.imsave(savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * W
                     penalties[0] = ia.comp_variance_of_Laplacian(IW)
                     positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
                     penaltyhistory = np.append(penaltyhistory, penalties[0])
-                    micromanipulator.moveAbs(reference+5*np.ndarray(0,0,stepsize))
+                    x,y,z = reference+5*np.ndarray(0,0,stepsize)
+                    micromanipulator.moveAbs(x,y,z)
                     I = camera.snap()
                     io.imsave(savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * W
@@ -463,7 +482,8 @@ class Worker(QObject):
             elif np.array_equal(pinbool, [1,1,1]):
                 if stepsize == stepsizemax:
                     penalties = np.roll(penalties,1)
-                    micromanipulator.moveAbs(reference-np.ndarray(0,0,stepsize))
+                    x,y,z = reference-np.ndarray(0,0,stepsize)
+                    micromanipulator.moveAbs(x,y,z)
                     I = camera.snap()
                     io.imsave(savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * W
@@ -473,7 +493,8 @@ class Worker(QObject):
                     reference = reference - np.ndarray([0,0,stepsize])
                 else:
                     stepsize = 2*stepsize
-                    micromanipulator.moveAbs(reference-np.ndarray(0,0,stepsize))
+                    x,y,z = reference-np.ndarray(0,0,stepsize)
+                    micromanipulator.moveAbs(x,y,z)
                     I = camera.snap()
                     io.imsave(savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                     IW = I * W
@@ -490,7 +511,7 @@ class Worker(QObject):
             penalties = np.zeros(6)
             positions = np.linspace(reference[2], reference[2]+2*stepsize, 6)
             for idx, pos in enumerate(positions):
-                micromanipulator.moveAbs(reference[0], reference[1], pos)
+                micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
                 I = camera.snap()
                 io.imsave(savedirectory+str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))+'.tif', I, check_contrast=False)
                 IW = I * W
