@@ -10,13 +10,14 @@ import serial
 import numpy as np
 
 
-class ScientificaPatchStar(serial.Serial):
-    """ Serial instance for Scientifica PatchStar control
+class ScientificaPatchStar:
+    """ Scientifica PatchStar control through serial communication
     This class is for controlling the Scientifica PatchStar micromanipulator.
     """
     
     def __init__(self, address='COM16', baud=38400):
-        super().__init__(port=address, baudrate=baud, timeout=1)
+        self.port = address     # COM port micromanipulator is connected to
+        self.baudrate = baud    # Baudrate of the micromanipulator
         self.ENDOFLINE = '\r'   # Carriage return
         self.units = 100        # 1um is 100 PatchStar units
     
@@ -25,14 +26,15 @@ class ScientificaPatchStar(serial.Serial):
         # Add an end-of-line signature to indicate the end of a command
         command = command + self.ENDOFLINE
         
-        # Encode the command to ascii and send to PatchStar
-        self.write(command.encode('ascii'))
-        
-        # Wait until all data is written
-        self.flush()
-        
-        # Read PatchStar response until carriage return
-        response = self.read_until(self.ENDOFLINE.encode('ascii'))
+        with serial.Serial(self.port, self.baudrate, timeout=3) as patchstar:
+            # Encode the command to ascii and send to PatchStar
+            patchstar.write(command.encode('ascii'))
+            
+            # Wait until all data is written
+            patchstar.flush()
+            
+            # Read PatchStar response until carriage return
+            response = patchstar.read_until(self.ENDOFLINE.encode('ascii'))
         
         # Decodes response to utf-8
         response = response.decode('utf-8')
