@@ -20,9 +20,9 @@ class SmartPatcher(QObject):
         self.pixel_size = 244.8                     # in nanometers
         self.pipette_orientation = 0                # in radians
         self.pipette_diameter = 16                  # in pixels
+        self.R = (0,0,0)                            # rotation matrix
         
         # Algorithm constants
-        self._R = np.eye(3)                         # rotation matrix
         self._operation_mode = 'Default'            # specifies worker mode
         self._pipette_coordinates_pair = np.array(  # [micromanipulator, camera]
             [[None,None,None], [None,None,None]])
@@ -86,6 +86,29 @@ class SmartPatcher(QObject):
                 
             logging.info('QThread isFinished: ' + str(self.thread.isFinished()))
             logging.info('QThread isRunning: ' + str(self.thread.isRunning()))
+    
+    def account4rotation(self, origin, target):
+        """
+        This function accounts for the misalignment of the micromanipulator w.r.t
+        the camera FOV. The origin is the rotation point where the rotation
+        matrix R rotates about.
+        
+        input:
+            origin  = point of rotation (np.ndarray with shape (3,))
+            target  = target coordinates (np.ndarray with shape (3,))
+        
+        output:
+            newtarget   = rotated target coordinates (np.ndarray with shape (3,))
+        """
+        if type(origin) == np.ndarray and type(target) == np.ndarray:
+            if origin.shape == (3,) and target.shape == (3,):
+                pass
+            else:
+                raise ValueError('origin and target should have shape (3,)')
+        else:
+            raise ValueError('origin and target should be numpy.ndarray')
+        
+        return self.R @ np.subtract(origin,target)
     
     
     @property
@@ -227,7 +250,7 @@ class SmartPatcher(QObject):
             R_gamma = np.array([[np.cos(gamma), np.sin(gamma), 0],
                                 [-np.sin(gamma), np.cos(gamma), 0],
                                 [0, 0, 1]])
-            self._R = R_gamma @ R_beta @ R_alpha
+            self._R = self._R @ R_gamma @ R_beta @ R_alpha
         else:
             raise ValueError('rotation matrix must be a numpy.ndarray')
     

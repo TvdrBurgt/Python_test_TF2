@@ -149,7 +149,8 @@ class Worker(QObject):
             realcoords = np.tile(np.nan, (2,len(positions),2))
             for i in range(dimension):
                 for j, pos in enumerate(positions):
-                    realcoords[i,j] = reference+directions[i]*pos
+                    print(directions[i])
+                    realcoords[i,j] = reference[0:2]+directions[i]*pos
             
             # couple micrometer distance with pixeldistance and take the mean
             diff_realcoords = np.abs(np.diff(realcoords, axis=1))   # in microns
@@ -162,8 +163,11 @@ class Worker(QObject):
             self._parent.pixelsize = sample_mean
             logging.info('pixelsize estimation: mean +/- s.d. = ' + str(sample_mean) + ' +/- ' + str(np.sqrt(sample_var)))
             
-            # real = np.random.rand(2,7,2)+1555
-            # pix = np.random.rand(2,7,2)*10
+            # # simulate pixel size estimation
+            # real = np.array([np.transpose([np.linspace(0,100,7),np.linspace(0,100,7)]),np.transpose([np.linspace(0,100,7),-np.linspace(0,100,7)])])
+            # pix = np.array([np.transpose([np.linspace(750,1250,7),np.linspace(750,1250,7)]),np.transpose([np.linspace(750,1250,7),-np.linspace(750,1250,7)])])
+            # real += np.random.rand(2,7,2)+1555
+            # pix += np.random.rand(2,7,2)*10
             # diff_real = np.abs(np.diff(real, axis=1))
             # diff_pix = np.abs(np.diff(pix, axis=1))
             # smp = diff_real/diff_pix
@@ -171,6 +175,7 @@ class Worker(QObject):
             # smp_var = np.var(smp)
             # print('mean pixel size = ' + str(smp_mean))
             # print('variance pixel size = ' + str(smp_var))
+            # print('true pixel size = ' + str((101/7)/(501/7)))
         
         self.finished.emit()
     
@@ -189,8 +194,10 @@ class Worker(QObject):
             pipette_coordinates_pair    np.array([reference (in microns);
                                                   tip coordinates (in pixels)])
         """
+        # get all relevant parent attributes
         micromanipulator = self._parent.micromanipulator
         camera = self._parent.camerathread
+        account4rotation = self._parent.account4rotation
         D = self._parent.pipette_diameter
         O = self._parent.pipette_orientation
         
@@ -205,7 +212,7 @@ class Worker(QObject):
         
         for i in range(0, positions.shape[0]):
             # snap images for pipettet tip detection
-            x,y,z = reference+positions[i]
+            x,y,z = account4rotation(origin=reference, target=reference+positions[i])
             micromanipulator.moveAbs(x,y,z)
             image_left = camera.snap()
             micromanipulator.moveRel(dx=5)
@@ -240,6 +247,7 @@ class Worker(QObject):
     
     @pyqtSlot()
     def autofocus_tip(self, camera_handle=None, micromanipulator_handle=None):
+        # get all relevant parent attributes
         micromanipulator = self._parent.micromanipulator
         camera = self._parent.camerathread
         
