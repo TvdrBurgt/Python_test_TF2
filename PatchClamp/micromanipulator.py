@@ -125,26 +125,3 @@ class ScientificaPatchStar:
         Stops any motion.
         """
         self.send_and_recieve('STOP' + self.ENDOFLINE)
-    
-    
-    # def debug(self, string):
-    #     """
-    #     For debugging purposes only. Input a string corresponding to a command
-    #     from the Scientifica '3 Axis Linear Card Command List'.
-    #     """
-    #     command = string + self.ENDOFLINE
-        
-    #     # Encode the command to ascii and send to PatchStar
-    #     self.write(command.encode('ascii'))
-    #     # Wait until all data is written
-    #     self.flush()
-    #     # Read PatchStar response until carriage return
-    #     response = self.read_until(self.ENDOFLINE.encode('ascii'))
-    #     # Decodes response to utf-8
-    #     response = response.decode('utf-8')
-    #     # Strip off the carriage return
-    #     response = response.rstrip(self.ENDOFLINE)
-        
-    #     return response
-
-
