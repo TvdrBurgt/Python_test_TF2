@@ -250,7 +250,10 @@ class SmartPatcher(QObject):
             R_gamma = np.array([[np.cos(gamma), np.sin(gamma), 0],
                                 [-np.sin(gamma), np.cos(gamma), 0],
                                 [0, 0, 1]])
-            self._R = self._R @ R_gamma @ R_beta @ R_alpha
+            try:
+                self._R = self._R @ R_gamma @ R_beta @ R_alpha
+            except:
+                self._R = R_gamma @ R_beta @ R_alpha
         else:
             raise ValueError('rotation matrix must be a numpy.ndarray')
     
