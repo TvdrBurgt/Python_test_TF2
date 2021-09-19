@@ -122,7 +122,12 @@ class PatchClampUI(QWidget):
         sensorLayout = QGridLayout()
         
         sensorWidget = pg.GraphicsLayoutWidget()
-        self.algorithm = sensorWidget.addPlot(1, 0, 1, 1)
+        algorithm = sensorWidget.addPlot(1, 0, 1, 1)
+        algorithm.setTitle('sharpness score')
+        algorithm.setLabel("left", units='a.u.')
+        algorithm.setLabel("bottom", text="depth (um)")
+        self.algorithm = algorithm.plot(pen=(1,3))
+        # self.algorithm = sensorWidget.addPlot(1, 0, 1, 1)
         self.current = sensorWidget.addPlot(2, 0, 1, 1)
         self.pressure = sensorWidget.addPlot(3, 0, 1, 1)
         
@@ -201,6 +206,7 @@ class PatchClampUI(QWidget):
         
         self.backend = SmartPatcher()
         self.backend.worker.draw.connect(self.draw_roi)
+        self.backend.worker.sharpnessfunction.connect(self.update_focusscore)
         self.backend.worker.progress.connect(self.mocksignal)
         self.backend.worker.finished.connect(self.mocksignal)
         
@@ -373,6 +379,12 @@ class PatchClampUI(QWidget):
         self.snapImageItem.setImage(image)
     
     
+    def update_focusscore(self, data):
+        positions = data[0,:]
+        penalties = data[1,:]
+        self.algorithm.setData(positions,penalties)
+    
+    
     def STOP(self):
         if self.STOP_button.isChecked():
             self.backend.STOP = True
@@ -395,8 +407,10 @@ class PatchClampUI(QWidget):
         be reused in the main widget, only then we accept the close event.
         and quit the widget.
         """
-        if not self.backend.camerathread == None:
+        try:
             del self.backend.camerathread
+        except:
+            pass
         
         event.accept()
         

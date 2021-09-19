@@ -17,6 +17,7 @@ from PatchClamp.ImageProcessing_patchclamp import PatchClampImageProcessing as i
 
 class Worker(QObject):
     draw = pyqtSignal(list)
+    sharpnessfunction = pyqtSignal(np.ndarray)
     progress = pyqtSignal()
     finished = pyqtSignal()
     
@@ -111,7 +112,9 @@ class Worker(QObject):
                 
                 # pipette tip detection algorithm
                 x1, y1 = ia.detectPipettetip(image_left, image_right, diameter=D, orientation=O)
+                self.draw.emit(['cross',x1,y1])
                 W = ia.makeGaussian(size=image_left.shape, mu=(x1,y1), sigma=(image_left.shape[0]//12,image_left.shape[1]//12))
+                self.camera.snapsignal.emit(np.multiply(image_right,W))
                 x, y = ia.detectPipettetip(np.multiply(image_left,W), np.multiply(image_right,W), diameter=(5/4)*D, orientation=O)
                 
                 # save tip coordinates
@@ -224,7 +227,9 @@ class Worker(QObject):
             
             # pipette tip detection algorithm
             x1, y1 = ia.detectPipettetip(image_left, image_right, diameter=D, orientation=O)
+            self.draw.emit(['cross',x1,y1])
             W = ia.makeGaussian(size=image_left.shape, mu=(x1,y1), sigma=(image_left.shape[0]//12,image_left.shape[1]//12))
+            self.camera.snapsignal.emit(np.multiply(image_right,W))
             x, y = ia.detectPipettetip(np.multiply(image_left,W), np.multiply(image_right,W), diameter=(5/4)*D, orientation=O)
             
             # save tip coordinates in an array
@@ -296,6 +301,9 @@ class Worker(QObject):
         stepsizemax = optimalstepsize*8
         pinbool = np.zeros(3)
         while not np.array_equal(pinbool, [0,1,0]):
+            # emit sharpness function
+            self.sharpnessfunction.emit(np.vstack([positionhistory,penaltyhistory]))
+            
             # Adjust threshold
             margin = margin*.995 + .005
             

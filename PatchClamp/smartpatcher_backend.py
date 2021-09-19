@@ -18,10 +18,10 @@ class SmartPatcher(QObject):
     
     def __init__(self):
         # Default hardware constants
-        self.pixel_size = 244.8                     # in nanometers
-        self.pipette_orientation = 0                # in radians
-        self.pipette_diameter = 16                  # in pixels (16=patchclamp, ??=cell-picking)
-        self.rotation_angles = [0,0,0]              # (alp,bet,gam) in degree
+        self._pixel_size = 244.8                    # in nanometers
+        self._pipette_orientation = 0               # in radians
+        self._pipette_diameter = 16                 # in pixels (16=patchclamp, ??=cell-picking)
+        self._rotation_angles = [0,0,0]             # (alp,bet,gam) in degree
         self.update_constants_from_JSON()           # rewrites above constants
         
         # Algorithm constants
