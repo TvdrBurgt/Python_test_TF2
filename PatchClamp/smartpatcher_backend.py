@@ -6,6 +6,7 @@ Created on Sat Aug  7 18:21:18 2021
 """
 
 
+import json
 import logging
 import numpy as np
 from PyQt5.QtCore import QObject, QThread
@@ -16,11 +17,12 @@ from PatchClamp.workers import Worker
 class SmartPatcher(QObject):
     
     def __init__(self):
-        # Hardware constants
+        # Default hardware constants
         self.pixel_size = 244.8                     # in nanometers
         self.pipette_orientation = 0                # in radians
-        self.pipette_diameter = 16                  # in pixels
-        self.R = (0,0,0)                            # rotation matrix
+        self.pipette_diameter = 16                  # in pixels (16=patchclamp, ??=cell-picking)
+        self.rotation_angles = [0,0,0]              # (alp,bet,gam) in degree
+        self.update_constants_from_JSON()           # rewrites above constants
         
         # Algorithm constants
         self._operation_mode = 'Default'            # specifies worker mode
@@ -109,6 +111,25 @@ class SmartPatcher(QObject):
             raise ValueError('origin and target should be numpy.ndarray')
         
         return self.R @ np.subtract(origin,target)
+    
+    def update_constants_from_JSON(self):
+        # read json file with autopatcher constants and update them in backend
+        with open("autopatch_configuration.txt", "r") as json_infile:
+            data = json.load(json_infile)
+        self.pixel_size = data["pixel_size"]
+        self.pipette_orientation = data["pipette_orientation"]
+        self.pipette_diameter = data["pipette_diameter"]
+        self.rotation_angles = data["rotation_angles"]
+        
+    def write_constants_to_JSON(self):
+        data = {
+            "pixel_size": self.pixel_size,
+            "pipette_orientation": self.pipette_orientation,
+            "pipette_diameter": self.pipette_diameter,
+            "rotation_angles": self.rotation_angles
+            }
+        with open("autopatch_configuration.txt", "w") as json_outfile:
+            json.dump(data, json_outfile)
     
     
     @property
@@ -233,29 +254,47 @@ class SmartPatcher(QObject):
     
     
     @property
+    def rotation_angles(self):
+        return self._rotation_angles
+    
+    @rotation_angles.setter
+    def rotation_angles(self, alphabetagamma):
+        if len(alphabetagamma) == 3:
+            alpha,beta,gamma = alphabetagamma
+            if type(alpha) and type(beta) and type(gamma) == float or int:
+                logging.info('Set rotation angles alpha beta gamma: '+str(alpha)+' '+str(beta)+' '+str(gamma))
+                self._rotation_angles = [alpha,beta,gamma]
+                self.R = (alpha,beta,gamma)
+            else:
+                raise ValueError('rotation angles should be integers or floats')
+        else:
+            raise ValueError('rotation angles should be a 3 element array or tuple')
+    
+    @rotation_angles.deleter
+    def rotation_angles(self):
+        self._rotation_angles = [0,0,0]
+        del self.R
+    
+    @property
     def R(self):
         return self._R
     
     @R.setter
     def R(self, alphabetagamma):
         alpha,beta,gamma = alphabetagamma
-        if type(alpha) and type(beta) and type(gamma) == float or int:
-            logging.info('Set rotation angles alpha beta gamma: '+str(alpha)+' '+str(beta)+' '+str(gamma))
-            R_alpha = np.array([[1, 0, 0],
-                                [0, np.cos(alpha), np.sin(alpha)],
-                                [0, -np.sin(alpha), np.cos(alpha)]])
-            R_beta = np.array([[np.cos(beta), 0, -np.sin(beta)],
-                               [0, 1, 0],
-                               [np.sin(beta), 0, np.cos(beta)]])
-            R_gamma = np.array([[np.cos(gamma), np.sin(gamma), 0],
-                                [-np.sin(gamma), np.cos(gamma), 0],
-                                [0, 0, 1]])
-            try:
-                self._R = self._R @ R_gamma @ R_beta @ R_alpha
-            except:
-                self._R = R_gamma @ R_beta @ R_alpha
-        else:
-            raise ValueError('rotation matrix must be a numpy.ndarray')
+        R_alpha = np.array([[1, 0, 0],
+                            [0, np.cos(alpha), np.sin(alpha)],
+                            [0, -np.sin(alpha), np.cos(alpha)]])
+        R_beta = np.array([[np.cos(beta), 0, -np.sin(beta)],
+                           [0, 1, 0],
+                           [np.sin(beta), 0, np.cos(beta)]])
+        R_gamma = np.array([[np.cos(gamma), np.sin(gamma), 0],
+                            [-np.sin(gamma), np.cos(gamma), 0],
+                            [0, 0, 1]])
+        try:
+            self._R = self._R @ R_gamma @ R_beta @ R_alpha
+        except:
+            self._R = R_gamma @ R_beta @ R_alpha
     
     @R.deleter
     def R(self):
