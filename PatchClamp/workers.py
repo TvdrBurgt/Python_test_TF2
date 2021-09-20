@@ -78,6 +78,7 @@ class Worker(QObject):
         """
         micromanipulator = self._parent.micromanipulator
         camera = self._parent.camerathread
+        account4rotation = self._parent.account4rotation
         mode = self._parent.operation_mode
         D = self._parent.pipette_diameter
         O = self._parent.pipette_orientation
@@ -104,7 +105,7 @@ class Worker(QObject):
         for i in range(dimension):
             for j, pos in enumerate(positions):
                 # snap images for pipettet tip detection
-                x,y,z = reference+directions[i]*pos
+                x,y,z = account4rotation(origin=reference, target=reference+directions[i]*pos)
                 micromanipulator.moveAbs(x,y,z)
                 image_left = camera.snap()
                 micromanipulator.moveRel(dx=5)
@@ -152,8 +153,8 @@ class Worker(QObject):
             realcoords = np.tile(np.nan, (2,len(positions),2))
             for i in range(dimension):
                 for j, pos in enumerate(positions):
-                    print(directions[i])
-                    realcoords[i,j] = reference[0:2]+directions[i]*pos
+                    x,y,z = account4rotation(origin=reference, target=reference+directions[i]*pos)
+                    realcoords[i,j] = np.array([x,y])
             
             # couple micrometer distance with pixeldistance and take the mean
             diff_realcoords = np.abs(np.diff(realcoords, axis=1))   # in microns
