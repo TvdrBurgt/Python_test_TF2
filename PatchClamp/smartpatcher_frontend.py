@@ -13,11 +13,12 @@ import matplotlib.pyplot as plt
 
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QPen, QColor
-from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QDoubleSpinBox, QGroupBox, QLabel
+from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QDoubleSpinBox, QGroupBox, QLabel, QStackedWidget, QComboBox, QTabWidget
 import pyqtgraph.exporters
 import pyqtgraph as pg
 
 sys.path.append('../')
+from PatchClamp.manualpatcher_frontend import PatchclampSealTestUI
 from PatchClamp.smartpatcher_backend import SmartPatcher
 from PatchClamp.camerathread import CameraThread
 from PatchClamp.micromanipulator import ScientificaPatchStar
@@ -35,7 +36,7 @@ class PatchClampUI(QWidget):
         """
         # ---------------------- General widget settings ---------------------
         """
-        self.setWindowTitle("Automatic Patchclamp")
+        self.setWindowTitle("Patchclamp")
         
         """
         -------------------------- Hardware container -------------------------
@@ -180,15 +181,35 @@ class PatchClampUI(QWidget):
         algorithmContainer.setLayout(algorithmLayout)
         
         """
-        --------------------------- Adding to master --------------------------
+        ---------------------- Add widgets and set Layout ---------------------
         """
         master = QGridLayout()
         master.addWidget(hardwareContainer, 0, 0, 1, 1)
         master.addWidget(liveContainer, 0, 1, 1, 1)
         master.addWidget(sensorContainer, 0, 2, 1, 1)
         master.addWidget(algorithmContainer, 1, 0, 1, 3)
-
-        self.setLayout(master)
+        
+        autopatcher = QGroupBox()
+        autopatcher.setLayout(master)
+        
+        """
+        -------------------- Stack automatic/manual GUI's  --------------------
+        """
+        stackedWidget = QStackedWidget()
+        stackedWidget.addWidget(autopatcher)
+        stackedWidget.addWidget(PatchclampSealTestUI())
+        
+        pageComboBox = QComboBox()
+        pageComboBox.addItem(str("Automatic patcher"))
+        pageComboBox.addItem(str("Manual patcher"))
+        pageComboBox.activated.connect(stackedWidget.setCurrentIndex)
+        
+        layout = QGridLayout()
+        layout.addWidget(pageComboBox, 0,0,1,1)
+        layout.addWidget(stackedWidget, 1,0,1,1)
+        self.setLayout(layout)
+        
+        
         
         """
         =======================================================================
