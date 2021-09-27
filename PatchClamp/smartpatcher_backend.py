@@ -33,7 +33,7 @@ class SmartPatcher(QObject):
         
         # Hardware devices
         self._camerathread = None
-        self._amplifierthread = None
+        self._sealtestthread = None
         self._pressurethread = None
         self._micromanipulator = None
         self._objectivemotor = None
@@ -146,17 +146,20 @@ class SmartPatcher(QObject):
         self._camerathread.stop()
         self._camerathread = None
     
+    
     @property
-    def amplifierthread(self):
-        return self._amplifierthread
+    def sealtestthread(self):
+        return self._sealtestthread
     
-    @amplifierthread.setter
-    def amplifierthread(self, patchamplifier):
-        self._amplifierthread = patchamplifier
+    @sealtestthread.setter
+    def sealtestthread(self, sealtestthread_handle):
+        self._sealtestthread = sealtestthread_handle
+        self._sealtestthread.start()
     
-    @amplifierthread.deleter
-    def amplifierthread(self):
-        self._amplifierthread = None
+    @sealtestthread.deleter
+    def sealtestthread(self):
+        self._sealtestthread.stop()
+        self._sealtestthread = None
     
     
     @property
@@ -383,5 +386,5 @@ class SmartPatcher(QObject):
             logging.info('Emergency stop standby')
             self.worker.STOP = False
         else:
-            raise ValueError('Emergency stop should be either TRUE or False')
+            raise ValueError('Emergency stop should be either TRUE or FALSE')
     

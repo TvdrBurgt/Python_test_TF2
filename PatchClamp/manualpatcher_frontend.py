@@ -116,10 +116,10 @@ class PatchclampSealTestUI(QWidget):
             self.handleMeasurement
         )  # Connecting to the measurement signal
 
-        self.holdTest = PatchclampSealTest_hold()
-        self.holdTest.measurementThread_hold.measurement.connect(
-            self.handleMeasurement
-        )  # Connecting to the measurement signal
+        # self.holdTest = PatchclampSealTest_hold()
+        # self.holdTest.measurementThread_hold.measurement.connect(
+        #     self.handleMeasurement
+        # )  # Connecting to the measurement signal
 
         self.currentclampTest = PatchclampSealTest_currentclamp()
         self.currentclampTest.measurementThread_currentclamp.measurement.connect(
@@ -216,7 +216,7 @@ class PatchclampSealTestUI(QWidget):
         # zapContainer.setFixedWidth(320)
         zapContainerLayout = QGridLayout()
 
-        self.ICON_zap = "./Icons/zap.jpg"
+        self.ICON_zap = "../Icons/zap.jpg"
         self.zapiconlabel = QLabel()
         self.zapiconlabel.setPixmap(QPixmap(self.ICON_zap))
         zapContainerLayout.addWidget(self.zapiconlabel, 0, 0)

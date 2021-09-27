@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QPen, QColor
-from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QDoubleSpinBox, QGroupBox, QLabel, QStackedWidget, QComboBox, QTabWidget
+from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QDoubleSpinBox, QGroupBox, QLabel, QStackedWidget, QComboBox, QTabWidget, QSizePolicy
 import pyqtgraph.exporters
 import pyqtgraph as pg
 
@@ -21,6 +21,7 @@ sys.path.append('../')
 from PatchClamp.manualpatcher_frontend import PatchclampSealTestUI
 from PatchClamp.smartpatcher_backend import SmartPatcher
 from PatchClamp.camerathread import CameraThread
+from PatchClamp.sealtestthread import SealTestThread
 from PatchClamp.micromanipulator import ScientificaPatchStar
     
 
@@ -45,8 +46,8 @@ class PatchClampUI(QWidget):
         hardwareLayout = QGridLayout()
         
         # Button to (dis)connect camera
-        self.connect_camera_button = QPushButton(text="Camera", clicked=self.connect_camera)
-        self.connect_camera_button.setCheckable(True)
+        self.connect_camerathread_button = QPushButton(text="Camera", clicked=self.connect_camerathread)
+        self.connect_camerathread_button.setCheckable(True)
         
         # Button to (dis)connect objective motor
         self.connect_objectivemotor_button = QPushButton(text="Objective motor", clicked=self.mockfunction)
@@ -56,9 +57,9 @@ class PatchClampUI(QWidget):
         self.connect_micromanipulator_button = QPushButton(text="Micromanipulator", clicked=self.connect_micromanipulator)
         self.connect_micromanipulator_button.setCheckable(True)
         
-        # Button to (dis)connect amplifier
-        self.connect_amplifier_button = QPushButton(text="Amplifier", clicked=self.mockfunction)
-        self.connect_amplifier_button.setCheckable(True)
+        # Button to (dis)connect NIDAQ for sealtest
+        self.connect_sealtestthread_button = QPushButton(text="NIDAQ/Sealtest", clicked=self.mockfunction)
+        self.connect_sealtestthread_button.setCheckable(True)
         
         # Button to (dis)connect pressure controller
         self.connect_pressurecontroller_button = QPushButton(text="Pressure controller", clicked=self.mockfunction)
@@ -68,10 +69,10 @@ class PatchClampUI(QWidget):
         self.STOP_button = QPushButton(text="Emergency STOP", clicked=self.STOP)
         self.STOP_button.setCheckable(True)
         
-        hardwareLayout.addWidget(self.connect_camera_button, 0, 0, 1, 1)
+        hardwareLayout.addWidget(self.connect_camerathread_button, 0, 0, 1, 1)
         hardwareLayout.addWidget(self.connect_objectivemotor_button, 1, 0, 1, 1)
         hardwareLayout.addWidget(self.connect_micromanipulator_button, 2, 0, 1, 1)
-        hardwareLayout.addWidget(self.connect_amplifier_button, 3, 0, 1, 1)
+        hardwareLayout.addWidget(self.connect_sealtestthread_button, 3, 0, 1, 1)
         hardwareLayout.addWidget(self.connect_pressurecontroller_button, 4, 0, 1, 1)
         hardwareLayout.addWidget(self.STOP_button, 5, 0, 1, 1)
         hardwareContainer.setLayout(hardwareLayout)
@@ -128,8 +129,11 @@ class PatchClampUI(QWidget):
         algorithm.setLabel("left", units='a.u.')
         algorithm.setLabel("bottom", text="depth (um)")
         self.algorithm = algorithm.plot(pen=(1,3))
-        # self.algorithm = sensorWidget.addPlot(1, 0, 1, 1)
-        self.current = sensorWidget.addPlot(2, 0, 1, 1)
+        CurVol = sensorWidget.addPlot(2, 0, 1, 1)
+        CurVol.setTitle("Current")
+        CurVol.setLabel("left", units="A")
+        CurVol.setLabel("bottom", text="20 ms")
+        self.CurVol = CurVol.plot(pen=(2,3))
         self.pressure = sensorWidget.addPlot(3, 0, 1, 1)
         
         sensorLayout.addWidget(sensorWidget)
@@ -195,20 +199,21 @@ class PatchClampUI(QWidget):
         """
         -------------------- Stack automatic/manual GUI's  --------------------
         """
-        stackedWidget = QStackedWidget()
-        stackedWidget.addWidget(autopatcher)
-        stackedWidget.addWidget(PatchclampSealTestUI())
+        self.stackedWidget = QStackedWidget()
+        self.stackedWidget.addWidget(autopatcher)
+        self.stackedWidget.addWidget(PatchclampSealTestUI())
         
         pageComboBox = QComboBox()
         pageComboBox.addItem(str("Automatic patcher"))
         pageComboBox.addItem(str("Manual patcher"))
-        pageComboBox.activated.connect(stackedWidget.setCurrentIndex)
+        pageComboBox.activated.connect(self.stackedWidget.setCurrentIndex)
+        pageComboBox.activated.connect(self.resize_QStack)
+        pageComboBox.AdjustToContents = True
         
         layout = QGridLayout()
         layout.addWidget(pageComboBox, 0,0,1,1)
-        layout.addWidget(stackedWidget, 1,0,1,1)
+        layout.addWidget(self.stackedWidget, 1,0,1,1)
         self.setLayout(layout)
-        
         
         
         """
@@ -237,6 +242,7 @@ class PatchClampUI(QWidget):
         =======================================================================
         """
         
+        
     def mocksignal(self):
         print('Algorithm finished')
         logging.info('QThread isFinished: ' + str(self.backend.thread.isFinished()))
@@ -247,7 +253,15 @@ class PatchClampUI(QWidget):
         print("Button pushed")
         self.backend.request(name='mockworker')
         
-        
+    
+    def resize_QStack(self):
+        activelayer = self.stackedWidget.currentIndex()
+        if activelayer == 1:
+            self.setFixedSize(400,750)
+        else:
+            self.setFixedSize(1800,750)
+            
+    
     def connect_micromanipulator(self):
         """
         We initiate the micromanipulator by creating the ScientificaPatchStar
@@ -257,19 +271,20 @@ class PatchClampUI(QWidget):
         """
         if self.connect_micromanipulator_button.isChecked():
             micromanipulator = ScientificaPatchStar(address='COM16', baud=38400)
+            
             self.backend.micromanipulator = micromanipulator
         else:
             del self.backend.micromanipulator
         
         
-    def connect_camera(self):
+    def connect_camerathread(self):
         """
         We initiate the camera by creating the CameraThread object, then we
         connect signals with slots to govern inter-thread communication, i.e.
         to recieve images to display. Afterwards we move the camera thread to
         the backend where the thread is immediately started.
         """
-        if self.connect_camera_button.isChecked():
+        if self.connect_camerathread_button.isChecked():
             camerathread = CameraThread(camerahandle=None)
             
             self.signal_camera_live = camerathread.livesignal
@@ -282,6 +297,25 @@ class PatchClampUI(QWidget):
             del self.backend.camerathread
             del self.signal_camera_live
             del self.signal_camera_snap
+    
+    
+    def connect_sealtestthread(self):
+        """
+        We initiate the sealtest thread by creating the SealTestThread object,
+        then we connect the measurement signal to update the graph for voltage
+        and current. Afterwards we move the sealtest thread to the backend
+        where the thread is immediately started.
+        """
+        if self.connect_sealtestthread_button.isChecked():
+            sealtestthread = SealTestThread()
+            
+            self.signal_sealtest = sealtestthread.measurement
+            self.signal_sealtest.connect(self.update_currentvoltage)
+            
+            self.backend.sealtestthread = sealtestthread
+        else:
+            del self.backend.sealtestthread
+            del self.signal_sealtest
         
         
     def toggle_pauselive(self):
@@ -350,9 +384,6 @@ class PatchClampUI(QWidget):
             self.liveView.addedItems[idx].translatable = False
             self.liveView.addedItems[idx].setPen(QPen(QColor(193,245,240), 0))
             self.backend.target_coordinates = np.array([x,y,np.nan])
-        
-    # def quick_update_graph(self, value):
-    #     self.
     
     
     def draw_roi(self, *args):
@@ -404,6 +435,9 @@ class PatchClampUI(QWidget):
         positions = data[0,:]
         penalties = data[1,:]
         self.algorithm.setData(positions,penalties)
+    
+    def update_currentvoltage(self, current, voltage):
+        self.CurVol.setData(current[-200:])
     
     
     def STOP(self):
