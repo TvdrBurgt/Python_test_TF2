@@ -30,6 +30,13 @@ class SmartPatcher(QObject):
             [[None,None,None], [None,None,None]])
         self._target_coordinates = np.array(        # [X, Y, Z] in pixels
             [None,None,None])
+        self.window_size = 200
+        self.current = np.array([])
+        self.n_c = 0
+        self.voltage = np.array([])
+        self.n_v = 0
+        self.pressure = np.array([])
+        self.n_p = 0
         
         # Hardware devices
         self._camerathread = None
@@ -131,6 +138,45 @@ class SmartPatcher(QObject):
         with open("autopatch_configuration.txt", "w") as json_outfile:
             json.dump(data, json_outfile)
     
+    def _current_append_(self, values):
+        """Append new values to a sliding window."""
+        length = len(values)
+        if self.n_c + length > self.window_size:
+            # Buffer is full so make room.
+            copySize = self.window_size - length
+            self.current = self.current[-copySize:]
+            self.n_c = copySize
+        self.current = np.append(self.current, values)
+        self.n_c += length
+        
+        return self.current
+    
+    def _voltage_append_(self, values):
+        """Append new values to a sliding window."""
+        length = len(values)
+        if self.n_v + length > self.window_size:
+            # Buffer is full so make room.
+            copySize = self.window_size - length
+            self.voltage = self.voltage[-copySize:]
+            self.n_v = copySize
+        self.voltage = np.append(self.voltage, values)
+        self.n_v += length
+        
+        return self.voltage
+    
+    # def _pressure_append_(self, values):
+    #     """Append new values to a sliding window."""
+    #     length = len(values)
+    #     if self.n_p + length > self.window_size:
+    #         # Buffer is full so make room.
+    #         copySize = self.window_size - length
+    #         self.pressure = self.pressure[-copySize:]
+    #         self.n_p = copySize
+    #     self.pressure = np.append(self.pressure, values)
+    #     self.n_p += length
+        
+    #     return self.pressure
+    
     
     @property
     def camerathread(self):
@@ -153,6 +199,7 @@ class SmartPatcher(QObject):
     
     @sealtestthread.setter
     def sealtestthread(self, sealtestthread_handle):
+        logging.info('SealTestThread instantiated and set')
         self._sealtestthread = sealtestthread_handle
         self._sealtestthread.start()
     

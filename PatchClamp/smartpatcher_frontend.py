@@ -58,7 +58,7 @@ class PatchClampUI(QWidget):
         self.connect_micromanipulator_button.setCheckable(True)
         
         # Button to (dis)connect NIDAQ for sealtest
-        self.connect_sealtestthread_button = QPushButton(text="NIDAQ/Sealtest", clicked=self.mockfunction)
+        self.connect_sealtestthread_button = QPushButton(text="NIDAQ/Sealtest", clicked=self.connect_sealtestthread)
         self.connect_sealtestthread_button.setCheckable(True)
         
         # Button to (dis)connect pressure controller
@@ -129,12 +129,18 @@ class PatchClampUI(QWidget):
         algorithm.setLabel("left", units='a.u.')
         algorithm.setLabel("bottom", text="depth (um)")
         self.algorithm = algorithm.plot(pen=(1,3))
-        CurVol = sensorWidget.addPlot(2, 0, 1, 1)
-        CurVol.setTitle("Current")
-        CurVol.setLabel("left", units="A")
-        CurVol.setLabel("bottom", text="20 ms")
-        self.CurVol = CurVol.plot(pen=(2,3))
-        self.pressure = sensorWidget.addPlot(3, 0, 1, 1)
+        
+        currentPlot = sensorWidget.addPlot(2, 0, 1, 1)
+        currentPlot.setTitle("Current")
+        currentPlot.setLabel("left", units="A")
+        currentPlot.setLabel("bottom", text="20 ms")
+        self.currentPlot = currentPlot.plot(pen=(2,3))
+        
+        pressurePlot = sensorWidget.addPlot(3, 0, 1, 1)
+        pressurePlot.setTitle("Pressure")
+        pressurePlot.setLabel("left", units="mBar")
+        pressurePlot.setLabel("bottom", text="20 ms")
+        self.pressurePlot = pressurePlot.plot(pen=(3,3))
         
         sensorLayout.addWidget(sensorWidget)
         sensorContainer.setLayout(sensorLayout)
@@ -306,6 +312,7 @@ class PatchClampUI(QWidget):
         and current. Afterwards we move the sealtest thread to the backend
         where the thread is immediately started.
         """
+        logging.info('connect sealtestthread button pushed')
         if self.connect_sealtestthread_button.isChecked():
             sealtestthread = SealTestThread()
             
@@ -436,8 +443,14 @@ class PatchClampUI(QWidget):
         penalties = data[1,:]
         self.algorithm.setData(positions,penalties)
     
-    def update_currentvoltage(self, current, voltage):
-        self.CurVol.setData(current[-200:])
+    def update_currentvoltage(self, voltOut, curOut):
+        voltage = self.backend._voltage_append_(voltOut*1000)
+        current = self.backend._current_append_(curOut*1*10**12)
+        
+        self.currentPlot.setData(current)
+        self.pressurePlot.setData(voltage)
+        
+        # self.updateLabels(curOut, voltOut)
     
     
     def STOP(self):
