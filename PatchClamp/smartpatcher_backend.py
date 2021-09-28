@@ -2,7 +2,7 @@
 """
 Created on Sat Aug  7 18:21:18 2021
 
-@author: tvdrb
+@author: TvdrBurgt
 """
 
 
@@ -109,7 +109,7 @@ class SmartPatcher(QObject):
         output:
             newtarget   = rotated target coordinates (np.ndarray with shape (3,))
         """
-        if type(origin) == np.ndarray and type(target) == np.ndarray:
+        if isinstance(origin, np.ndarray) and isinstance(target, np.ndarray):
             if origin.shape == (3,) and target.shape == (3,):
                 pass
             else:
@@ -259,7 +259,7 @@ class SmartPatcher(QObject):
     @pixel_size.setter
     def pixel_size(self, size):
         logging.info('Set pixel size to: ' + str(size))
-        if type(size) == float or type(size) == int:
+        if isinstance(size, float) or isinstance(size, int):
             self._pixel_size = size
         else:
             raise ValueError('pixelsize should be a float or integer')
@@ -275,7 +275,7 @@ class SmartPatcher(QObject):
     
     @pipette_orientation.setter
     def pipette_orientation(self, angle):
-        if type(angle) == float or type(angle) == int:
+        if isinstance(angle, float) or isinstance(angle, int):
             logging.info('Set pipette orientation: ' + str(angle) + ' degrees')
             self._pipette_orientation = angle
         else:
@@ -292,7 +292,7 @@ class SmartPatcher(QObject):
     
     @pipette_diameter.setter
     def pipette_diameter(self, diameter):
-        if type(diameter) == float or type(diameter) == int:
+        if isinstance(diameter, float) or isinstance(diameter, int):
             logging.info('Set pipette opening diameter: D = ' + str(diameter))
             self._pipette_diameter = diameter
         else:
@@ -357,7 +357,7 @@ class SmartPatcher(QObject):
     
     @operation_mode.setter
     def operation_mode(self, mode):
-        if type(mode) == str:
+        if isinstance(mode, str):
             logging.info('Set operation mode for workers to: ' + mode)
             self._operation_mode = mode
         else:
@@ -374,7 +374,7 @@ class SmartPatcher(QObject):
     
     @pipette_coordinates_pair.setter
     def pipette_coordinates_pair(self, coords):
-        if type(coords) is np.ndarray:
+        if isinstance(coords, np.ndarray):
             logging.info('Couple pipette coordinates:\n[X,Y,Z] = ' + str(coords[0,:]) + '\n[row,col,obj] = ' + str(coords[1,:]))
             if coords.shape == (2,3):
                 self._pipette_coordinates_pair = coords
@@ -395,7 +395,7 @@ class SmartPatcher(QObject):
     @target_coordinates.setter
     def target_coordinates(self, coords):
         logging.info('Set target coordinates:\n[row,col,obj] = ' + str(coords))
-        if type(coords) is np.ndarray:
+        if isinstance(coords, np.ndarray):
             if coords.shape == (3,):
                 self._target_coordinates = coords
             else:

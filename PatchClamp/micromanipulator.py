@@ -2,7 +2,7 @@
 """
 Created on Wed Aug 11 11:09:56 2021
 
-@author: tvdrb
+@author: TvdrBurgt
 """
 
 

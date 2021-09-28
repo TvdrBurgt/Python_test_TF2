@@ -2,7 +2,7 @@
 """
 Created on Mon Sep 27 15:48:59 2021
 
-@author: lhuismans, tvdrb
+@author: lhuismans, TvdrBurgt
 
 """
 

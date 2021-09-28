@@ -2,7 +2,7 @@
 """
 Created on Fri Aug  6 15:15:38 2021
 
-@author: tvdrb
+@author: TvdrBurgt
 """
 
 import time
@@ -448,8 +448,8 @@ class PatchClampUI(QWidget):
         current = self.backend._current_append_(curOut*1*10**12)
         
         self.currentPlot.setData(current)
-        self.pressurePlot.setData(voltage)
         
+        """ to calculate capacitance and resistance """
         # self.updateLabels(curOut, voltOut)
     
     
