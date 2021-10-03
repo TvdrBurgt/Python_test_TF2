@@ -247,7 +247,8 @@ class Worker(QObject):
         userbias = np.array([0, 0])     #should come from human input!
         tipcoord += userbias
         self.draw.emit(['cross',tipcoord[0],tipcoord[1]])
-        io.imsave(os.getcwd()+'\\feedback\\'+'softcalibration'+'.tif', camera.snap(), check_contrast=False)    #FLAG: relevant for MSc thesis
+        I = camera.snap()
+        io.imsave(os.getcwd()+'\\feedback\\'+'softcalibration'+'.tif', I, check_contrast=False)    #FLAG: relevant for MSc thesis
         
         # set micromanipulator and camera coordinate pair of pipette tip
         self._parent.pipette_coordinates_pair = np.vstack([reference, np.array([tipcoord[0], tipcoord[1], np.nan])])
@@ -530,7 +531,8 @@ class Worker(QObject):
         # Move micromanipulator to the position of maximal penalty
         micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positions[i_max])
         np.save(os.getcwd()+'\\feedback\\'+'autofocus_positionhistory_foundfocus', positions[i_max])                   #FLAG: relevant for MSc thesis
-        io.imsave(os.getcwd()+'\\feedback\\'+'foundfocus'+'.tif', camera.snap(), check_contrast=False)   #FLAG: relevant for MSc thesis
+        I = camera.snap()
+        io.imsave(os.getcwd()+'\\feedback\\'+'foundfocus'+'.tif', I, check_contrast=False)   #FLAG: relevant for MSc thesis
         
         logging.info('Focus offset found!')
         
