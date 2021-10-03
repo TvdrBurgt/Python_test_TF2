@@ -99,7 +99,7 @@ class ScientificaPatchStar:
             Send: ABS 100 26 3
             Response: A (if move allowed else E)
         """
-        x, y, z = np.ndarray([x,y,z]) * self.units
+        x, y, z = np.array([x,y,z]) * self.units
         
         response = self.send_and_recieve('ABS %d %d %d' % (x,y,z))
         

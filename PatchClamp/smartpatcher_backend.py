@@ -117,7 +117,7 @@ class SmartPatcher(QObject):
         else:
             raise ValueError('origin and target should be numpy.ndarray')
         
-        return self.R @ np.subtract(origin,target)
+        return self.R @ np.subtract(target,origin) + origin
     
     def update_constants_from_JSON(self):
         # read json file with autopatcher constants and update them in backend
@@ -313,8 +313,10 @@ class SmartPatcher(QObject):
             alpha,beta,gamma = alphabetagamma
             if type(alpha) and type(beta) and type(gamma) == float or int:
                 logging.info('Set rotation angles alpha beta gamma: '+str(alpha)+' '+str(beta)+' '+str(gamma))
-                self._rotation_angles = [alpha,beta,gamma]
-                self.R = (alpha,beta,gamma)
+                alpha_old, beta_old, gamma_old = self.rotation_angles
+                self._rotation_angles = [alpha+alpha_old, beta+beta_old, gamma+gamma_old]
+                self.R = (alpha+alpha_old, beta+beta_old, gamma+gamma_old)
+                self.write_constants_to_JSON()
             else:
                 raise ValueError('rotation angles should be integers or floats')
         else:
@@ -349,6 +351,7 @@ class SmartPatcher(QObject):
     @R.deleter
     def R(self):
         self._R = np.eye(3)
+        self.write_constants_to_JSON()
     
     
     @property

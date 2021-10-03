@@ -152,7 +152,7 @@ class PatchClampUI(QWidget):
         algorithmLayout = QGridLayout()
         
         request_hardcalibrationxy_button = QPushButton(text="Calibrate XY", clicked=self.request_hardcalibration_xy)
-        request_hardcalibrationxyz_button = QPushButton(text="Calibrate XYZ", clicked=self.request_hardcalibration_xyz)
+        request_hardcalibrationxyz_button = QPushButton(text="Calibrate pixelsize", clicked=self.request_hardcalibration_pixelsize)
         request_selecttarget_button = QPushButton(text="Select target", clicked=self.request_selecttarget)
         request_confirmtarget_button = QPushButton(text="Confirm target", clicked=self.request_confirmtarget)
         request_detecttip_button = QPushButton(text="Detect tip", clicked=self.request_softcalibration)
@@ -347,8 +347,8 @@ class PatchClampUI(QWidget):
     def request_hardcalibration_xy(self):
         self.backend.request(name='hardcalibration', mode='XY')
         
-    def request_hardcalibration_xyz(self):
-        self.backend.request(name='hardcalibration', mode='XYZ')
+    def request_hardcalibration_pixelsize(self):
+        self.backend.request(name='hardcalibration', mode='pixelsize')
     
     def request_softcalibration(self):
         self.backend.request(name='softcalibration')
@@ -446,7 +446,7 @@ class PatchClampUI(QWidget):
     def update_currentvoltage(self, voltOut, curOut):
         voltage = self.backend._voltage_append_(voltOut*1000)
         current = self.backend._current_append_(curOut*1*10**12)
-        print(curOut*1*10**12 - current[-100:])
+        # print(curOut*1*10**12 - current[-100:])
         
         self.currentPlot.setData(current)
         
@@ -561,5 +561,4 @@ if __name__ == "__main__":
         mainwin.show()
         app.exec_()
         
-    start_logger()
-    run_app()
+    start
