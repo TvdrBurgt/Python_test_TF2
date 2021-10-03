@@ -444,8 +444,8 @@ class PatchClampUI(QWidget):
         self.algorithm.setData(positions,penalties)
     
     def update_currentvoltage(self, voltOut, curOut):
-        voltage = self.backend._voltage_append_(voltOut*1000)
-        current = self.backend._current_append_(curOut*1*10**12)
+        voltage = self.backend._voltage_append_(voltOut)
+        current = self.backend._current_append_(curOut)
         # print(curOut*1*10**12 - current[-100:])
         
         self.currentPlot.setData(current)
@@ -561,4 +561,6 @@ if __name__ == "__main__":
         mainwin.show()
         app.exec_()
         
-    start
+    start_logger()
+    run_app()
+    
