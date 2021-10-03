@@ -446,6 +446,7 @@ class PatchClampUI(QWidget):
     def update_currentvoltage(self, voltOut, curOut):
         voltage = self.backend._voltage_append_(voltOut*1000)
         current = self.backend._current_append_(curOut*1*10**12)
+        print(curOut*1*10**12 - current[-100:])
         
         self.currentPlot.setData(current)
         

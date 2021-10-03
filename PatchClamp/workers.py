@@ -121,6 +121,7 @@ class Worker(QObject):
                 # save tip coordinates
                 tipcoords[i,j,:] = np.array([x,y,np.nan])
                 self.draw.emit(['cross',x,y])
+                np.save('hardcalibration'+mode, tipcoords)  #FLAG: relevant for MSc thesis
         
         # move hardware back to start position
         x,y,z = reference
@@ -236,6 +237,7 @@ class Worker(QObject):
             # save tip coordinates in an array
             tipcoords[i,:] = x,y
             self.draw.emit(['cross',x,y])
+            np.save('softcalibration', tipcoords)  #FLAG: relevant for MSc thesis
         
         # user bias correction
         tipcoord = np.mean(tipcoords, axis=0)
@@ -244,6 +246,7 @@ class Worker(QObject):
         userbias = np.array([0, 0])     #should come from human input!
         tipcoord += userbias
         self.draw.emit(['cross',tipcoord[0],tipcoord[1]])
+        io.imsave(os.getcwd()+'\\PatchClamp\\feedback\\'+'softcalibration'+'.tif', camera.snap(), check_contrast=False)    #FLAG: relevant for MSc thesis
         
         # set micromanipulator and camera coordinate pair of pipette tip
         self._parent.pipette_coordinates_pair = np.vstack([reference, np.array([tipcoord[0], tipcoord[1], np.nan])])
@@ -252,7 +255,7 @@ class Worker(QObject):
         
     
     @pyqtSlot()
-    def autofocus_tip(self, camera_handle=None, micromanipulator_handle=None):
+    def autofocus_tip(self):
         # get all relevant parent attributes
         micromanipulator = self._parent.micromanipulator
         camera = self._parent.camerathread
@@ -304,6 +307,8 @@ class Worker(QObject):
         while not np.array_equal(pinbool, [0,1,0]):
             # emit sharpness function
             self.sharpnessfunction.emit(np.vstack([positionhistory,penaltyhistory]))
+            np.save('autofocus_positionhistory', positionhistory)   #FLAG: relevant for MSc thesis
+            np.save('autofocus_penaltyhistory', penaltyhistory)     #FLAG: relevant for MSc thesis
             
             # Adjust threshold
             margin = margin*.995 + .005
@@ -536,6 +541,9 @@ class Worker(QObject):
                 positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
                 penaltyhistory = np.append(penaltyhistory, penalties[idx])
             
+            np.save('autofocus_positionhistory_stepsize='+str(stepsize), positions)     #FLAG: relevant for MSc thesis
+            np.save('autofocus_penaltyhistory_stepsize='+str(stepsize), penalties)      #FLAG: relevant for MSc thesis
+            
             # Locate maximum penalty value
             i_max = penalties.argmax()
             
@@ -544,6 +552,11 @@ class Worker(QObject):
             
             # Set reference position one step below maximum penalty position
             reference[2] = positions[i_max] - stepsize
+            
+        # Move micromanipulator to the position of maximal penalty
+        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positions[i_max])
+        np.save('autofocus_positionhistory_foundfocus', positions[i_max])                   #FLAG: relevant for MSc thesis
+        io.imsave(savedirectory+'foundfocus'+'.tif', camera.snap(), check_contrast=False)   #FLAG: relevant for MSc thesis
         
         logging.info('Focus offset found!')
         
