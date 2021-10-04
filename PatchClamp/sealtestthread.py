@@ -57,7 +57,8 @@ from NIDAQ.constants import MeasurementConstants, NiDaqChannels
 #         self.patchVoltInChan = None
         
 #         # generate wave function from loaded constants
-#         self.wave = blockWave(self.sampleRate, self.frequency, self.voltMin, self.voltMax, self.dutycycle)
+#         self.wave = zeros(self.readNumber)
+#         self.setWave(1,0,0)
         
         
 #     def stop(self):
@@ -173,7 +174,8 @@ class SealTestThread(QThread):
         self.patchVoltInChan = None
         
         # generate wave function from loaded constants
-        self.wave = blockWave(self.sampleRate, self.frequency, self.voltMin, self.voltMax, self.dutycycle)
+        self.wave = np.zeros(self.readNumber)
+        self.setWave(1,0,0)
 
     def stop(self):
         self.isRunning = False
@@ -200,8 +202,8 @@ class SealTestThread(QThread):
         self.isRunning = True
         while self.isRunning:
             output = np.random.rand(2,self.readNumber)
-            output[0,:] *= 1000
-            output[1,:] *= np.linspace(0,1,100)*1*10**-12
+            output[0,:] *= np.concatenate((np.ones(25),np.zeros(25),np.ones(25),np.zeros(25)))*1
+            output[1,:] *= np.linspace(-2,2,100)*10**-2
 
             # Emiting the data just received as a signal
             self.measurement.emit(output[0,:], output[1,:])
@@ -209,3 +211,8 @@ class SealTestThread(QThread):
             QThread.msleep(10)
         
         logging.info('sealtest thread stopped')
+
+
+if __name__ == "__main__":
+    a = SealTestThread()
+    

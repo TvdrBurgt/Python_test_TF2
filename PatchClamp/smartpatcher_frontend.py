@@ -19,9 +19,11 @@ import pyqtgraph as pg
 
 sys.path.append('../')
 from PatchClamp.manualpatcher_frontend import PatchclampSealTestUI
+# from PatchClamp.manualpatcher_backend import PatchclampSealTest
 from PatchClamp.smartpatcher_backend import SmartPatcher
 from PatchClamp.camerathread import CameraThread
 from PatchClamp.sealtestthread import SealTestThread
+# from PatchClamp.sealtestthread2 import PatchclampSealTest 
 from PatchClamp.micromanipulator import ScientificaPatchStar
     
 
@@ -314,8 +316,10 @@ class PatchClampUI(QWidget):
         """
         logging.info('connect sealtestthread button pushed')
         if self.connect_sealtestthread_button.isChecked():
+            # sealtestthread = PatchclampSealTest()
             sealtestthread = SealTestThread()
             
+            # self.signal_sealtest = sealtestthread.measurementThread.measurement
             self.signal_sealtest = sealtestthread.measurement
             self.signal_sealtest.connect(self.update_currentvoltage)
             
