@@ -5,7 +5,7 @@ Created on Wed Aug 11 15:15:30 2021
 @author: TvdrBurgt
 """
 
-import os
+
 import logging
 import datetime
 import numpy as np
@@ -76,6 +76,8 @@ class Worker(QObject):
                          camera y-axis)
             pixelsize   (pixel size in nanometers)
         """
+        # get all relevant parent attributes
+        save_directory = self._parent.save_directory
         micromanipulator = self._parent.micromanipulator
         camera = self._parent.camerathread
         account4rotation = self._parent.account4rotation
@@ -121,7 +123,7 @@ class Worker(QObject):
                 # save tip coordinates
                 tipcoords[i,j,:] = np.array([x,y,np.nan])
                 self.draw.emit(['cross',x,y])
-                np.save(os.getcwd()+'\\feedback\\'+'hardcalibration'+mode, tipcoords)  #FLAG: relevant for MSc thesis
+                np.save(save_directory+'hardcalibration'+mode, tipcoords)  #FLAG: relevant for MSc thesis
         
         # move hardware back to start position
         x,y,z = reference
@@ -201,6 +203,7 @@ class Worker(QObject):
                                                   tip coordinates (in pixels)])
         """
         # get all relevant parent attributes
+        save_directory = self._parent.save_directory
         micromanipulator = self._parent.micromanipulator
         camera = self._parent.camerathread
         account4rotation = self._parent.account4rotation
@@ -238,7 +241,7 @@ class Worker(QObject):
             # save tip coordinates in an array
             tipcoords[i,:] = x,y
             self.draw.emit(['cross',x,y])
-            np.save(os.getcwd()+'\\feedback\\'+'softcalibration', tipcoords)  #FLAG: relevant for MSc thesis
+            np.save(save_directory+'softcalibration', tipcoords)  #FLAG: relevant for MSc thesis
         
         # user bias correction
         tipcoord = np.mean(tipcoords, axis=0)
@@ -248,7 +251,7 @@ class Worker(QObject):
         tipcoord += userbias
         self.draw.emit(['cross',tipcoord[0],tipcoord[1]])
         I = camera.snap()
-        io.imsave(os.getcwd()+'\\feedback\\'+'softcalibration'+'.tif', I, check_contrast=False)    #FLAG: relevant for MSc thesis
+        io.imsave(save_directory+'softcalibration'+'.tif', I, check_contrast=False)    #FLAG: relevant for MSc thesis
         
         # set micromanipulator and camera coordinate pair of pipette tip
         self._parent.pipette_coordinates_pair = np.vstack([reference, np.array([tipcoord[0], tipcoord[1], np.nan])])
@@ -259,6 +262,7 @@ class Worker(QObject):
     @pyqtSlot()
     def autofocus_tip(self):
         # get all relevant parent attributes
+        save_directory = self._parent.save_directory
         micromanipulator = self._parent.micromanipulator
         camera = self._parent.camerathread
         
@@ -516,8 +520,8 @@ class Worker(QObject):
                 positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
                 penaltyhistory = np.append(penaltyhistory, penalties[idx])
             
-            np.save(os.getcwd()+'\\feedback\\'+'autofocus_positionhistory_stepsize='+str(stepsize), positions)     #FLAG: relevant for MSc thesis
-            np.save(os.getcwd()+'\\feedback\\'+'autofocus_penaltyhistory_stepsize='+str(stepsize), penalties)      #FLAG: relevant for MSc thesis
+            np.save(save_directory+'autofocus_positionhistory_stepsize='+str(stepsize), positions)     #FLAG: relevant for MSc thesis
+            np.save(save_directory+'autofocus_penaltyhistory_stepsize='+str(stepsize), penalties)      #FLAG: relevant for MSc thesis
             
             # Locate maximum penalty value
             i_max = penalties.argmax()
@@ -530,9 +534,9 @@ class Worker(QObject):
             
         # Move micromanipulator to the position of maximal penalty
         micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positions[i_max])
-        np.save(os.getcwd()+'\\feedback\\'+'autofocus_positionhistory_foundfocus', positions[i_max])                   #FLAG: relevant for MSc thesis
+        np.save(save_directory+'autofocus_positionhistory_foundfocus', positions[i_max])                   #FLAG: relevant for MSc thesis
         I = camera.snap()
-        io.imsave(os.getcwd()+'\\feedback\\'+'foundfocus'+'.tif', I, check_contrast=False)   #FLAG: relevant for MSc thesis
+        io.imsave(save_directory+'foundfocus'+'.tif', I, check_contrast=False)   #FLAG: relevant for MSc thesis
         
         logging.info('Focus offset found!')
         
@@ -542,9 +546,9 @@ class Worker(QObject):
     
     # @pyqtSlot()
     # def request_imagexygrid(self):
+    #     save_directory = self._parent.save_directory
     #     micromanipulator = self._parent.micromanipulator
     #     camera = self._parent.camerathread
-    #     savedirectory = r'M:\tnw\ist\do\projects\Neurophotonics\Brinkslab\Data\Thijs\Save directory\\'
     #     x,y,z = micromanipulator.getPos()
     #     stepsize = 50
     #     for i in range(0, 11):
@@ -554,5 +558,5 @@ class Worker(QObject):
     #                 if k == 'b':
     #                     micromanipulator.moveRel(dx=5, dy=0, dz=0)
     #                 snap = camera.snap()
-    #                 io.imsave(savedirectory+'X%dY%d'%(i*stepsize,j*stepsize)+k+'.tif', snap, check_contrast=False)
+    #                 io.imsave(save_directory+'X%dY%d'%(i*stepsize,j*stepsize)+k+'.tif', snap, check_contrast=False)
     

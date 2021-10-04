@@ -5,7 +5,7 @@ Created on Sat Aug  7 18:21:18 2021
 @author: TvdrBurgt
 """
 
-
+import os
 import json
 import logging
 import numpy as np
@@ -25,6 +25,7 @@ class SmartPatcher(QObject):
         self.update_constants_from_JSON()           # rewrites above constants
         
         # Algorithm constants
+        self.save_directory = os.getcwd()+'\\feedback\\'
         self._operation_mode = 'Default'            # specifies worker mode
         self._pipette_coordinates_pair = np.array(  # [micromanipulator, camera]
             [[None,None,None], [None,None,None]])
