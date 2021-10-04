@@ -21,7 +21,8 @@ sys.path.append('../')
 from PatchClamp.manualpatcher_frontend import PatchclampSealTestUI
 from PatchClamp.smartpatcher_backend import SmartPatcher
 from PatchClamp.camerathread import CameraThread
-from PatchClamp.sealtestthread import SealTestThread
+# from PatchClamp.sealtestthread import SealTestThread
+from PatchClamp.sealtestthread2 import PatchclampSealTest 
 from PatchClamp.micromanipulator import ScientificaPatchStar
     
 
@@ -314,9 +315,9 @@ class PatchClampUI(QWidget):
         """
         logging.info('connect sealtestthread button pushed')
         if self.connect_sealtestthread_button.isChecked():
-            sealtestthread = SealTestThread()
+            sealtestthread = PatchclampSealTest()
             
-            self.signal_sealtest = sealtestthread.measurement
+            self.signal_sealtest = sealtestthread.measurementThread.measurement
             self.signal_sealtest.connect(self.update_currentvoltage)
             
             self.backend.sealtestthread = sealtestthread
@@ -446,7 +447,6 @@ class PatchClampUI(QWidget):
     def update_currentvoltage(self, voltOut, curOut):
         voltage = self.backend._voltage_append_(voltOut)
         current = self.backend._current_append_(curOut)
-        # print(curOut*1*10**12 - current[-100:])
         
         self.currentPlot.setData(current)
         

@@ -201,12 +201,12 @@ class SmartPatcher(QObject):
     def sealtestthread(self, sealtestthread_handle):
         logging.info('SealTestThread instantiated and set')
         self._sealtestthread = sealtestthread_handle
+        self._sealtestthread.setWave(0.1, 0.01, 0)
         self._sealtestthread.start()
     
     @sealtestthread.deleter
     def sealtestthread(self):
-        self._sealtestthread.stop()
-        self._sealtestthread = None
+        self._sealtestthread.aboutToQuitHandler()
     
     
     @property
