@@ -7,7 +7,6 @@ Created on Wed Aug 11 15:15:30 2021
 
 
 import logging
-import datetime
 import numpy as np
 from skimage import io
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot

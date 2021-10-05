@@ -5,7 +5,6 @@ Created on Fri Aug  6 15:15:38 2021
 @author: TvdrBurgt
 """
 
-import time
 import sys
 import numpy as np
 import logging
@@ -13,7 +12,7 @@ import matplotlib.pyplot as plt
 
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QPen, QColor
-from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QDoubleSpinBox, QGroupBox, QLabel, QStackedWidget, QComboBox, QTabWidget, QSizePolicy
+from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QDoubleSpinBox, QGroupBox, QLabel, QStackedWidget, QComboBox
 import pyqtgraph.exporters
 import pyqtgraph as pg
 
@@ -480,6 +479,14 @@ class PatchClampUI(QWidget):
         """
         try:
             del self.backend.camerathread
+        except:
+            pass
+        try:
+            del self.backend.micromanipulator
+        except:
+            pass
+        try:
+            del self.backend.sealtestthread
         except:
             pass
         
