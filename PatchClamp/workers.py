@@ -267,8 +267,9 @@ class Worker(QObject):
         
         # algorithm variables
         focusprecision = 0.1    # focal plane finding precision (in microns)
+        focusbias = 20          # bias from found peak to focus (in microns)
         optimalstepsize = 12    # peak recognizing step size (in microns)
-        margin = 0.90           # threshold for max values (percentage)
+        margin = 0.98           # threshold for max values (percentage)
         
         reference = micromanipulator.getPos()
         
@@ -278,30 +279,25 @@ class Worker(QObject):
         W = ia.makeGaussian(size=image.shape, mu=(width//2,height//2), sigma=(width//12,height//12))
         
         # Initialize array for storing [positions; penalties]
-        positionhistory = np.zeros(3)
-        penaltyhistory = np.zeros(3)
+        positionhistory = np.zeros(8)
+        penaltyhistory = np.zeros(8)
         
         """"Step up three times to compute penalties [p1,p2,p3]"""
         penalties = np.zeros(3)
-        for i in range(3):
-            # Capture image
+        for i in range(8):
             I = camera.snap()
-            
-            # Apply image window
             IW = I * W
-            
-            # Calculate out of focus penalty score
-            penalties[i] = ia.comp_variance_of_Laplacian(IW)
             
             # Save position and penalty in history
             positionhistory[i] = micromanipulator.getPos()[2]
-            penaltyhistory[i] = penalties[i]
+            penaltyhistory[i] = ia.comp_variance_of_Laplacian(IW)
             
             # Move pipette up
-            if i < 2:
+            if i < 7:
                 micromanipulator.moveRel(dz=optimalstepsize)
             
         """Iteratively find peak in focus penalty values"""
+        penalties = penaltyhistory[0:3]
         stepsize = optimalstepsize
         stepsizemin = optimalstepsize/2
         stepsizemax = optimalstepsize*8
@@ -309,8 +305,6 @@ class Worker(QObject):
         while not np.array_equal(pinbool, [0,1,0]):
             # emit sharpness function
             self.sharpnessfunction.emit(np.vstack([positionhistory,penaltyhistory]))
-            # Adjust threshold
-            margin = margin*.95 + .05
             logging.info(pinbool)
             
             # Find maximum, middle, and minimum penalty values
@@ -333,7 +327,13 @@ class Worker(QObject):
             
             # Move micromanipulator towards local maximum through (7 modes)
             if np.array_equal(pinbool, [0,1,0]):
-                pass
+                tail = np.where(positionhistory > positionhistory[np.where(penaltyhistory == p_max)])
+                indices = np.argsort(positionhistory[tail])[0:8]
+                monotonicity = np.all(np.diff(penaltyhistory[indices]) <= 0)
+                if monotonicity:
+                    pass
+                else:
+                    pinbool = np.array([1,0,0])
             elif np.array_equal(pinbool, [1,0,1]):
                 x,y,z = reference-np.array([0,0,stepsize])
                 micromanipulator.moveAbs(x,y,z)
@@ -538,6 +538,10 @@ class Worker(QObject):
         io.imsave(save_directory+'foundfocus'+'.tif', I, check_contrast=False)   #FLAG: relevant for MSc thesis
         
         logging.info('Focus offset found!')
+        
+        micromanipulator.moveRel(dz=-focusbias)
+        
+        logging.info('Moved pipette in focus!')
         
         self.finished.emit()
         
