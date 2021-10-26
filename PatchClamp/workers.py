@@ -569,7 +569,7 @@ class Worker(QObject):
         penaltyhistory = np.append(penaltyhistory, penalty)                         #FLAG: relevant for MSc thesis
         np.save(save_directory+'autofocus_positionhistory_'+timestamp, positions)   #FLAG: relevant for MSc thesis
         np.save(save_directory+'autofocus_penaltyhistory_'+timestamp, penalties)    #FLAG: relevant for MSc thesis
-        io.imsave(save_directory+'foundfocus'+'.tif', I, check_contrast=False)      #FLAG: relevant for MSc thesis
+        io.imsave(save_directory+'foundfocus_'+timestamp+'.tif', I, check_contrast=False)      #FLAG: relevant for MSc thesis
         
         
         self.finished.emit()
