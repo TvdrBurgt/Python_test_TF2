@@ -265,315 +265,191 @@ class Worker(QObject):
         save_directory = self._parent.save_directory
         micromanipulator = self._parent.micromanipulator
         camera = self._parent.camerathread
+        # D = self._parent.pipette_diameter
+        # O = self._parent.pipette_orientation
         
         # algorithm variables
-        focusprecision = 0.1    # focal plane finding precision (in microns)
-        focusbias = 20          # bias from found peak to focus (in microns)
-        optimalstepsize = 12    # peak recognizing step size (in microns)
-        margin = 0.05           # sharpness function bandwith (in percentage)
+        stepsize = 10
+        focusbias = 20
         
         reference = micromanipulator.getPos()
+        penaltyhistory = np.array([])
+        positionhistory = np.array([])
         
-        # Construct Gaussian window
-        image = camera.snap()
-        width,height = image.shape
-        W = ia.makeGaussian(size=image.shape, mu=(width//2,height//2), sigma=(width//12,height//12))
-        
-        # Initialize array for storing [positions; penalties]
-        positionhistory = np.zeros(3)
-        penaltyhistory = np.zeros(3)
-        
-        """"Step up three times to compute penalties [p1,p2,p3]"""
-        penalties = np.zeros(3)
-        for i in range(3):
+        #I) fill first three sharpness scores towards the tail of the graph
+        pen = np.zeros(3)
+        pos = np.zeros(3)
+        for i in range(0,3):
+            micromanipulator.moveRel(dz=+stepsize)
             I = camera.snap()
-            IW = I * W
-            
-            # Save position and penalty in history
-            positionhistory[i] = micromanipulator.getPos()[2]
-            penaltyhistory[i] = ia.comp_variance_of_Laplacian(IW)
-            
-            if i < 2:
-                # Move pipette up
-                micromanipulator.moveRel(dz=optimalstepsize)
-            else:
-                # Transform margin to a sharpness function bandwith
-                bandwith = margin*np.min(penalties)
-            
-        """Iteratively find peak in focus penalty values"""
-        penalties = penaltyhistory[0:3]
-        stepsize = optimalstepsize
-        stepsizemin = optimalstepsize/4
-        stepsizemax = optimalstepsize*4
-        pinbool = np.zeros(3)
-        while not np.array_equal(pinbool, [0,1,0]):
-            # Emit sharpness function
-            self.sharpnessfunction.emit(np.vstack([positionhistory,penaltyhistory]))
-            logging.info(pinbool)
-            
-            # Find maximum, middle, and minimum penalty values
-            i_min, i_mdl, i_max = np.argsort(penalties)
-            p_min, p_mdl, p_max = np.sort(penalties)
-            
-            # Check which penalty is significant (maximum, minimum, none)
-            if p_max - bandwith > p_mdl:
-                pinbool[i_max] = 1
-                pinbool[i_mdl] = 0
-                pinbool[i_min] = 0
-            elif p_max - bandwith > p_min:
-                pinbool[i_max] = 1
-                pinbool[i_mdl] = 1
-                pinbool[i_min] = 0
-            else:
-                pinbool[i_max] = 1
-                pinbool[i_mdl] = 1
-                pinbool[i_min] = 1
-            
-            if np.array_equal(pinbool, [0,1,0]):
-                # get the tail to the right of the maxima
-                tail = np.where(positionhistory > positionhistory[np.where(penaltyhistory == p_max)])
-                indices = np.argsort(positionhistory[tail])[0:8]
-                positions = positionhistory[indices]
-                penalties = penaltyhistory[indices]
-                # fill up the tail to 8 values if necessary
-                if len(tail) < 8:
-                    micromanipulator.moveAbs(x=reference[0], y=reference[0], z=positions[-1])
-                    for i in range(0, 8-len(tail)):
-                        micromanipulator.moveRel(dz=optimalstepsize)
-                        I = camera.snap()
-                        position = micromanipulator.getPos()[2]
-                        penalty = ia.comp_variance_of_Laplacian(I)
-                        positions = np.append(positions, position)
-                        penalties = np.append(penalties, penalty)
-                # check if monotonicity condition holds for the slope.
-                if np.any(np.diff(penalties) > 0):
-                    pinbool = np.array([1,0,0])
-            
-            if np.array_equal(pinbool, [1,0,1]):
-                x,y,z = reference-np.array([0,0,stepsize])
-                micromanipulator.moveAbs(x,y,z)
-                I = camera.snap()
-                IW = I * W
-                penalties[1] = penalties[0]
-                penalties[0] = ia.comp_variance_of_Laplacian(IW)
-                positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
-                penaltyhistory = np.append(penaltyhistory, penalties[0])
-                reference = reference - np.array([0,0,stepsize])
-            elif np.array_equal(pinbool, [1,0,0]):
-                if stepsize > optimalstepsize:
-                    stepsize = stepsize/2
-                    penalties[1] = penalties[0]
-                    x,y,z = reference+np.array([0,0,stepsize])
-                    micromanipulator.moveAbs(x,y,z)
-                    I = camera.snap()
-                    IW = I * W
-                    penalties[2] = ia.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
-                    penaltyhistory = np.append(penaltyhistory, penalties[2])
-                    x,y,z = reference-np.array([0,0,stepsize])
-                    micromanipulator.moveAbs(x,y,z)
-                    I = camera.snap()
-                    IW = I * W
-                    penalties[0] = ia.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
-                    penaltyhistory = np.append(penaltyhistory, penalties[0])
-                    reference = reference - np.array([0,0,stepsize])
-                elif stepsize < optimalstepsize:
-                    stepsize = stepsize*2
-                    penalties[1] = penalties[0]
-                    x,y,z = reference-np.array([0,0,stepsize])
-                    micromanipulator.moveAbs(x,y,z)
-                    I = camera.snap()
-                    IW = I * W
-                    penalties[0] = ia.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
-                    penaltyhistory = np.append(penaltyhistory, penalties[0])
-                    reference = reference - np.array([0,0,stepsize])
-                else:
-                    penalties = np.roll(penalties,1)
-                    x,y,z = reference-np.array([0,0,stepsize])
-                    micromanipulator.moveAbs(x,y,z)
-                    I = camera.snap()
-                    IW = I * W
-                    penalties[0] = ia.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
-                    penaltyhistory = np.append(penaltyhistory, penalties[0])
-                    reference = reference - np.array([0,0,stepsize])
-            elif np.array_equal(pinbool, [0,0,1]):
-                if stepsize > optimalstepsize:
-                    stepsize = stepsize/2
-                    penalties[1] = penalties[2]
-                    x,y,z = reference+3*np.array([0,0,stepsize])
-                    micromanipulator.moveAbs(x,y,z)
-                    I = camera.snap()
-                    IW = I * W
-                    penalties[0] = ia.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
-                    penaltyhistory = np.append(penaltyhistory, penalties[0])
-                    x,y,z = reference+5*np.array([0,0,stepsize])
-                    micromanipulator.moveAbs(x,y,z)
-                    I = camera.snap()
-                    IW = I * W
-                    penalties[2] = ia.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
-                    penaltyhistory = np.append(penaltyhistory, penalties[2])
-                    reference = reference + 3*np.array([0,0,stepsize])
-                elif stepsize < optimalstepsize:
-                    stepsize = stepsize*2
-                    penalties[1] = penalties[2]
-                    x,y,z = reference+2*np.array([0,0,stepsize])
-                    micromanipulator.moveAbs(x,y,z)
-                    I = camera.snap()
-                    IW = I * W
-                    penalties[2] = ia.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
-                    penaltyhistory = np.append(penaltyhistory, penalties[2])
-                    reference = reference
-                else:
-                    penalties = np.roll(penalties,-1)
-                    x,y,z = reference+3*np.array([0,0,stepsize])
-                    micromanipulator.moveAbs(x,y,z)
-                    I = camera.snap()
-                    IW = I * W
-                    penalties[2] = ia.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
-                    penaltyhistory = np.append(penaltyhistory, penalties[2])
-                    reference = reference + np.array([0,0,stepsize])
-            elif np.array_equal(pinbool, [1,1,0]):
-                if stepsize == stepsizemin:
-                    penalties = np.roll(penalties,1)
-                    x,y,z = reference-np.array([0,0,stepsize])
-                    micromanipulator.moveAbs(x,y,z)
-                    I = camera.snap()
-                    IW = I * W
-                    penalties[0] = ia.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
-                    penaltyhistory = np.append(penaltyhistory, penalties[0])
-                    reference = reference - np.array([0,0,stepsize])
-                else:
-                    stepsize = stepsize/2
-                    penalties[1] = penalties[0]
-                    x,y,z = reference+np.array([0,0,stepsize])
-                    micromanipulator.moveAbs(x,y,z)
-                    I = camera.snap()
-                    IW = I * W
-                    penalties[2] = ia.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
-                    penaltyhistory = np.append(penaltyhistory, penalties[2])
-                    x,y,z = reference-np.array([0,0,stepsize])
-                    micromanipulator.moveAbs(x,y,z)
-                    I = camera.snap()
-                    IW = I * W
-                    penalties[0] = ia.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
-                    penaltyhistory = np.append(penaltyhistory, penalties[0])
-                    reference = reference - np.array([0,0,stepsize])
-            elif np.array_equal(pinbool, [0,1,1]):
-                if stepsize == stepsizemin:
-                    penalties = np.roll(penalties,-1)
-                    x,y,z = reference+3*np.array([0,0,stepsize])
-                    micromanipulator.moveAbs(x,y,z)
-                    I = camera.snap()
-                    IW = I * W
-                    penalties[2] = ia.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
-                    penaltyhistory = np.append(penaltyhistory, penalties[2])
-                    reference = reference + np.array([0,0,stepsize])
-                else:
-                    stepsize = stepsize/2
-                    penalties[1] = penalties[2]
-                    x,y,z = reference+3*np.array([0,0,stepsize])
-                    micromanipulator.moveAbs(x,y,z)
-                    I = camera.snap()
-                    IW = I * W
-                    penalties[0] = ia.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
-                    penaltyhistory = np.append(penaltyhistory, penalties[0])
-                    x,y,z = reference+5*np.array([0,0,stepsize])
-                    micromanipulator.moveAbs(x,y,z)
-                    I = camera.snap()
-                    IW = I * W
-                    penalties[2] = ia.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
-                    penaltyhistory = np.append(penaltyhistory, penalties[2])
-                    reference = reference + 3*np.array([0,0,stepsize])
-            elif np.array_equal(pinbool, [1,1,1]):
-                if stepsize == stepsizemax:
-                    penalties = np.roll(penalties,1)
-                    x,y,z = reference-np.array([0,0,stepsize])
-                    micromanipulator.moveAbs(x,y,z)
-                    I = camera.snap()
-                    IW = I * W
-                    penalties[0] = ia.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
-                    penaltyhistory = np.append(penaltyhistory, penalties[0])
-                    reference = reference - np.array([0,0,stepsize])
-                else:
-                    stepsize = 2*stepsize
-                    x,y,z = reference-np.array([0,0,stepsize])
-                    micromanipulator.moveAbs(x,y,z)
-                    I = camera.snap()
-                    IW = I * W
-                    penalties[1] = penalties[0]
-                    penalties[0] = ia.comp_variance_of_Laplacian(IW)
-                    positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
-                    penaltyhistory = np.append(penaltyhistory, penalties[0])
-                    reference = reference - np.array([0,0,stepsize])
-            
-            # in case we are stuck around the peak for too long
-            peak_idx = np.argmax(penaltyhistory)
-            if np.sum(positionhistory <= positionhistory[peak_idx]) > 6:
-                pinbool = np.array([0,1,0])
-                reference[2] = positionhistory[peak_idx] - optimalstepsize
-                
-        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))               #FLAG: relevant for MSc thesis
-        np.save(save_directory+'autofocus_positionhistory_'+timestamp, positions)   #FLAG: relevant for MSc thesis
-        np.save(save_directory+'autofocus_penaltyhistory_'+timestamp, penalties)    #FLAG: relevant for MSc thesis
+            pen[i] = ia.comp_variance_of_Laplacian(I)
+            pos[i] = reference[2] + (i+1)*stepsize
+        penaltyhistory = np.append(penaltyhistory, pen)
+        positionhistory = np.append(positionhistory, pos)
         
-        """Final approach by sampling between the zeros in [0,1,0]"""
+        
+        going_up = True
+        going_down = not going_up
+        lookingforpeak = True
+        while lookingforpeak:
+            
+            # emit graph
+            self.sharpnessfunction.emit(np.vstack([positionhistory,penaltyhistory]))
+            
+            #II) check which side of the sharpness graph to extend
+            move = None
+            if going_up:
+                pen = penaltyhistory[-3::]
+            else:
+                pen = penaltyhistory[0:3]
+            
+            #III) check where maximum penalty score is: left, middle, right
+            if np.argmax(pen) == 0:
+                maximum = 'left'
+            elif np.argmax(pen) == 1:
+                maximum = 'middle'
+            elif np.argmax(pen) == 2:
+                maximum = 'right'
+            
+            #IVa) possible actions to undertake while going up
+            if maximum == 'right' and going_up:
+                move = 'step up'
+            elif maximum == 'left' and going_up:
+                going_up = False
+                going_down = True
+            elif maximum == 'middle' and going_up:
+                if pen[1] == np.max(penaltyhistory):
+                    pos = positionhistory[-1]
+                    micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
+                    penaltytail = pen[1::]
+                    for i in range(2, 8):
+                        micromanipulator.moveRel(dz=+stepsize)
+                        I = camera.snap()
+                        penalty = ia.comp_variance_of_Laplacian(I)
+                        penaltytail = np.append(penaltytail, penalty)
+                    monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
+                    if monotonicity_condition:
+                        logging.info("Detected maximum is a sharpness peak!")
+                        lookingforpeak = False
+                        move = None
+                        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
+                    else:
+                        logging.info("Detected maximum is noise")
+                        going_up = False
+                        going_down = True
+                else:
+                    going_up = False
+                    going_down = True
+            
+            #IVb) possible actions to undertake while going down
+            elif maximum == 'left' and going_down:
+                move = 'step down'
+            elif maximum == 'right' and going_down:
+                if pen[2] == np.max(penaltyhistory):
+                    pos = positionhistory[2]
+                    micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
+                    penaltytail = pen[2]
+                    for i in range(2, 8):
+                        micromanipulator.moveRel(dz=+stepsize)
+                        I = camera.snap()
+                        penalty = ia.comp_variance_of_Laplacian(I)
+                        penaltytail = np.append(penaltytail, penalty)
+                    monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
+                    if monotonicity_condition:
+                        logging.info("Detected maximum is a sharpness peak!")
+                        lookingforpeak = False
+                        move = None
+                        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
+                    else:
+                        logging.info("Detected maximum is noise")
+                        move = 'step down'
+                else:
+                    move = 'step down'
+            elif maximum == 'middle' and going_down:
+                penaltytail = penaltyhistory[1::]
+                taillength = len(penaltytail)
+                pos = positionhistory[-1]
+                if taillength < 8:
+                    micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
+                    for i in range(taillength, 8):
+                        micromanipulator.moveRel(dz=+stepsize)
+                        I = camera.snap()
+                        penalty = ia.comp_variance_of_Laplacian(I)
+                        penaltytail = np.append(penaltytail, penalty)
+                else:
+                    penaltytail = penaltytail[0:8]
+                monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
+                if monotonicity_condition:
+                    logging.info("Detected maximum is a sharpness peak!")
+                    lookingforpeak = False
+                    move = None
+                    micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
+                else:
+                    logging.info("Detected maximum is noise")
+                    move = 'step down'
+        
+            #V) extend the sharpness function on either side
+            if move == 'step up':
+                pos = positionhistory[-1] + stepsize
+                micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
+                I = camera.snap()
+                pen = ia.comp_variance_of_Laplacian(I)
+                penaltyhistory = np.append(penaltyhistory, pen)
+                positionhistory = np.append(positionhistory, pos)
+            elif move == 'step down':
+                pos = positionhistory[0] - stepsize
+                micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
+                I = camera.snap()
+                pen = ia.comp_variance_of_Laplacian(I)
+                penaltyhistory = np.append(pen, penaltyhistory)
+                positionhistory = np.append(pos, positionhistory)
+        
+        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                   #FLAG: relevant for MSc thesis
+        np.save(save_directory+'autofocus_positionhistory_'+timestamp, positionhistory) #FLAG: relevant for MSc thesis
+        np.save(save_directory+'autofocus_penaltyhistory_'+timestamp, penaltyhistory)   #FLAG: relevant for MSc thesis
+        
+        # # pipette tip detection algorithm to make a window around the tip
+        # x,y,z = micromanipulator.getPos()
+        # image_left = camera.snap()
+        # micromanipulator.moveRel(dx=5)
+        # image_right = camera.snap()
+        # micromanipulator.moveAbs(x,y,z)
+        # x1, y1 = ia.detectPipettetip(image_left, image_right, diameter=D, orientation=O)
+        # W = ia.makeGaussian(size=image_left.shape, mu=(x1,y1), sigma=(image_left.shape[0]//12,image_left.shape[1]//12))
+        # camera.snapsignal.emit(np.multiply(image_right,W))
+        # x, y = ia.detectPipettetip(np.multiply(image_left,W), np.multiply(image_right,W), diameter=(5/4)*D, orientation=O)
+        # W = ia.makeGaussian(size=image_left.shape, mu=(x,y), sigma=(image_left.shape[0]//12,image_left.shape[1]//12))
+        # # bias correction should be included here first!
+        
+        #VI) continue with finding the fine focus position
         logging.info('Coarse focus found, continue with finetuning')
-        stepsize = optimalstepsize
-        while stepsize > focusprecision:
-            # Sample ten points between outer penalty values
+        _,_,z = micromanipulator.getPos()
+        for step in [stepsize, stepsize/5, stepsize/25]:
+            # Sample six points between the last three penalty scores
             penalties = np.zeros(6)
-            positions = np.linspace(reference[2], reference[2]+2*stepsize, 6)
+            positions = np.linspace(z-step, z+step, 6)
             for idx, pos in enumerate(positions):
                 micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
                 I = camera.snap()
-                IW = I * W
-                penalties[idx] = ia.comp_variance_of_Laplacian(IW)
-                positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])
+                # IW = I * W
+                # penalties[idx] = ia.comp_variance_of_Laplacian(IW)
+                penalties[idx] = ia.comp_variance_of_Laplacian(I)
+                positionhistory = np.append(positionhistory, pos)
                 penaltyhistory = np.append(penaltyhistory, penalties[idx])
             
             # Locate maximum penalty value
-            i_max = penalties.argmax()
+            i_max = np.argmax(penalties)
+            z = positions[i_max]
             
-            # Decrease step size
-            stepsize = stepsize/5
-            
-            # Set reference position one step below maximum penalty position
-            reference[2] = positions[i_max] - stepsize
-            
-            logging.info('stepsize decreased to ' + str(stepsize))
-            
-        # Move micromanipulator to the position of maximal penalty
-        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positions[i_max])
-        micromanipulator.moveRel(dz=-focusbias)
+            # emit graph
+            self.sharpnessfunction.emit(np.vstack([positionhistory,penaltyhistory]))
         
-        logging.info('Moved pipette in focus!')
-        
-        I = camera.snap()                                                           #FLAG: relevant for MSc thesis
-        IW = I * W                                                                  #FLAG: relevant for MSc thesis
-        penalty = ia.comp_variance_of_Laplacian(IW)                                 #FLAG: relevant for MSc thesis
-        positionhistory = np.append(positionhistory, micromanipulator.getPos()[2])  #FLAG: relevant for MSc thesis
-        penaltyhistory = np.append(penaltyhistory, penalty)                         #FLAG: relevant for MSc thesis
-        np.save(save_directory+'autofocus_positionhistory_'+timestamp, positions)   #FLAG: relevant for MSc thesis
-        np.save(save_directory+'autofocus_penaltyhistory_'+timestamp, penalties)    #FLAG: relevant for MSc thesis
-        io.imsave(save_directory+'foundfocus_'+timestamp+'.tif', I, check_contrast=False)      #FLAG: relevant for MSc thesis
-        
+        #VII) correct for bias in focus height and move pipette into focus
+        foundfocus = z
+        pipette_in_focus = foundfocus - focusbias
+        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pipette_in_focus)
         
         self.finished.emit()
-        
         
     
     # @pyqtSlot()
@@ -592,101 +468,3 @@ class Worker(QObject):
     #                 snap = camera.snap()
     #                 io.imsave(save_directory+'X%dY%d'%(i*stepsize,j*stepsize)+k+'.tif', snap, check_contrast=False)
 
-
-# @pyqtSlot()
-# def autofocus_tip(self):
-#     # get all relevant parent attributes
-#     save_directory = self._parent.save_directory
-#     micromanipulator = self._parent.micromanipulator
-#     camera = self._parent.camerathread
-    
-#     # algorithm variables
-#     focusprecision = 0.1    # focal plane finding precision (in microns)
-#     focusbias = 20          # bias from found peak to focus (in microns)
-#     stepsize = 12           # peak recognizing step size (in microns)
-#     margin = 0.99           # threshold for max values (percentage)
-#     historylength = 1.0     # length of history (in microns)
-    
-#     reference = micromanipulator.getPos()
-    
-#     # Initialize array for storing [positions; penalties]
-#     positionhistory = np.zeros(3)
-#     penaltyhistory = np.zeros(3)
-    
-#     """"Step up three times to compute penalties [p1,p2,p3]"""
-#     for i in range(3):
-#         # Capture image
-#         I = camera.snap()
-        
-#         # Save position history and sharpness score
-#         positionhistory[i] = micromanipulator.getPos()[2]
-#         penaltyhistory[i] = ia.comp_variance_of_Laplacian(I)
-        
-#         # Move pipette up
-#         if i < 2:
-#             micromanipulator.moveRel(dz=optimalstepsize)
-#         else:
-#             micromanipulator.moveAbs(x=reference[0], y=reference[1], z=reference[2])
-    
-#     """Iteratively find peak in focus penalty values"""
-#     pinbool = np.zeros(3)
-#     while not np.array_equal(pinbool, [0,1,0]):
-#         self.sharpnessfunction.emit(np.vstack([positionhistory,penaltyhistory]))
-        
-#         # Find maximum, middle, and minimum penalty values
-#         penalties = penaltyhistory[-3::]
-#         i_min, i_mdl, i_max = np.argsort(penalties)
-#         p_min, p_mdl, p_max = np.sort(penalties)
-#         if margin*p_max > p_mdl:
-#             pinbool[i_max] = 1
-#             pinbool[i_mdl] = 0
-#             pinbool[i_min] = 0
-#         elif margin*p_max > p_min:
-#             pinbool[i_max] = 1
-#             pinbool[i_mdl] = 1
-#             pinbool[i_min] = 0
-#         else:
-#             pinbool[i_max] = 1
-#             pinbool[i_mdl] = 1
-#             pinbool[i_min] = 1
-        
-#         if np.array_equal(pinbool,[0,1,0]):
-#             # get the tail to the right of the maxima
-#             tail = np.where(positionhistory > positionhistory[-2])
-#             indices = np.argsort(positionhistory[tail])[0:8]
-#             positions = positionhistory[indices]
-#             penalties = penaltyhistory[indices]
-#             # fill up the tail to 8 values if necessary
-#             if len(tail) < 8:
-#                 micromanipulator.moveAbs(x=reference[0], y=reference[0], z=positions[-1])
-#                 for i in range(0, 8-len(tail)):
-#                     micromanipulator.moveRel(dz=optimalstepsize)
-#                     I = camera.snap()
-#                     position = micromanipulator.getPos()[2]
-#                     penalty = ia.comp_variance_of_Laplacian(I)
-#                     positions = np.append(positions, position)
-#                     penalties = np.append(penalties, penalty)
-#             # check if monotonicity condition holds for the slope.
-#             if np.any(np.diff(penalties) > 0):
-#                 pinbool = np.array([1,0,0])
-        
-#         if np.array_equal(pinbool,[1,0,0]) or np.array_equal(pinbool,[1,1,0]) or np.array_equal(pinbool,[1,1,1]) or np.array_equal(pinbool,[1,0,1]):
-#             micromanipulator.moveRel(dz=-optimalstepsize)
-#             I = camera.snap()
-#             position = micromanipulator.getPos()[2]
-#             penalty = ia.comp_variance_of_Laplacian(I)
-#             positionhistory = np.append(positionhistory, position)
-#             penaltyhistory = np.append(penaltyhistory, penalty)
-#         elif np.array_equal(pinbool,[0,0,1]) or np.array_equal(pinbool,[0,1,1]):
-#             micromanipulator.moveRel(dz=optimalstepsize)
-#             I = camera.snap()
-#             position = micromanipulator.getPos()[2]
-#             penalty = ia.comp_variance_of_Laplacian(I)
-#             positionhistory = np.append(positionhistory, position)
-#             penaltyhistory = np.append(penaltyhistory, penalty)
-        
-#         # in case we are stuck around the peak for too long
-#         peak_idx = np.argmax(penaltyhistory)
-#         if np.sum(positionhistory <= positionhistory[peak_idx]) > 6:
-#             pinbool = np.array([0,1,0])
-#             reference[2] = positionhistory[peak_idx] - stepsize
