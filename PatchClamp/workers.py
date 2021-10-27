@@ -262,6 +262,24 @@ class Worker(QObject):
     
     @pyqtSlot()
     def autofocus_tip(self):
+        """ Autofocus pipette tip iteratively moves the pipette up or down
+        untill the tip is in focus.
+        
+        The algorithm uses the variance of the Laplacian as its sharpness
+        function. The sharpness values are high for images with sharp edges and
+        low for images with little sharp edges. We use this phenomenon to find
+        the maximum of the sharpness function, the image contains sharp lines
+        when the pipette is in-focus. Note that the sharpness values go up when
+        the pipette moves through the focal plane, thereby creating more sharp
+        edges as a result of pipette geometry and light bending. However, the
+        sharpness function dips a little when the pipette tip is in focus. The
+        autofocus algorithm here is designed to stop at the local maximum
+        before the dip. Another advantage is that this dip is present at a
+        constant height above the focal plance, this allows us to move past the
+        the peak without pressing the pipette down into the sample/coverslip.
+        
+        The *focusbias* is around 10-20 micrometers!!!
+        """
         # get all relevant parent attributes
         save_directory = self._parent.save_directory
         micromanipulator = self._parent.micromanipulator
@@ -286,7 +304,6 @@ class Worker(QObject):
             pos[i] = reference[2] + (i+1)*stepsize
         penaltyhistory = np.append(penaltyhistory, pen)
         positionhistory = np.append(positionhistory, pos)
-        
         
         going_up = True
         going_down = not going_up
@@ -441,8 +458,15 @@ class Worker(QObject):
         
         self.finished.emit()
     
+    
     @pyqtSlot()
     def target2center(self):
+        """ Target to center moves the XY stage so that the user-selected
+        target ends up in the center of the camera field-of-view.
+        
+        The camera field-of-view is turned 90 degrees counter-clockwise 
+        compared to the ludl XY sample stage.
+        """
         stage = self._parent.XYstage
         pixelsize = self._parent.pixel_size
         width,height = self._parent.image_size
