@@ -270,8 +270,8 @@ class Worker(QObject):
         
         # algorithm variables
         stepsize = 10
-        focusbias = 20
-        min_taillength = 8
+        focusbias = 10
+        min_taillength = 10
         
         reference = micromanipulator.getPos()
         penaltyhistory = np.array([])
@@ -333,7 +333,7 @@ class Worker(QObject):
                         logging.info("Detected maximum is a sharpness peak!")
                         lookingforpeak = False
                         move = None
-                        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
+                        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positionhistory[-2])
                     else:
                         logging.info("Detected maximum is noise")
                         going_up = False
@@ -360,7 +360,7 @@ class Worker(QObject):
                         logging.info("Detected maximum is a sharpness peak!")
                         lookingforpeak = False
                         move = None
-                        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
+                        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positionhistory[2])
                     else:
                         logging.info("Detected maximum is noise")
                         move = 'step down'
@@ -384,7 +384,7 @@ class Worker(QObject):
                     logging.info("Detected maximum is a sharpness peak!")
                     lookingforpeak = False
                     move = None
-                    micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
+                    micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positionhistory[1])
                 else:
                     logging.info("Detected maximum is noise")
                     move = 'step down'
@@ -449,6 +449,9 @@ class Worker(QObject):
         foundfocus = z
         pipette_in_focus = foundfocus - focusbias
         micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pipette_in_focus)
+        
+        I = camera.snap()                                                                   #FLAG: relevant for MSc thesis
+        io.imsave(save_directory+'autofocus_'+timestamp+'.tif', I, check_contrast=False)    #FLAG: relevant for MSc thesis
         
         self.finished.emit()
         

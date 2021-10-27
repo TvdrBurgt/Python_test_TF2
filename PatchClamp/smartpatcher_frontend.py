@@ -127,7 +127,7 @@ class PatchClampUI(QWidget):
         algorithm = sensorWidget.addPlot(1, 0, 1, 1)
         algorithm.setTitle('sharpness score')
         algorithm.setLabel("left", units='a.u.')
-        algorithm.setLabel("bottom", text="depth (um)")
+        algorithm.setLabel("bottom", text="height (um)")
         self.algorithm = algorithm.plot(pen=(1,3))
         
         currentPlot = sensorWidget.addPlot(2, 0, 1, 1)
