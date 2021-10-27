@@ -91,7 +91,7 @@ class SmartPatcher(QObject):
                     else:
                         self.thread.started.connect(self.worker.autofocus_tip)
                 elif name == 'target2center':
-                    if self.stage == None or np.array_equal(self.target_coordinates, [None,None,None]):
+                    if self.XYstage == None or np.array_equal(self.target_coordinates, [None,None,None]):
                         raise ValueError('XY stage not connected')
                     else:
                         self.thread.started.connect(self.worker.target2center)

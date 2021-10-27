@@ -266,8 +266,6 @@ class Worker(QObject):
         save_directory = self._parent.save_directory
         micromanipulator = self._parent.micromanipulator
         camera = self._parent.camerathread
-        # D = self._parent.pipette_diameter
-        # O = self._parent.pipette_orientation
         
         # algorithm variables
         stepsize = 10
@@ -409,19 +407,6 @@ class Worker(QObject):
         timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                   #FLAG: relevant for MSc thesis
         np.save(save_directory+'autofocus_positionhistory_'+timestamp, positionhistory) #FLAG: relevant for MSc thesis
         np.save(save_directory+'autofocus_penaltyhistory_'+timestamp, penaltyhistory)   #FLAG: relevant for MSc thesis
-        
-        # # pipette tip detection algorithm to make a window around the tip
-        # x,y,z = micromanipulator.getPos()
-        # image_left = camera.snap()
-        # micromanipulator.moveRel(dx=5)
-        # image_right = camera.snap()
-        # micromanipulator.moveAbs(x,y,z)
-        # x1, y1 = ia.detectPipettetip(image_left, image_right, diameter=D, orientation=O)
-        # W = ia.makeGaussian(size=image_left.shape, mu=(x1,y1), sigma=(image_left.shape[0]//12,image_left.shape[1]//12))
-        # camera.snapsignal.emit(np.multiply(image_right,W))
-        # x, y = ia.detectPipettetip(np.multiply(image_left,W), np.multiply(image_right,W), diameter=(5/4)*D, orientation=O)
-        # W = ia.makeGaussian(size=image_left.shape, mu=(x,y), sigma=(image_left.shape[0]//12,image_left.shape[1]//12))
-        # # bias correction should be included here first!
         
         #VI) continue with finding the fine focus position
         logging.info('Coarse focus found, continue with finetuning')

@@ -165,7 +165,6 @@ class PatchClampUI(QWidget):
         request_target2center_button = QPushButton(text="Move target to center", clicked=self.request_target2center)
         request_autofocustip = QPushButton(text="Autofocus tip", clicked=self.request_autofocustip)
         request_softcalibration_button = QPushButton(text="Detect tip", clicked=self.request_softcalibration)
-        request_target2center_button = QPushButton(text="Move target to center", clicked=self.mockfunction)
         request_gigaseal_button = QPushButton(text="Gigaseal", clicked=self.mockfunction)
         request_breakin_button = QPushButton(text="Break-in", clicked=self.mockfunction)
         request_zap_button = QPushButton(text="ZAP", clicked=self.mockfunction)
