@@ -271,6 +271,7 @@ class Worker(QObject):
         # algorithm variables
         stepsize = 10
         focusbias = 20
+        min_taillength = 8
         
         reference = micromanipulator.getPos()
         penaltyhistory = np.array([])
@@ -322,7 +323,7 @@ class Worker(QObject):
                     pos = positionhistory[-1]
                     micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
                     penaltytail = pen[1::]
-                    for i in range(2, 8):
+                    for i in range(2, min_taillength):
                         micromanipulator.moveRel(dz=+stepsize)
                         I = camera.snap()
                         penalty = ia.comp_variance_of_Laplacian(I)
@@ -349,7 +350,7 @@ class Worker(QObject):
                     pos = positionhistory[2]
                     micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
                     penaltytail = pen[2]
-                    for i in range(2, 8):
+                    for i in range(2, min_taillength):
                         micromanipulator.moveRel(dz=+stepsize)
                         I = camera.snap()
                         penalty = ia.comp_variance_of_Laplacian(I)
@@ -369,15 +370,15 @@ class Worker(QObject):
                 penaltytail = penaltyhistory[1::]
                 taillength = len(penaltytail)
                 pos = positionhistory[-1]
-                if taillength < 8:
+                if taillength < min_taillength:
                     micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
-                    for i in range(taillength, 8):
+                    for i in range(taillength, min_taillength):
                         micromanipulator.moveRel(dz=+stepsize)
                         I = camera.snap()
                         penalty = ia.comp_variance_of_Laplacian(I)
                         penaltytail = np.append(penaltytail, penalty)
                 else:
-                    penaltytail = penaltytail[0:8]
+                    penaltytail = penaltytail[0:min_taillength]
                 monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
                 if monotonicity_condition:
                     logging.info("Detected maximum is a sharpness peak!")
