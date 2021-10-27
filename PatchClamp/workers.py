@@ -253,7 +253,7 @@ class Worker(QObject):
         io.imsave(save_directory+'softcalibration'+'.tif', I, check_contrast=False)    #FLAG: relevant for MSc thesis
         
         # set micromanipulator and camera coordinate pair of pipette tip
-        self._parent.pipette_coordinates_pair = np.vstack([reference, np.array([tipcoord[0], tipcoord[1], np.nan])])
+        self._parent.pipette_coordinates_pair = np.vstack([reference, np.array([tipcoord[0], tipcoord[1], None])])
         
         self.finished.emit()
         
@@ -541,7 +541,35 @@ class Worker(QObject):
         
         self.finished.emit()
         
+    
+    @pyqtSlot()
+    def target2center(self):
+        stage = self._parent.XYstage
+        pixelsize = self._parent.pixel_size
+        width,height = self._parent.image_size
+        xtarget,ytarget,_ = self._parent.target_coordinates
         
+        # Calculate image center pixels
+        xcenter,ycenter = int(width/2),int(height/2)
+        
+        # Caculate path to travel from target to center
+        dx_pi = (xtarget - xcenter)    #in pixels
+        dy_pi = (ytarget - ycenter)    #in pixels
+        
+        # Convert pixels to ludl indices (1577 ludl index = 340 um)
+        dx = int(dx_pi * pixelsize/1000 * 1577/340)
+        dy = int(dy_pi * pixelsize/1000 * 1577/340)
+        
+        # Move XY stage a distance (-dx,-dy)
+        stage.moveRel(xRel=-dx, yRel=-dy)
+        
+        # Update target coordinates in the backend
+        self.parent.target_coordinates = np.array([xcenter,ycenter,None])
+        self.draw.emit(['target', dx_pi, dy_pi])
+        
+        self.finished.emit()
+        
+    
     
     # @pyqtSlot()
     # def request_imagexygrid(self):
