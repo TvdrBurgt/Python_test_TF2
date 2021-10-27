@@ -566,7 +566,7 @@ class Worker(QObject):
         stage.moveRel(xRel=dy, yRel=-dx)
         while ismoving:
             ismoving = not stage.motorsStopped()
-            time.sleep(0.2)
+            time.sleep(0.1)
         
         # Update target coordinates in the backend
         self.parent.target_coordinates = np.array([xcenter,ycenter,None])
