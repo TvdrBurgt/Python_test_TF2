@@ -19,6 +19,7 @@ class SmartPatcher(QObject):
     def __init__(self):
         # Default hardware constants
         self._pixel_size = 244.8                    # in nanometers
+        self._image_size = [2048, 2048]             # dimension of FOV in pix
         self._pipette_orientation = 0               # in radians
         self._pipette_diameter = 16                 # in pixels (16=patchclamp, ??=cell-picking)
         self._rotation_angles = [0,0,0]             # (alp,bet,gam) in degree
@@ -45,6 +46,7 @@ class SmartPatcher(QObject):
         self._pressurethread = None
         self._micromanipulator = None
         self._objectivemotor = None
+        self._XYstage = None
         
         # Worker thread
         self.worker = Worker(self)
@@ -88,6 +90,11 @@ class SmartPatcher(QObject):
                         raise ValueError('Camera and/or micromanipulator not connected')
                     else:
                         self.thread.started.connect(self.worker.autofocus_tip)
+                elif name == 'target2center':
+                    if self.stage == None or np.array_equal(self.target_coordinates, [None,None,None]):
+                        raise ValueError('XY stage not connected')
+                    else:
+                        self.thread.started.connect(self.worker.target2center)
                 elif name == 'mockworker':
                     self.thread.started.connect(self.worker.mockworker)
                 
@@ -125,6 +132,7 @@ class SmartPatcher(QObject):
         with open("autopatch_configuration.txt", "r") as json_infile:
             data = json.load(json_infile)
         self.pixel_size = data["pixel_size"]
+        self.image_size = data["image_size"]
         self.pipette_orientation = data["pipette_orientation"]
         self.pipette_diameter = data["pipette_diameter"]
         self.rotation_angles = data["rotation_angles"]
@@ -132,6 +140,7 @@ class SmartPatcher(QObject):
     def write_constants_to_JSON(self):
         data = {
             "pixel_size": self.pixel_size,
+            "image_size": self.image_size,
             "pipette_orientation": self.pipette_orientation,
             "pipette_diameter": self.pipette_diameter,
             "rotation_angles": self.rotation_angles
@@ -256,6 +265,21 @@ class SmartPatcher(QObject):
     
     
     @property
+    def XYstage(self):
+        logging.info('XYstage get')
+        return self._XYstage
+    
+    @XYstage.setter
+    def XYstage(self, stage_handle):
+        logging.info('XYstage set')
+        self._XYstage = stage_handle
+    
+    @XYstage.deleter
+    def XYstage(self):
+        self._XYstage = None
+    
+    
+    @property
     def pixel_size(self):
         return self._pixel_size
     
@@ -270,6 +294,24 @@ class SmartPatcher(QObject):
     @pixel_size.deleter
     def pixel_size(self):
         self._pixel_size = None
+    
+    
+    @property
+    def image_size(self):
+        return self._image_size
+    
+    @image_size.setter
+    def image_size(self, size):
+        width,height = size
+        if type(width) and type(height) == float or int:
+            logging.info('Set image size to: '+str(width)+'x'+str(height)+' pixels')
+            self._image_size = [width, height]
+        else:
+            raise ValueError('Image size should have width and height of type float or integer')
+    
+    @image_size.deleter
+    def image_size(self):
+        self._image_size = [None, None]
     
     
     @property
@@ -391,7 +433,7 @@ class SmartPatcher(QObject):
     
     @pipette_coordinates_pair.deleter
     def pipette_coordinates_pair(self):
-        self._pipette_coordinates_pair = np.array([None, None])
+        self._pipette_coordinates_pair = np.array([[None,None,None], [None,None,None]])
     
     
     @property
@@ -411,7 +453,7 @@ class SmartPatcher(QObject):
     
     @target_coordinates.deleter
     def target_coordinates(self):
-        self._pipette_coordinates = np.array([None, None])
+        self._pipette_coordinates = np.array([None, None, None])
     
     
     @property

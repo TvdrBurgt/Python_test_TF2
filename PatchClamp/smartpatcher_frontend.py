@@ -23,7 +23,8 @@ from PatchClamp.smartpatcher_backend import SmartPatcher
 from PatchClamp.camerathread import CameraThread
 from PatchClamp.sealtestthread import SealTestThread
 from PatchClamp.micromanipulator import ScientificaPatchStar
-    
+from PatchClamp.stage import LudlStage
+
 
 
 class PatchClampUI(QWidget):
@@ -57,6 +58,10 @@ class PatchClampUI(QWidget):
         self.connect_micromanipulator_button = QPushButton(text="Micromanipulator", clicked=self.connect_micromanipulator)
         self.connect_micromanipulator_button.setCheckable(True)
         
+        # Button to (dis)connect XYstage
+        self.connect_XYstage_button = QPushButton(text="XY stage", clicked=self.connect_XYstage)
+        self.connect_XYstage_button.setCheckable(True)
+        
         # Button to (dis)connect NIDAQ for sealtest
         self.connect_sealtestthread_button = QPushButton(text="NIDAQ/Sealtest", clicked=self.connect_sealtestthread)
         self.connect_sealtestthread_button.setCheckable(True)
@@ -72,9 +77,10 @@ class PatchClampUI(QWidget):
         hardwareLayout.addWidget(self.connect_camerathread_button, 0, 0, 1, 1)
         hardwareLayout.addWidget(self.connect_objectivemotor_button, 1, 0, 1, 1)
         hardwareLayout.addWidget(self.connect_micromanipulator_button, 2, 0, 1, 1)
-        hardwareLayout.addWidget(self.connect_sealtestthread_button, 3, 0, 1, 1)
-        hardwareLayout.addWidget(self.connect_pressurecontroller_button, 4, 0, 1, 1)
-        hardwareLayout.addWidget(self.STOP_button, 5, 0, 1, 1)
+        hardwareLayout.addWidget(self.connect_XYstage_button, 3, 0, 1, 1)
+        hardwareLayout.addWidget(self.connect_sealtestthread_button, 4, 0, 1, 1)
+        hardwareLayout.addWidget(self.connect_pressurecontroller_button, 5, 0, 1, 1)
+        hardwareLayout.addWidget(self.STOP_button, 6, 0, 1, 1)
         hardwareContainer.setLayout(hardwareLayout)
         
         """
@@ -155,6 +161,8 @@ class PatchClampUI(QWidget):
         request_hardcalibrationxyz_button = QPushButton(text="Calibrate pixelsize", clicked=self.request_hardcalibration_pixelsize)
         request_selecttarget_button = QPushButton(text="Select target", clicked=self.request_selecttarget)
         request_confirmtarget_button = QPushButton(text="Confirm target", clicked=self.request_confirmtarget)
+        request_softcalibration_button = QPushButton(text="Detect tip", clicked=self.request_softcalibration)
+        request_target2center_button = QPushButton(text="Move target to center", clicked=self.request_target2center)
         request_autofocustip = QPushButton(text="Autofocus tip", clicked=self.request_autofocustip)
         request_softcalibration_button = QPushButton(text="Detect tip", clicked=self.request_softcalibration)
         request_target2center_button = QPushButton(text="Move target to center", clicked=self.mockfunction)
@@ -180,9 +188,9 @@ class PatchClampUI(QWidget):
         algorithmLayout.addWidget(request_hardcalibrationxyz_button, 1, 0, 1, 1)
         algorithmLayout.addWidget(request_selecttarget_button, 0, 1, 1, 1)
         algorithmLayout.addWidget(request_confirmtarget_button, 1, 1, 1, 1)
-        algorithmLayout.addWidget(request_autofocustip, 0, 2, 2, 1)
-        algorithmLayout.addWidget(request_softcalibration_button, 0, 3, 1, 1)
-        algorithmLayout.addWidget(request_target2center_button, 1, 3, 1, 1)
+        algorithmLayout.addWidget(request_target2center_button, 0, 2, 2, 1)
+        algorithmLayout.addWidget(request_autofocustip, 0, 3, 1, 1)
+        algorithmLayout.addWidget(request_softcalibration_button, 1, 3, 1, 1)
         algorithmLayout.addWidget(request_gigaseal_button, 0, 4, 2, 1)
         algorithmLayout.addWidget(request_breakin_button, 0, 5, 2, 1)
         algorithmLayout.addWidget(request_zap_button, 0, 6, 2, 1)
@@ -283,8 +291,22 @@ class PatchClampUI(QWidget):
             self.backend.micromanipulator = micromanipulator
         else:
             del self.backend.micromanipulator
-        
-        
+    
+    
+    def connect_XYstage(self):
+        """
+        We initiate the XYstage (sample stage) by creating the LudlStage object
+        Creating the object does not automatically open the USB port to which
+        the device is connected to. Deleting the object stops stage movement.
+        """
+        if self.connect_XYstage_button.isChecked():
+            ludlStage = LudlStage("COM12")
+            
+            self.backend.XYstage = ludlStage
+        else:
+            del self.backend.XYstage
+    
+    
     def connect_camerathread(self):
         """
         We initiate the camera by creating the CameraThread object, then we
@@ -357,6 +379,9 @@ class PatchClampUI(QWidget):
     def request_softcalibration(self):
         self.backend.request(name='softcalibration')
     
+    def request_target2center(self):
+        self.backend.request(name='target2center')
+    
     def request_autofocustip(self):
         self.backend.request(name='autofocustip')
     
@@ -394,7 +419,7 @@ class PatchClampUI(QWidget):
             x,y = self.liveView.addedItems[idx].state['pos'] + self.liveView.addedItems[idx].state['size'] / 2
             self.liveView.addedItems[idx].translatable = False
             self.liveView.addedItems[idx].setPen(QPen(QColor(193,245,240), 0))
-            self.backend.target_coordinates = np.array([x,y,np.nan])
+            self.backend.target_coordinates = np.array([x,y,None])
     
     
     def draw_roi(self, *args):
@@ -424,6 +449,11 @@ class PatchClampUI(QWidget):
         elif label == 'image':
             img = args[0][1]
             self.update_snap(img)
+        elif label == 'target':
+            dx,dy = args[0][1:3]
+            idx = self.roimanager.giveROIindex('target')[-1]
+            x,y = self.liveView.addedItems[idx].state['pos']
+            self.liveView.addedItems[idx].setPos([x-dx,y-dy])
         else:
             print(label + ' is not a known draw-label')
     

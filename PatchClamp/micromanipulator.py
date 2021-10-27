@@ -6,6 +6,7 @@ Created on Wed Aug 11 11:09:56 2021
 """
 
 
+import time
 import serial
 import numpy as np
 
@@ -57,6 +58,7 @@ class ScientificaPatchStar:
             response = '-1'
             while response != '0':
                 response = self.send_and_recieve('S')
+                time.sleep(0.1)
                 
             return result
             
