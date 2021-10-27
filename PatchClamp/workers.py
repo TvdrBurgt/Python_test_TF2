@@ -6,6 +6,7 @@ Created on Wed Aug 11 15:15:30 2021
 """
 
 
+import time
 import logging
 import numpy as np
 from skimage import io
@@ -560,8 +561,12 @@ class Worker(QObject):
         dx = int(dx_pi * pixelsize/1000 * 1577/340)
         dy = int(dy_pi * pixelsize/1000 * 1577/340)
         
-        # Move XY stage a distance (-dx,-dy)
-        stage.moveRel(xRel=-dx, yRel=-dy)
+        # Move XY stage a distance (-dx,-dy), note that stage axis are rotated
+        ismoving = True
+        stage.moveRel(xRel=dy, yRel=-dx)
+        while ismoving:
+            ismoving = not stage.motorsStopped()
+            time.sleep(0.2)
         
         # Update target coordinates in the backend
         self.parent.target_coordinates = np.array([xcenter,ycenter,None])
