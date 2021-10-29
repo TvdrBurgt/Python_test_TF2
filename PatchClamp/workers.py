@@ -435,8 +435,6 @@ class Worker(QObject):
             for idx, pos in enumerate(positions):
                 micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
                 I = camera.snap()
-                # IW = I * W
-                # penalties[idx] = ia.comp_variance_of_Laplacian(IW)
                 penalties[idx] = ia.comp_variance_of_Laplacian(I)
                 positionhistory = np.append(positionhistory, pos)
                 penaltyhistory = np.append(penaltyhistory, penalties[idx])
@@ -455,6 +453,8 @@ class Worker(QObject):
         
         I = camera.snap()                                                                   #FLAG: relevant for MSc thesis
         io.imsave(save_directory+'autofocus_'+timestamp+'.tif', I, check_contrast=False)    #FLAG: relevant for MSc thesis
+        np.save(save_directory+'autofocus_positionhistory_'+timestamp, positionhistory)     #FLAG: relevant for MSc thesis
+        np.save(save_directory+'autofocus_penaltyhistory_'+timestamp, penaltyhistory)       #FLAG: relevant for MSc thesis
         
         self.finished.emit()
     
