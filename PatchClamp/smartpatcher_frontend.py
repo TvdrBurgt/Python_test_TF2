@@ -22,6 +22,7 @@ from PatchClamp.manualpatcher_frontend import PatchclampSealTestUI
 from PatchClamp.smartpatcher_backend import SmartPatcher
 from PatchClamp.camerathread import CameraThread
 from PatchClamp.sealtestthread import SealTestThread
+from PatchClamp.pressurethread import PressureThread
 from PatchClamp.micromanipulator import ScientificaPatchStar
 from PatchClamp.stage import LudlStage
 
@@ -67,7 +68,7 @@ class PatchClampUI(QWidget):
         self.connect_sealtestthread_button.setCheckable(True)
         
         # Button to (dis)connect pressure controller
-        self.connect_pressurecontroller_button = QPushButton(text="Pressure controller", clicked=self.mockfunction)
+        self.connect_pressurecontroller_button = QPushButton(text="Pressure controller", clicked=self.connect_pressurethread)
         self.connect_pressurecontroller_button.setCheckable(True)
         
         # Button to stop all hardware in motion
@@ -175,13 +176,13 @@ class PatchClampUI(QWidget):
         self.set_pressure_button.setMaximum(200)
         self.set_pressure_button.setDecimals(0)
         self.set_pressure_button.setValue(0)
-        self.set_pressure_button.setSingleStep(1)
+        self.set_pressure_button.setSingleStep(10)
         
         # Button to release pressure instantaneous
-        request_releasepressure_button = QPushButton(text="Release pressure", clicked=self.mockfunction)
+        request_releasepressure_button = QPushButton(text="Release pressure", clicked=self.request_release_pressure)
         
         # Button to send pressure to pressure controller
-        request_applypressure_button = QPushButton(text="Apply pressure", clicked=self.mockfunction)
+        request_applypressure_button = QPushButton(text="Apply pressure", clicked=self.request_apply_pressure)
         
         algorithmLayout.addWidget(request_hardcalibrationxy_button, 0, 0, 1, 1)
         algorithmLayout.addWidget(request_hardcalibrationxyz_button, 1, 0, 1, 1)
@@ -348,6 +349,26 @@ class PatchClampUI(QWidget):
         else:
             del self.backend.sealtestthread
             del self.signal_sealtest
+    
+    
+    def connect_pressurethread(self):
+        """
+        We initiate the pressure thread by creating the PressureThread object,
+        then we connect the measurement signal to update the pressure evolution
+        graph. Afterwards we move the sealtest thread to the backend
+        where the thread is immediately started.
+        """
+        logging.info('connect pressurethread button pushed')
+        if self.connect_pressurecontroller_button.isChecked():
+            pressurethread = PressureThread()
+            
+            self.signal_pressure = pressurethread.measurement
+            self.signal_pressure.connect(self.update_pressure)
+            
+            self.backend.pressurethread = pressurethread
+        else:
+            del self.backend.pressurethread
+            del self.signal_pressure
         
         
     def toggle_pauselive(self):
@@ -367,7 +388,15 @@ class PatchClampUI(QWidget):
             I = plt.imread("testimage.tif")
             self.update_snap(I)
             raise ValueError('no camera connected')
-        
+    
+    
+    def request_release_pressure(self):
+        self.backend.pressurethread.set_pressure(0)
+    
+    def request_apply_pressure(self):
+        target_pressure = self.set_pressure_button.value()
+        self.backend.pressurethread.set_pressure(target_pressure)
+    
     
     def request_hardcalibration_xy(self):
         self.backend.request(name='hardcalibration', mode='XY')
@@ -484,6 +513,11 @@ class PatchClampUI(QWidget):
         
         """ to calculate capacitance and resistance """
         # self.updateLabels(curOut, voltOut)
+    
+    def update_pressure(self, data):
+        # pressure_in = data[0]
+        pressure_out = self.backend._pressure_append_(data[1])
+        self.pressurePlot.setData(pressure_out)
     
     
     def STOP(self):

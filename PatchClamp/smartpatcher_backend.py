@@ -174,18 +174,18 @@ class SmartPatcher(QObject):
         
         return self.voltage
     
-    # def _pressure_append_(self, values):
-    #     """Append new values to a sliding window."""
-    #     length = len(values)
-    #     if self.n_p + length > self.window_size:
-    #         # Buffer is full so make room.
-    #         copySize = self.window_size - length
-    #         self.pressure = self.pressure[-copySize:]
-    #         self.n_p = copySize
-    #     self.pressure = np.append(self.pressure, values)
-    #     self.n_p += length
+    def _pressure_append_(self, values):
+        """Append new values to a sliding window."""
+        length = 1
+        if self.n_p + length > self.window_size:
+            # Buffer is full so make room.
+            copySize = self.window_size - length
+            self.pressure = self.pressure[-copySize:]
+            self.n_p = copySize
+        self.pressure = np.append(self.pressure, values)
+        self.n_p += length
         
-    #     return self.pressure
+        return self.pressure
     
     
     @property
@@ -228,9 +228,11 @@ class SmartPatcher(QObject):
     @pressurethread.setter
     def pressurethread(self, pressurecontroller):
         self._pressurethread = pressurecontroller
+        self._pressurethread.start()
     
     @pressurethread.deleter
     def pressurethread(self):
+        self._pressurethread.stop()
         self._pressurethread = None
         
         
