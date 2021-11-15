@@ -146,7 +146,8 @@ class PatchClampUI(QWidget):
         pressurePlot = sensorWidget.addPlot(3, 0, 1, 1)
         pressurePlot.setTitle("Pressure")
         pressurePlot.setLabel("left", units="mBar")
-        pressurePlot.setLabel("bottom", text="20 ms")
+        pressurePlot.setLabel("bottom", text="time")
+        pressurePlot.setRange(yRange=[-250,250])
         self.pressurePlot = pressurePlot.plot(pen=(3,3))
         
         sensorLayout.addWidget(sensorWidget)

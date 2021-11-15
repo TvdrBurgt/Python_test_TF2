@@ -95,7 +95,7 @@ class PressureThread(QThread):
         
         self.isrunning = True
         while self.isrunning:
-            output = self.pressure_offset + np.random.rand(2)
+            output = self.pressure_offset + np.random.rand(2)*10-5
             self.measurement.emit(np.array([output[0], output[1]]))
             QThread.msleep(50)
         
