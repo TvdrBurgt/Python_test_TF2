@@ -24,14 +24,14 @@ from PyQt5.QtCore import pyqtSignal, pyqtSlot, QThread
 #         self.baudrate = baud    # Baudrate of the micromanipulator
 #         self.ENDOFLINE = '\n'   # Carriage return
         
-#         # Serial attributes
-#         serial.Serial(port=self.address, baudrate=self.baud, timeout=1)
-        
 #         # QThread attributes
 #         super().__init__()
 #         self.isrunning = False
 #         self.moveToThread(self)
-#         # self.started.connect(self.measure)
+#         self.started.connect(self.measure)
+        
+#         # Serial attributes
+#         self.controller = serial.Serial(port=self.port, baudrate=self.baudrate, timeout=1)
     
 #     def stop(self):
 #         self.isrunning = False
@@ -42,7 +42,7 @@ from PyQt5.QtCore import pyqtSignal, pyqtSlot, QThread
 #         command = "P %d" % pressure + self.ENDOFLINE
         
 #         # Encode the command to ascii and send to the device
-#         self.write(command.encode('ascii'))
+#         self.controller.write(command.encode('ascii'))
         
 #     @pyqtSlot()
 #     def measure(self):
@@ -50,14 +50,17 @@ from PyQt5.QtCore import pyqtSignal, pyqtSlot, QThread
         
 #         self.isrunning = True
 #         while self.isrunning:
-#             response = self.read_until(self.ENDOFLINE.encode('ascii'))
+#             response = self.controller.read_until(self.ENDOFLINE.encode('ascii'))
 #             response = response.decode('utf-8')
 #             response = response.split()
-#             if response[0] == "PS":
-#                 PS1 = float(response[1])
-#                 PS2 = float(response[2])
-#                 self.measurement.emit(np.array([PS1, PS2]))
+#             if len(response) > 0:
+#                 if response[0] == "PS":
+#                     PS1 = float(response[1])
+#                     PS2 = float(response[2])
+#                     self.measurement.emit(np.array([PS1, PS2]))
+#         QThread.msleep(25)
 #         self.set_pressure(0)
+#         self.close()
             
 #         logging.info('pressure thread stopped')
 
