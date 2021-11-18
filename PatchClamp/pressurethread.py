@@ -10,7 +10,7 @@ import time
 import serial
 import logging
 import numpy as np
-from PyQt5.QtCore import pyqtSignal, pyqtSlot, QThread, QMutex
+from PyQt5.QtCore import pyqtSignal, pyqtSlot, QThread
 
 
 class PressureThread(QThread):
@@ -20,8 +20,6 @@ class PressureThread(QThread):
     measurement = pyqtSignal(np.ndarray)
     
     def __init__(self, address='COM4', baud=9600):
-        self.mutex = QMutex()
-        
         # QThread attributes
         super().__init__()
         self.isrunning = False
