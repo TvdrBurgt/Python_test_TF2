@@ -23,7 +23,7 @@ class SmartPatcher(QObject):
         self._pipette_orientation = 0               # in radians
         self._pipette_diameter = 16                 # in pixels (16=patchclamp, ??=cell-picking)
         self._rotation_angles = [0,0,0]             # (alp,bet,gam) in degree
-        self.update_constants_from_JSON()           # rewrites above constants
+        self.update_constants_from_JSON()           # rewrites above default constants
         
         # Algorithm constants
         self.save_directory = os.getcwd()+'\\feedback\\'
@@ -37,7 +37,7 @@ class SmartPatcher(QObject):
         self.n_c = 0
         self.voltage = np.array([])
         self.n_v = 0
-        self.window_size_p = 1000
+        self.window_size_p = 200
         self.pressure = np.array([])
         self.n_p = 0
         
@@ -127,7 +127,20 @@ class SmartPatcher(QObject):
             raise ValueError('origin and target should be numpy.ndarray')
         
         return self.R @ np.subtract(target,origin) + origin
-    
+
+    # def update_constants_from_JSON(self):
+    #     # read json file with autopatcher constants and update them in backend
+    #     try:
+    #         with open("autopatch_configuration.txt", "r") as json_infile:
+    #             data = json.load(json_infile)
+    #         self.pixel_size = data["pixel_size"]
+    #         self.image_size = data["image_size"]
+    #         self.pipette_orientation = data["pipette_orientation"]
+    #         self.pipette_diameter = data["pipette_diameter"]
+    #         self.rotation_angles = data["rotation_angles"]
+    #     except:
+    #         self.write_constants_to_JSON()
+
     def update_constants_from_JSON(self):
         # read json file with autopatcher constants and update them in backend
         with open("autopatch_configuration.txt", "r") as json_infile:

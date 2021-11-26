@@ -146,7 +146,7 @@ class PatchClampUI(QWidget):
         pressurePlot = sensorWidget.addPlot(3, 0, 1, 1)
         pressurePlot.setTitle("Pressure")
         pressurePlot.setLabel("left", units="mBar")
-        pressurePlot.setLabel("bottom", text="time")
+        pressurePlot.setLabel("bottom", units='a.u.', text="time")
         pressurePlot.setRange(yRange=[-250,250])
         self.pressurePlot = pressurePlot.plot(pen=(3,3))
         
@@ -180,7 +180,8 @@ class PatchClampUI(QWidget):
         self.set_pressure_button.setSingleStep(10)
         
         # Button to release pressure instantaneous
-        request_releasepressure_button = QPushButton(text="Release pressure", clicked=self.request_release_pressure)
+        self.request_releasepressure_button = QPushButton(text="Release pressure", clicked=self.request_release_pressure)
+        self.request_releasepressure_button.setCheckable(True)
         
         # Button to send pressure to pressure controller
         request_applypressure_button = QPushButton(text="Apply pressure", clicked=self.request_apply_pressure)
@@ -197,7 +198,7 @@ class PatchClampUI(QWidget):
         algorithmLayout.addWidget(request_zap_button, 0, 6, 2, 1)
         algorithmLayout.addWidget(QLabel("Pressure (in mBar):"), 0, 7, 1, 1)
         algorithmLayout.addWidget(self.set_pressure_button, 0, 8, 1, 1)
-        algorithmLayout.addWidget(request_releasepressure_button, 1, 7, 1, 1)
+        algorithmLayout.addWidget(self.request_releasepressure_button, 1, 7, 1, 1)
         algorithmLayout.addWidget(request_applypressure_button, 1, 8, 1, 1)
         algorithmContainer.setLayout(algorithmLayout)
         
@@ -392,7 +393,7 @@ class PatchClampUI(QWidget):
     
     
     def request_release_pressure(self):
-        self.backend.pressurethread.set_pressure(0)
+        self.backend.pressurethread.release_pressure()
     
     def request_apply_pressure(self):
         target_pressure = self.set_pressure_button.value()
@@ -553,6 +554,10 @@ class PatchClampUI(QWidget):
             pass
         try:
             del self.backend.sealtestthread
+        except:
+            pass
+        try:
+            del self.backend.pressurethread
         except:
             pass
         

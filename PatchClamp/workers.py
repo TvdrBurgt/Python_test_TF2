@@ -495,6 +495,56 @@ class Worker(QObject):
         self.draw.emit(['target', dx_pi, dy_pi])
         
         self.finished.emit()
+    
+    
+    @pyqtSlot()
+    def formgigaseal(self):
+        """ Form Gigaseal brings the pipette to the target cell and forms a 
+        gigaseal with the membrane.
+        
+        I) Calculate trajectory and bring pipette tip above the target cell.
+        II) Pipette tip descent until resistance increases >0.3MOhm.
+        III) Release pressure, possibly apply light suction, to form Gigaseal
+        
+        """
+        micromanipulator = self._parent.micromanipulator
+        pressurecontroller = self._parent.pressurethread
+        sealtestthread = self._parent.sealtestthread
+        account4rotation = self._parent.account4rotation
+        pixelsize = self._parent.pixel_size
+        tipcoords_manip, tipcoords_cam = self._parent.pipette_coordinates_pair
+        xtarget,ytarget,_ = self._parent.target_coordinates
+        
+        #Ia) calculate shortest trajectory to target and apply coordinate transformation
+        micromanipulator.moveAbs(x=tipcoords_manip[0], y=tipcoords_manip[1], z=tipcoords_manip[2])
+        dx = xtarget - tipcoords_cam[0]                     #x trajectory (in pixels)
+        dy = ytarget - tipcoords_cam[1]                     #y trajectory (in pixels)
+        trajectory = np.array([dx,dy,0])*pixelsize/1000     #trajectory (in microns)
+        trajectory = account4rotation(origin=tipcoords_manip, target=tipcoords_manip+trajectory)
+        
+        #Ib) move the micromanipulator to the target
+        micromanipulator.moveRel(dx=trajectory[0], dy=trajectory[1], dz=trajectory[2])
+        
+        
+        
+        #II) descent pipette with velocity=... and measure resistance every ...msec
+        
+        
+        
+        
+        #III) set pressure to ATM and monitor resistance
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        self.finished.emit()
         
     
     
