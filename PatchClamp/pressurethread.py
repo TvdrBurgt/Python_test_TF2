@@ -218,7 +218,35 @@ class PressureThread(QThread):
 #                 self.set_pressure(new_pressure)
 #                 old_pressure = new_pressure
             
-#             # Not really necessary but better to safe computation power
-#             QThread.msleep(10)
+#             # Enter the record function
+#             if not self.isrecording:
+#                 QThread.msleep(10)
+#             else:
+#                 self.record()
         
 #         logging.info('pressure thread stopped')
+
+#     def record(self):
+#         logging.info("pressure recording started")
+        
+#         PS1 = []
+#         PS2 = []
+#         timing = []
+#         start = time.time()
+#         while self.isrecording:
+#             output = self.pressure_offset + np.random.rand(2)*10-5
+            
+#             PS1.append(output[0])
+#             PS2.append(output[1])
+#             timing.append(T)
+#             self.measurement.emit(np.array([PS1[-1], PS2[-1]]))
+            
+#             # Determines the sampling rate
+#             QThread.msleep(5)
+        
+#         # Save measurements and close the serial port
+#         np.save(save_directory+'pressure_recording_sensor1', PS1)
+#         np.save(save_directory+'pressure_recording_sensor2', PS2)
+#         np.save(save_directory+'pressure_recording_timing', timing)
+            
+#         logging.info('pressure recording stopped')
