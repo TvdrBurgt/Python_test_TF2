@@ -17,8 +17,10 @@ import pyqtgraph.exporters
 import pyqtgraph as pg
 
 sys.path.append('../')
+from NIDAQ.constants import MeasurementConstants
 from PatchClamp.manualpatcher_frontend import PatchclampSealTestUI
 # from PatchClamp.manualpatcher_backend import PatchclampSealTest
+
 from PatchClamp.smartpatcher_backend import SmartPatcher
 from PatchClamp.camerathread import CameraThread
 from PatchClamp.sealtestthread import SealTestThread
@@ -152,7 +154,7 @@ class PatchClampUI(QWidget):
         sensorContainer.setLayout(sensorLayout)
         
         """
-        ---------------------- Algorithm control buttons ----------------------
+        ---------------------- Autopatch control buttons ----------------------
         """
         algorithmContainer = QGroupBox()
         algorithmLayout = QGridLayout()
@@ -165,9 +167,48 @@ class PatchClampUI(QWidget):
         request_target2center_button = QPushButton(text="Move target to center", clicked=self.request_target2center)
         request_autofocustip = QPushButton(text="Autofocus tip", clicked=self.request_autofocustip)
         request_softcalibration_button = QPushButton(text="Detect tip", clicked=self.request_softcalibration)
+        
+        algorithmLayout.addWidget(request_hardcalibrationxy_button, 0, 0, 1, 1)
+        algorithmLayout.addWidget(request_hardcalibrationxyz_button, 1, 0, 1, 1)
+        algorithmLayout.addWidget(request_selecttarget_button, 0, 1, 1, 1)
+        algorithmLayout.addWidget(request_confirmtarget_button, 1, 1, 1, 1)
+        algorithmLayout.addWidget(request_target2center_button, 0, 2, 2, 1)
+        algorithmLayout.addWidget(request_autofocustip, 0, 3, 1, 1)
+        algorithmLayout.addWidget(request_softcalibration_button, 1, 3, 1, 1)
+        algorithmContainer.setLayout(algorithmLayout)
+        
+        """
+        ----------------------- Sealtest control buttons ----------------------
+        """
+        sealtestContainer = QGroupBox()
+        sealtestLayout = QGridLayout()
+        
+        self.resistanceLabel = QLabel("Resistance: ")
+        self.capacitanceLabel = QLabel("Capacitance: ")
+        self.ratioLabel = QLabel("Ratio: ")
+        self.membraneVoltLabel = QLabel("Vm: ")
+        
         request_gigaseal_button = QPushButton(text="Gigaseal", clicked=self.mockfunction)
         request_breakin_button = QPushButton(text="Break-in", clicked=self.mockfunction)
         request_zap_button = QPushButton(text="ZAP", clicked=self.mockfunction)
+        
+        sealtestLayout.addWidget(self.resistanceLabel, 0, 0, 1, 3)
+        sealtestLayout.addWidget(self.capacitanceLabel, 0, 3, 1, 3)
+        sealtestLayout.addWidget(self.ratioLabel, 0, 6, 1, 3)
+        sealtestLayout.addWidget(self.membraneVoltLabel, 0, 9, 1, 3)
+        sealtestLayout.addWidget(request_gigaseal_button, 1, 0, 1, 4)
+        sealtestLayout.addWidget(request_breakin_button, 1, 4, 1, 4)
+        sealtestLayout.addWidget(request_zap_button, 1, 8, 1, 4)
+        sealtestContainer.setLayout(sealtestLayout)
+        
+        """
+        ----------------------- Pressure control buttons ----------------------
+        """
+        pressureContainer = QGroupBox()
+        pressureLayout = QGridLayout()
+        
+        # Live pressure value
+        self.pressureLabel = QLabel("Pressure (in mBar):")
         
         # Button to set pressure
         self.set_pressure_button = QDoubleSpinBox(self)
@@ -183,6 +224,7 @@ class PatchClampUI(QWidget):
         # Button to send pressure to pressure controller
         request_applypressure_button = QPushButton(text="Apply pressure", clicked=self.mockfunction)
         
+<<<<<<< Updated upstream
         algorithmLayout.addWidget(request_hardcalibrationxy_button, 0, 0, 1, 1)
         algorithmLayout.addWidget(request_hardcalibrationxyz_button, 1, 0, 1, 1)
         algorithmLayout.addWidget(request_selecttarget_button, 0, 1, 1, 1)
@@ -198,15 +240,25 @@ class PatchClampUI(QWidget):
         algorithmLayout.addWidget(request_releasepressure_button, 1, 7, 1, 1)
         algorithmLayout.addWidget(request_applypressure_button, 1, 8, 1, 1)
         algorithmContainer.setLayout(algorithmLayout)
+=======
+        pressureLayout.addWidget(self.pressureLabel, 0, 0, 1, 2)
+        pressureLayout.addWidget(self.set_pressure_button, 0, 2, 1, 1)
+        pressureLayout.addWidget(self.request_releasepressure_button, 1, 0, 1, 1)
+        pressureLayout.addWidget(self.request_recordpressure_button, 1, 1, 1, 1)
+        pressureLayout.addWidget(request_applypressure_button, 1, 2, 1, 1)
+        pressureContainer.setLayout(pressureLayout)
+>>>>>>> Stashed changes
         
         """
         ---------------------- Add widgets and set Layout ---------------------
         """
         master = QGridLayout()
         master.addWidget(hardwareContainer, 0, 0, 1, 1)
-        master.addWidget(liveContainer, 0, 1, 1, 1)
-        master.addWidget(sensorContainer, 0, 2, 1, 1)
-        master.addWidget(algorithmContainer, 1, 0, 1, 3)
+        master.addWidget(liveContainer, 0, 1, 1, 2)
+        master.addWidget(sensorContainer, 0, 3, 1, 1)
+        master.addWidget(algorithmContainer, 1, 0, 1, 2)
+        master.addWidget(sealtestContainer, 1, 2, 1, 1)
+        master.addWidget(pressureContainer, 1, 3, 1, 1)
         
         autopatcher = QGroupBox()
         autopatcher.setLayout(master)
@@ -274,7 +326,7 @@ class PatchClampUI(QWidget):
         if activelayer == 1:
             self.setFixedSize(400,750)
         else:
-            self.setFixedSize(1800,750)
+            self.setFixedSize(1800,800)
             
     
     def connect_micromanipulator(self):
@@ -483,8 +535,97 @@ class PatchClampUI(QWidget):
         self.currentPlot.setData(current)
         
         """ to calculate capacitance and resistance """
-        # self.updateLabels(curOut, voltOut)
+        self.updateLabels(current, voltage)
     
+    
+    
+    
+    
+    
+    
+    
+    def updateLabels(self, curOut, voltOut):
+        """Update the resistance and capacitance labels.
+        http://scipy-lectures.org/intro/scipy/auto_examples/plot_curve_fit.html
+        https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html"""
+        constants = MeasurementConstants()
+        sampPerCyc = int(constants.patchSealSampRate / constants.patchSealFreq)
+
+        try:
+            curOutCyc = curOut.reshape(int(curOut.size / sampPerCyc), sampPerCyc)
+            curData = np.mean(curOutCyc, axis=0)
+        except:
+            curData = curOut
+
+        voltData = voltOut
+        try:
+            # Computing resistance
+            tres = np.mean(voltData)
+            dV = np.mean(voltData[voltData > tres]) - np.mean(voltData[voltData < tres])  # Computing the voltage difference
+            dIss = np.mean(curData[int(np.floor(0.15 * sampPerCyc)) : int(np.floor(sampPerCyc / 2)) - 2]) - np.mean(curData[int(np.floor(0.65 * sampPerCyc)) : sampPerCyc - 2])  # Computing the current distance
+            membraneResistance = dV / (dIss * 1000000)  # Ohms law (MegaOhm)
+            self.resistanceLabel.setText("Resistance:  %.4f M\u03A9" % membraneResistance)
+
+            estimated_size_resistance = 10000 / (membraneResistance * 1000000)  # The resistance of a typical patch of membrane, RM is 10000 Omega/{cm}^2
+        except:
+            self.resistanceLabel.setText("Resistance:  %s" % "NaN")
+
+        try:
+            measured_vlotage = np.mean(voltData) * 1000
+            self.membraneVoltLabel.setText("Vm:  %.2f mV" % measured_vlotage)
+            self.membraneVoltLabel.setStyleSheet("color: red")
+        except:
+            self.membraneVoltLabel.setText("Vm:  %s" % "NaN")
+        try:
+            # Computing capacitance
+            points = 10
+            maxCur = np.amax(curData)
+            maxCurIndex = np.where(curData == maxCur)[0][0]
+            curFit = curData[int(maxCurIndex+1) : int(maxCurIndex+1+points-1)] - \
+                0.5*(np.mean(curData[int(np.floor(0.15*sampPerCyc)) : int(np.floor(sampPerCyc/2)) - 2]) + \
+                     np.mean(curData[int(np.floor(0.65*sampPerCyc)) : sampPerCyc-2]))
+            timepoints = 1000*np.arange(3, points - 1 + 3) / constants.patchSealSampRate
+            # Fitting the data to an exponential of the form y=a*exp(-b*x) where b = 1/tau and tau = RC
+            # I(t)=I0*e^−t/τ, y=a*exp(-b*x), get log of both sides:log y = -bx + log a
+            fit = np.polyfit(timepoints, curFit, 1)  # Converting the exponential to a linear function and fitting it
+            # Extracting data
+            current = fit[0]
+            resistance = dV * 1000 / current / 2  # Getting the resistance
+            tau = -1 / fit[1]
+            capacitance = 1000 * tau / resistance
+            self.capacitanceLabel.setText("Capacitance:  %.4f" % capacitance)
+
+            estimated_size_capacitance = capacitance * (10 ** -12) * (10 ** 6)
+
+            if estimated_size_capacitance > estimated_size_resistance:
+                estimated_ratio = (estimated_size_capacitance / estimated_size_resistance)
+            else:
+                estimated_ratio = (estimated_size_resistance / estimated_size_capacitance)
+
+            self.ratioLabel.setText("Ratio:  %.4f" % estimated_ratio)  # http://www.cnbc.cmu.edu/~bard/passive2/node5.html
+
+        except:
+            self.capacitanceLabel.setText("Capacitance:  %s" % "NaN")
+            self.ratioLabel.setText("Ratio:  %s" % "NaN")
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+<<<<<<< Updated upstream
+=======
+    def update_pressure(self, data):
+        # pressure_in = data[1]
+        pressure_out = self.backend._pressure_append_(data[0])
+        self.pressurePlot.setData(pressure_out)
+        self.pressureLabel.setText("Pressure (in mBar): %.1f" % pressure_out[-1])
+    
+>>>>>>> Stashed changes
     
     def STOP(self):
         if self.STOP_button.isChecked():

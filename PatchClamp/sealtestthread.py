@@ -203,7 +203,7 @@ class SealTestThread(QThread):
         while self.isRunning:
             output = np.random.rand(2,self.readNumber)
             output[0,:] *= np.concatenate((np.ones(25),np.zeros(25),np.ones(25),np.zeros(25)))*1
-            output[1,:] *= np.linspace(-2,2,100)*10**-2
+            output[1,:] *= np.linspace(2,-2,100)*10**-2
 
             # Emiting the data just received as a signal
             self.measurement.emit(output[0,:], output[1,:])
