@@ -242,6 +242,7 @@ class SmartPatcher(QObject):
     @pressurethread.setter
     def pressurethread(self, pressurecontroller):
         self._pressurethread = pressurecontroller
+        self._pressurethread.parent = self
         self._pressurethread.start()
     
     @pressurethread.deleter
@@ -354,7 +355,7 @@ class SmartPatcher(QObject):
     @pipette_diameter.setter
     def pipette_diameter(self, diameter):
         if isinstance(diameter, float) or isinstance(diameter, int):
-            logging.info('Set pipette opening diameter: D = ' + str(diameter))
+            logging.info('Set pipette opening diameter: D = ' + str(diameter) + ' pixels')
             self._pipette_diameter = diameter
         else:
             raise ValueError('Pipette opening diameter should be a float or integer')

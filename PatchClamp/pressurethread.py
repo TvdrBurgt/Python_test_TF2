@@ -20,9 +20,12 @@ class PressureThread(QThread):
     measurement = pyqtSignal(np.ndarray)
     
     def __init__(self, address='COM4', baud=9600):
+        self.parent = None
+        
         # QThread attributes
         super().__init__()
         self.isrunning = False
+        self.isrecording = False
         self.moveToThread(self)
         self.started.connect(self.measure)
         
@@ -33,7 +36,16 @@ class PressureThread(QThread):
         self.ENDOFLINE = '\n'   # Carriage return
         self.controller = serial.Serial(port=self.port, baudrate=self.baudrate, timeout=1)
     
+    @property
+    def parent(self):
+        return self._parent
+    
+    @parent.setter
+    def parent(self, parent):
+        self._parent = parent
+    
     def stop(self):
+        self.isrecording = False
         self.isrunning = False
         self.quit()
         self.wait()
@@ -93,13 +105,16 @@ class PressureThread(QThread):
                         self.measurement.emit(np.array([PS1, PS2]))
             
             # Set waveform 
-            new_pressure = self.waveform(time.time()-start, -100, -200, 5, 5)
+            new_pressure = self.waveform(time.time()-start, 0, -45, 10, 10)
             if new_pressure != old_pressure and not self.ATM:
                 self.set_pressure(new_pressure)
                 old_pressure = new_pressure
             
-            # Not really necessary but better to safe computation power
-            QThread.msleep(10)
+            # Enter the record function
+            if not self.isrecording:
+                QThread.msleep(10)
+            else:
+                self.record()
         
         # Set pressure back to ATM and close the serial port
         self.set_pressure(0)
@@ -107,18 +122,17 @@ class PressureThread(QThread):
             
         logging.info('pressure thread stopped')
     
-    @pyqtSlot()
+    
     def record(self):
-        logging.info("pressure thread for recording started")
+        logging.info("pressure recording started")
         
-        save_directory = save_directory = self._parent.save_directory
+        save_directory = self._parent.save_directory
         
         PS1 = []
         PS2 = []
         timing = []
         start = time.time()
-        self.isrunning = True
-        while self.isrunning:
+        while self.isrecording:
             
             # Read pressure controller, flush input, and emit pressure measurements
             response = self.controller.read_until(self.ENDOFLINE.encode('ascii'))
@@ -134,16 +148,17 @@ class PressureThread(QThread):
                     PS2.append(float(response[2]))
                     timing.append(T)
                     self.measurement.emit(np.array([PS1[-1], PS2[-1]]))
+            
+            # Determines the sampling rate
+            QThread.msleep(5)
         
         # Save measurements and close the serial port
         np.save(save_directory+'pressure_recording_sensor1', PS1)
-        np.save(save_directory+'pressure_recording_sensor2', PS1)
+        np.save(save_directory+'pressure_recording_sensor2', PS2)
         np.save(save_directory+'pressure_recording_timing', timing)
-        self.controller.close()
             
-        logging.info('pressure thread stopped')
-                    
-            
+        logging.info('pressure recording stopped')
+
 
 
 # class PressureThread(QThread):

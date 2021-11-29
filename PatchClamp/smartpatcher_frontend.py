@@ -183,6 +183,10 @@ class PatchClampUI(QWidget):
         self.request_releasepressure_button = QPushButton(text="Release pressure", clicked=self.request_release_pressure)
         self.request_releasepressure_button.setCheckable(True)
         
+        # Button to record pressure input
+        self.request_recordpressure_button = QPushButton(text="Record pressure", clicked=self.request_record_pressure)
+        self.request_recordpressure_button.setCheckable(True)
+        
         # Button to send pressure to pressure controller
         request_applypressure_button = QPushButton(text="Apply pressure", clicked=self.request_apply_pressure)
         
@@ -197,9 +201,10 @@ class PatchClampUI(QWidget):
         algorithmLayout.addWidget(request_breakin_button, 0, 5, 2, 1)
         algorithmLayout.addWidget(request_zap_button, 0, 6, 2, 1)
         algorithmLayout.addWidget(QLabel("Pressure (in mBar):"), 0, 7, 1, 1)
-        algorithmLayout.addWidget(self.set_pressure_button, 0, 8, 1, 1)
+        algorithmLayout.addWidget(self.set_pressure_button, 0, 8, 1, 2)
         algorithmLayout.addWidget(self.request_releasepressure_button, 1, 7, 1, 1)
-        algorithmLayout.addWidget(request_applypressure_button, 1, 8, 1, 1)
+        algorithmLayout.addWidget(self.request_recordpressure_button, 1, 8, 1, 1)
+        algorithmLayout.addWidget(request_applypressure_button, 1, 9, 1, 1)
         algorithmContainer.setLayout(algorithmLayout)
         
         """
@@ -362,7 +367,7 @@ class PatchClampUI(QWidget):
         """
         logging.info('connect pressurethread button pushed')
         if self.connect_pressurecontroller_button.isChecked():
-            pressurethread = PressureThread()
+            pressurethread = PressureThread(address='COM4', baud=9600)
             
             self.signal_pressure = pressurethread.measurement
             self.signal_pressure.connect(self.update_pressure)
@@ -394,6 +399,12 @@ class PatchClampUI(QWidget):
     
     def request_release_pressure(self):
         self.backend.pressurethread.release_pressure()
+    
+    def request_record_pressure(self):
+        if self.request_recordpressure_button.isChecked():
+            self.backend.pressurethread.isrecording = True
+        else:
+            self.backend.pressurethread.isrecording = False
     
     def request_apply_pressure(self):
         target_pressure = self.set_pressure_button.value()
@@ -517,8 +528,8 @@ class PatchClampUI(QWidget):
         # self.updateLabels(curOut, voltOut)
     
     def update_pressure(self, data):
-        # pressure_in = data[0]
-        pressure_out = self.backend._pressure_append_(data[1])
+        # pressure_in = data[1]
+        pressure_out = self.backend._pressure_append_(data[0])
         self.pressurePlot.setData(pressure_out)
     
     
