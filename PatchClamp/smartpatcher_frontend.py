@@ -664,19 +664,19 @@ class PatchClampUI(QWidget):
         """
         try:
             del self.backend.camerathread
-        except:
+        except AttributeError:
             pass
         try:
             del self.backend.micromanipulator
-        except:
+        except AttributeError:
             pass
         try:
             del self.backend.sealtestthread
-        except:
+        except AttributeError:
             pass
         try:
             del self.backend.pressurethread
-        except:
+        except AttributeError:
             pass
         
         event.accept()
