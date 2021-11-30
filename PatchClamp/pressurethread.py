@@ -247,6 +247,7 @@ class PressureThread(QThread):
         start = time.time()
         while self.isrecording:
             output = self.pressure_offset + np.random.rand(2)*10-5
+            T = time.time() - start
             
             PS1.append(output[0])
             PS2.append(output[1])
@@ -255,10 +256,5 @@ class PressureThread(QThread):
             
             # Determines the sampling rate
             QThread.msleep(5)
-        
-        # Save measurements and close the serial port
-        np.save(save_directory+'pressure_recording_sensor1', PS1)
-        np.save(save_directory+'pressure_recording_sensor2', PS2)
-        np.save(save_directory+'pressure_recording_timing', timing)
             
         logging.info('pressure recording stopped')
