@@ -278,7 +278,7 @@ class Worker(QObject):
         constant height above the focal plance, this allows us to move past the
         the peak without pressing the pipette down into the sample/coverslip.
         
-        The *focusbias* is around 10-20 micrometers!!!
+        The *focusbias* is around 10-30 micrometers!!!
         """
         # get all relevant parent attributes
         save_directory = self._parent.save_directory
@@ -503,17 +503,35 @@ class Worker(QObject):
         gigaseal with the membrane.
         
         I) Calculate trajectory and bring pipette tip above the target cell.
-        II) Pipette tip descent until resistance increases >0.3MOhm.
-        III) Release pressure, possibly apply light suction, to form Gigaseal
+        II) Adjust pipette pressure to small overpressure.
+        III) Pipette tip descent until resistance increases slightly.
+        IV) Release pressure, possibly apply light suction, to form Gigaseal
         
+        
+        Safety measures in place:
+            <!>     Pipette descent range: <50 microns so pipette does not
+                    penatrate the petridish.
+            <!>     Resistance check: Resistance rises when pipette tip is
+                    blocked by a cell or the petridish, a broken tip results
+                    in an abrupt drop in resistance after which we stop
+                    pipette descent immediately.
         """
+        save_directory = self._parent.save_directory
         micromanipulator = self._parent.micromanipulator
         pressurecontroller = self._parent.pressurethread
         sealtestthread = self._parent.sealtestthread
         account4rotation = self._parent.account4rotation
         pixelsize = self._parent.pixel_size
-        tipcoords_manip, tipcoords_cam = self._parent.pipette_coordinates_pair
+        tipcoords_manip,tipcoords_cam = self._parent.pipette_coordinates_pair
         xtarget,ytarget,_ = self._parent.target_coordinates
+        
+        # Safety measures in place
+        PIPETTE_DESCENT_RANGE = 50  # microns
+        RESISTANCE_DROP = 0.1       # drop-ratio
+        # Algorithm variables
+        R_INCREASE = 1e6            # MΩ
+        STEPSIZE = 0.1              # microns
+        TIMEOUT = 30                # seconds
         
         #Ia) calculate shortest trajectory to target and apply coordinate transformation
         micromanipulator.moveAbs(x=tipcoords_manip[0], y=tipcoords_manip[1], z=tipcoords_manip[2])
@@ -522,27 +540,53 @@ class Worker(QObject):
         trajectory = np.array([dx,dy,0])*pixelsize/1000     #trajectory (in microns)
         trajectory = account4rotation(origin=tipcoords_manip, target=tipcoords_manip+trajectory)
         
-        #Ib) move the micromanipulator to the target
+        #Ib) manoeuvre the micromanipulator above the target
         micromanipulator.moveRel(dx=trajectory[0], dy=trajectory[1], dz=trajectory[2])
         
+        #II) apply small pressure to the pipette for final approach
+        pressurecontroller.set_pressure(30)
+        resistance_reference = np.nanmean(self._parent.resistance)
         
+        #III) descent pipette with one micron at a time until R increases
+        resistance = resistance_reference
+        position = micromanipulator.getPos()[2]
+        resistancehistory = np.array([resistance])
+        positionhistory = np.array([position])
+        while resistance < resistance_reference + R_INCREASE:
+            # step down and measure the resistance
+            micromanipulator.moveRel(dx=0, dy=0, dz=-STEPSIZE)
+            position = micromanipulator.getPos()[2]
+            time.sleep(0.01)
+            resistance = np.nanmean(self._parent.resistance[-10::])
+#            self.sharpnessfunction.emit(resistance)
+            
+            # safety checks on maximum descent range and resistance drop
+            if resistance < np.nanmax(resistancehistory)*RESISTANCE_DROP:
+                break
+            else:
+                resistancehistory = np.append(resistancehistory, resistance)
+            if positionhistory[-1]-positionhistory[0] >= PIPETTE_DESCENT_RANGE:
+                break
+            else:
+                positionhistory = np.append(positionhistory, position)
+            
         
-        #II) descent pipette with velocity=... and measure resistance every ...msec
+        #IVa) set pressure to ATM
+        pressurecontroller.set_pressure(0)
         
+        #IVb) wait for Gigaseal
+        start = time.time()
+        while resistance < 1e9 and time.time()-start < TIMEOUT:
+            resistance = np.nanmax(self._parent.resistance[-10::])
+#            self.sharpnessfunction.emit(resistance)
+            resistancehistory = np.append(resistancehistory, resistance)
+            time.sleep(0.1)
         
+        logging.info("Gigaseal formed!")
         
-        
-        #III) set pressure to ATM and monitor resistance
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
+        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))   
+        np.save(save_directory+'gigaseal_positionhistory_'+timestamp, positionhistory)      #FLAG: relevant for MSc thesis
+        np.save(save_directory+'gigaseal_resistancehistory_'+timestamp, resistancehistory)  #FLAG: relevant for MSc thesis
         
         self.finished.emit()
         

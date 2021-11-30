@@ -190,7 +190,7 @@ class PatchClampUI(QWidget):
         self.ratioLabel = QLabel("Ratio: ")
         self.membraneVoltLabel = QLabel("Vm: ")
         
-        request_gigaseal_button = QPushButton(text="Gigaseal", clicked=self.mockfunction)
+        request_gigaseal_button = QPushButton(text="Gigaseal", clicked=self.request_formgigaseal)
         request_breakin_button = QPushButton(text="Break-in", clicked=self.mockfunction)
         request_zap_button = QPushButton(text="ZAP", clicked=self.mockfunction)
         
@@ -482,7 +482,6 @@ class PatchClampUI(QWidget):
             self.liveView.addedItems[idx].translatable = True
             self.liveView.addedItems[idx].setPen(QPen(QColor(255,255,0), 0))
         
-        
     def request_confirmtarget(self):
         """
         If a target is selected, we save the center coordinates of the ROI in
@@ -494,6 +493,9 @@ class PatchClampUI(QWidget):
             self.liveView.addedItems[idx].translatable = False
             self.liveView.addedItems[idx].setPen(QPen(QColor(193,245,240), 0))
             self.backend.target_coordinates = np.array([x,y,None])
+    
+    def request_formgigaseal(self):
+        self.backend.request(name='gigaseal')
     
     
     def draw_roi(self, *args):
@@ -551,20 +553,24 @@ class PatchClampUI(QWidget):
         penalties = data[1,:]
         self.algorithm.setData(positions,penalties)
     
+    def update_pressure(self, data):
+        # pressure_in = data[1]
+        self.backend._pressure_append_(data[0])
+        pressure_out = self.backend.pressure
+        
+        self.pressurePlot.setData(pressure_out)
+        self.pressureLabel.setText("Pressure (in mBar): %.1f" % pressure_out[-1])
+    
     def update_currentvoltage(self, voltOut, curOut):
-        voltage = self.backend._voltage_append_(voltOut / 10)
-        current = self.backend._current_append_(curOut / 1 / (100*10**6))
+        self.backend._voltage_append_(voltOut / 10)
+        self.backend._current_append_(curOut / 1 / (100*10**6))
+        # voltage = self.backend.voltage
+        current = self.backend.current
         
         self.currentPlot.setData(current)
         
         """ to calculate capacitance and resistance """
-        self.updateLabels(current, voltage)
-    
-    
-    
-    
-    
-    
+        self.updateLabels(self.backend.current, self.backend.voltage)
     
     
     def updateLabels(self, curOut, voltOut):
@@ -588,10 +594,12 @@ class PatchClampUI(QWidget):
             dIss = np.mean(curData[int(np.floor(0.15 * sampPerCyc)) : int(np.floor(sampPerCyc / 2)) - 2]) - np.mean(curData[int(np.floor(0.65 * sampPerCyc)) : sampPerCyc - 2])  # Computing the current distance
             membraneResistance = dV / (dIss * 1000000)  # Ohms law (MegaOhm)
             self.resistanceLabel.setText("Resistance:  %.4f M\u03A9" % membraneResistance)
+            self.backend._resistance_append_(membraneResistance*1e6)
 
             estimated_size_resistance = 10000 / (membraneResistance * 1000000)  # The resistance of a typical patch of membrane, RM is 10000 Omega/{cm}^2
         except:
             self.resistanceLabel.setText("Resistance:  %s" % "NaN")
+            self.backend._resistance_append_(np.nan)
 
         try:
             measured_vlotage = np.mean(voltData) * 1000
@@ -631,20 +639,6 @@ class PatchClampUI(QWidget):
             self.capacitanceLabel.setText("Capacitance:  %s" % "NaN")
             self.ratioLabel.setText("Ratio:  %s" % "NaN")
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    def update_pressure(self, data):
-        # pressure_in = data[1]
-        pressure_out = self.backend._pressure_append_(data[0])
-        self.pressurePlot.setData(pressure_out)
-        self.pressureLabel.setText("Pressure (in mBar): %.1f" % pressure_out[-1])
     
     def STOP(self):
         if self.STOP_button.isChecked():

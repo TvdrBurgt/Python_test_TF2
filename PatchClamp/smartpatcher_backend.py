@@ -32,14 +32,18 @@ class SmartPatcher(QObject):
             [[None,None,None], [None,None,None]])
         self._target_coordinates = np.array(        # [X, Y, Z] in pixels
             [None,None,None])
-        self.window_size_cv = 200
-        self.current = np.array([])
-        self.n_c = 0
-        self.voltage = np.array([])
-        self.n_v = 0
+        self.window_size_c = 200
+        self.window_size_v = 200
         self.window_size_p = 200
-        self.pressure = np.array([])
+        self.window_size_r = 200
+        self.n_c = 0
+        self.n_v = 0
         self.n_p = 0
+        self.n_r = 0
+        self._current = np.array([])
+        self._voltage = np.array([])
+        self._pressure = np.array([])
+        self._resistance = np.array([])
         
         # Hardware devices
         self._camerathread = None
@@ -96,6 +100,11 @@ class SmartPatcher(QObject):
                         raise ValueError('XY stage not connected')
                     else:
                         self.thread.started.connect(self.worker.target2center)
+                elif name == 'gigaseal':
+                    if self.sealtestthread == None or self.pressurethread == None or self.micromanipulator == None:
+                        raise ValueError('Sealtest, pressure controller and/or micromanipulator not connected')
+                    else:
+                        self.thread.started.connect(self.worker.formgigaseal)
                 elif name == 'mockworker':
                     self.thread.started.connect(self.worker.mockworker)
                 
@@ -165,28 +174,24 @@ class SmartPatcher(QObject):
     def _current_append_(self, values):
         """Append new values to a sliding window."""
         length = len(values)
-        if self.n_c + length > self.window_size_cv:
+        if self.n_c + length > self.window_size_c:
             # Buffer is full so make room.
-            copySize = self.window_size_cv - length
+            copySize = self.window_size_c - length
             self.current = self.current[-copySize:]
             self.n_c = copySize
         self.current = np.append(self.current, values)
         self.n_c += length
-        
-        return self.current
     
     def _voltage_append_(self, values):
         """Append new values to a sliding window."""
         length = len(values)
-        if self.n_v + length > self.window_size_cv:
+        if self.n_v + length > self.window_size_v:
             # Buffer is full so make room.
-            copySize = self.window_size_cv - length
+            copySize = self.window_size_v - length
             self.voltage = self.voltage[-copySize:]
             self.n_v = copySize
         self.voltage = np.append(self.voltage, values)
         self.n_v += length
-        
-        return self.voltage
     
     def _pressure_append_(self, values):
         """Append new values to a sliding window."""
@@ -198,8 +203,17 @@ class SmartPatcher(QObject):
             self.n_p = copySize
         self.pressure = np.append(self.pressure, values)
         self.n_p += length
-        
-        return self.pressure
+    
+    def _resistance_append_(self, values):
+        """Append new values to a sliding window."""
+        length = 1
+        if self.n_r + length > self.window_size_r:
+            # Buffer is full so make room.
+            copySize = self.window_size_r - length
+            self.resistance = self.resistance[-copySize:]
+            self.n_r = copySize
+        self.resistance = np.append(self.resistance, values)
+        self.n_r += length
     
     
     @property
@@ -471,6 +485,56 @@ class SmartPatcher(QObject):
     @target_coordinates.deleter
     def target_coordinates(self):
         self._pipette_coordinates = np.array([None, None, None])
+    
+    
+    
+    @property
+    def current(self):
+        return self._current
+    
+    @current.setter
+    def current(self, current_array):
+        self._current = current_array
+    
+    @current.deleter
+    def current(self):
+        self._current = np.array([])
+    
+    @property
+    def voltage(self):
+        return self._voltage
+    
+    @voltage.setter
+    def voltage(self, voltage_array):
+        self._voltage = voltage_array
+    
+    @voltage.deleter
+    def voltage(self):
+        self._voltage = np.array([])
+    
+    @property
+    def pressure(self):
+        return self._pressure
+    
+    @pressure.setter
+    def pressure(self, pressure_array):
+        self._pressure = pressure_array
+    
+    @pressure.deleter
+    def pressure(self):
+        self._pressure = np.array([])
+    
+    @property
+    def resistance(self):
+        return self._resistance
+    
+    @resistance.setter
+    def resistance(self, resistance_array):
+        self._resistance = resistance_array
+    
+    @resistance.deleter
+    def resistance(self):
+        self._resistance = np.array([])
     
     
     @property
