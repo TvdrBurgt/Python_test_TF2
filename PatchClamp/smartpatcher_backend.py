@@ -23,7 +23,7 @@ class SmartPatcher(QObject):
         self._pipette_orientation = 0               # in radians
         self._pipette_diameter = 16                 # in pixels (16=patchclamp, ??=cell-picking)
         self._rotation_angles = [0,0,0]             # (alp,bet,gam) in degree
-        self.update_constants_from_JSON()           # rewrites above constants
+        self.update_constants_from_JSON()           # rewrites above default constants
         
         # Algorithm constants
         self.save_directory = os.getcwd()+'\\feedback\\'
@@ -32,11 +32,12 @@ class SmartPatcher(QObject):
             [[None,None,None], [None,None,None]])
         self._target_coordinates = np.array(        # [X, Y, Z] in pixels
             [None,None,None])
-        self.window_size = 200
+        self.window_size_cv = 200
         self.current = np.array([])
         self.n_c = 0
         self.voltage = np.array([])
         self.n_v = 0
+        self.window_size_p = 200
         self.pressure = np.array([])
         self.n_p = 0
         
@@ -126,7 +127,20 @@ class SmartPatcher(QObject):
             raise ValueError('origin and target should be numpy.ndarray')
         
         return self.R @ np.subtract(target,origin) + origin
-    
+
+    # def update_constants_from_JSON(self):
+    #     # read json file with autopatcher constants and update them in backend
+    #     try:
+    #         with open("autopatch_configuration.txt", "r") as json_infile:
+    #             data = json.load(json_infile)
+    #         self.pixel_size = data["pixel_size"]
+    #         self.image_size = data["image_size"]
+    #         self.pipette_orientation = data["pipette_orientation"]
+    #         self.pipette_diameter = data["pipette_diameter"]
+    #         self.rotation_angles = data["rotation_angles"]
+    #     except:
+    #         self.write_constants_to_JSON()
+
     def update_constants_from_JSON(self):
         # read json file with autopatcher constants and update them in backend
         with open("autopatch_configuration.txt", "r") as json_infile:
@@ -151,9 +165,9 @@ class SmartPatcher(QObject):
     def _current_append_(self, values):
         """Append new values to a sliding window."""
         length = len(values)
-        if self.n_c + length > self.window_size:
+        if self.n_c + length > self.window_size_cv:
             # Buffer is full so make room.
-            copySize = self.window_size - length
+            copySize = self.window_size_cv - length
             self.current = self.current[-copySize:]
             self.n_c = copySize
         self.current = np.append(self.current, values)
@@ -164,9 +178,9 @@ class SmartPatcher(QObject):
     def _voltage_append_(self, values):
         """Append new values to a sliding window."""
         length = len(values)
-        if self.n_v + length > self.window_size:
+        if self.n_v + length > self.window_size_cv:
             # Buffer is full so make room.
-            copySize = self.window_size - length
+            copySize = self.window_size_cv - length
             self.voltage = self.voltage[-copySize:]
             self.n_v = copySize
         self.voltage = np.append(self.voltage, values)
@@ -174,18 +188,18 @@ class SmartPatcher(QObject):
         
         return self.voltage
     
-    # def _pressure_append_(self, values):
-    #     """Append new values to a sliding window."""
-    #     length = len(values)
-    #     if self.n_p + length > self.window_size:
-    #         # Buffer is full so make room.
-    #         copySize = self.window_size - length
-    #         self.pressure = self.pressure[-copySize:]
-    #         self.n_p = copySize
-    #     self.pressure = np.append(self.pressure, values)
-    #     self.n_p += length
+    def _pressure_append_(self, values):
+        """Append new values to a sliding window."""
+        length = 1
+        if self.n_p + length > self.window_size_p:
+            # Buffer is full so make room.
+            copySize = self.window_size_p - length
+            self.pressure = self.pressure[-copySize:]
+            self.n_p = copySize
+        self.pressure = np.append(self.pressure, values)
+        self.n_p += length
         
-    #     return self.pressure
+        return self.pressure
     
     
     @property
@@ -228,9 +242,12 @@ class SmartPatcher(QObject):
     @pressurethread.setter
     def pressurethread(self, pressurecontroller):
         self._pressurethread = pressurecontroller
+        self._pressurethread.parent = self
+        self._pressurethread.start()
     
     @pressurethread.deleter
     def pressurethread(self):
+        self._pressurethread.stop()
         self._pressurethread = None
         
         
@@ -338,7 +355,7 @@ class SmartPatcher(QObject):
     @pipette_diameter.setter
     def pipette_diameter(self, diameter):
         if isinstance(diameter, float) or isinstance(diameter, int):
-            logging.info('Set pipette opening diameter: D = ' + str(diameter))
+            logging.info('Set pipette opening diameter: D = ' + str(diameter) + ' pixels')
             self._pipette_diameter = diameter
         else:
             raise ValueError('Pipette opening diameter should be a float or integer')

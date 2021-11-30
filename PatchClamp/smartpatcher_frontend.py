@@ -24,6 +24,7 @@ from PatchClamp.manualpatcher_frontend import PatchclampSealTestUI
 from PatchClamp.smartpatcher_backend import SmartPatcher
 from PatchClamp.camerathread import CameraThread
 from PatchClamp.sealtestthread import SealTestThread
+from PatchClamp.pressurethread import PressureThread
 from PatchClamp.micromanipulator import ScientificaPatchStar
 from PatchClamp.stage import LudlStage
 
@@ -69,7 +70,7 @@ class PatchClampUI(QWidget):
         self.connect_sealtestthread_button.setCheckable(True)
         
         # Button to (dis)connect pressure controller
-        self.connect_pressurecontroller_button = QPushButton(text="Pressure controller", clicked=self.mockfunction)
+        self.connect_pressurecontroller_button = QPushButton(text="Pressure controller", clicked=self.connect_pressurethread)
         self.connect_pressurecontroller_button.setCheckable(True)
         
         # Button to stop all hardware in motion
@@ -147,7 +148,8 @@ class PatchClampUI(QWidget):
         pressurePlot = sensorWidget.addPlot(3, 0, 1, 1)
         pressurePlot.setTitle("Pressure")
         pressurePlot.setLabel("left", units="mBar")
-        pressurePlot.setLabel("bottom", text="20 ms")
+        pressurePlot.setLabel("bottom", units='a.u.', text="time")
+        pressurePlot.setRange(yRange=[-250,250])
         self.pressurePlot = pressurePlot.plot(pen=(3,3))
         
         sensorLayout.addWidget(sensorWidget)
@@ -216,21 +218,23 @@ class PatchClampUI(QWidget):
         self.set_pressure_button.setMaximum(200)
         self.set_pressure_button.setDecimals(0)
         self.set_pressure_button.setValue(0)
-        self.set_pressure_button.setSingleStep(1)
+        self.set_pressure_button.setSingleStep(10)
         
         # Button to release pressure instantaneous
-        request_releasepressure_button = QPushButton(text="Release pressure", clicked=self.mockfunction)
+        self.request_releasepressure_button = QPushButton(text="Release pressure", clicked=self.request_release_pressure)
+        self.request_releasepressure_button.setCheckable(True)
         
-        # Button for recording the pressure
-        request_recordpressure_button = QPushButton(text="Record", clicked=self.mockfunction)
+        # Button to record pressure input
+        self.request_recordpressure_button = QPushButton(text="Record pressure", clicked=self.request_record_pressure)
+        self.request_recordpressure_button.setCheckable(True)
         
         # Button to send pressure to pressure controller
-        request_applypressure_button = QPushButton(text="Apply pressure", clicked=self.mockfunction)
+        request_applypressure_button = QPushButton(text="Apply pressure", clicked=self.request_apply_pressure)
         
         pressureLayout.addWidget(self.pressureLabel, 0, 0, 1, 2)
         pressureLayout.addWidget(self.set_pressure_button, 0, 2, 1, 1)
-        pressureLayout.addWidget(request_releasepressure_button, 1, 0, 1, 1)
-        pressureLayout.addWidget(request_recordpressure_button, 1, 1, 1, 1)
+        pressureLayout.addWidget(self.request_releasepressure_button, 1, 0, 1, 1)
+        pressureLayout.addWidget(self.request_recordpressure_button, 1, 1, 1, 1)
         pressureLayout.addWidget(request_applypressure_button, 1, 2, 1, 1)
         pressureContainer.setLayout(pressureLayout)
         
@@ -385,6 +389,26 @@ class PatchClampUI(QWidget):
         else:
             del self.backend.sealtestthread
             del self.signal_sealtest
+    
+    
+    def connect_pressurethread(self):
+        """
+        We initiate the pressure thread by creating the PressureThread object,
+        then we connect the measurement signal to update the pressure evolution
+        graph. Afterwards we move the sealtest thread to the backend
+        where the thread is immediately started.
+        """
+        logging.info('connect pressurethread button pushed')
+        if self.connect_pressurecontroller_button.isChecked():
+            pressurethread = PressureThread(address='COM4', baud=9600)
+            
+            self.signal_pressure = pressurethread.measurement
+            self.signal_pressure.connect(self.update_pressure)
+            
+            self.backend.pressurethread = pressurethread
+        else:
+            del self.backend.pressurethread
+            del self.signal_pressure
         
         
     def toggle_pauselive(self):
@@ -404,7 +428,21 @@ class PatchClampUI(QWidget):
             I = plt.imread("testimage.tif")
             self.update_snap(I)
             raise ValueError('no camera connected')
-        
+    
+    
+    def request_release_pressure(self):
+        self.backend.pressurethread.release_pressure()
+    
+    def request_record_pressure(self):
+        if self.request_recordpressure_button.isChecked():
+            self.backend.pressurethread.isrecording = True
+        else:
+            self.backend.pressurethread.isrecording = False
+    
+    def request_apply_pressure(self):
+        target_pressure = self.set_pressure_button.value()
+        self.backend.pressurethread.set_pressure(target_pressure)
+    
     
     def request_hardcalibration_xy(self):
         self.backend.request(name='hardcalibration', mode='XY')
@@ -640,6 +678,10 @@ class PatchClampUI(QWidget):
             pass
         try:
             del self.backend.sealtestthread
+        except:
+            pass
+        try:
+            del self.backend.pressurethread
         except:
             pass
         
