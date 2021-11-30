@@ -221,33 +221,18 @@ class PatchClampUI(QWidget):
         # Button to release pressure instantaneous
         request_releasepressure_button = QPushButton(text="Release pressure", clicked=self.mockfunction)
         
+        # Button for recording the pressure
+        request_recordpressure_button = QPushButton(text="Record", clicked=self.mockfunction)
+        
         # Button to send pressure to pressure controller
         request_applypressure_button = QPushButton(text="Apply pressure", clicked=self.mockfunction)
         
-<<<<<<< Updated upstream
-        algorithmLayout.addWidget(request_hardcalibrationxy_button, 0, 0, 1, 1)
-        algorithmLayout.addWidget(request_hardcalibrationxyz_button, 1, 0, 1, 1)
-        algorithmLayout.addWidget(request_selecttarget_button, 0, 1, 1, 1)
-        algorithmLayout.addWidget(request_confirmtarget_button, 1, 1, 1, 1)
-        algorithmLayout.addWidget(request_target2center_button, 0, 2, 2, 1)
-        algorithmLayout.addWidget(request_autofocustip, 0, 3, 1, 1)
-        algorithmLayout.addWidget(request_softcalibration_button, 1, 3, 1, 1)
-        algorithmLayout.addWidget(request_gigaseal_button, 0, 4, 2, 1)
-        algorithmLayout.addWidget(request_breakin_button, 0, 5, 2, 1)
-        algorithmLayout.addWidget(request_zap_button, 0, 6, 2, 1)
-        algorithmLayout.addWidget(QLabel("Pressure (in mBar):"), 0, 7, 1, 1)
-        algorithmLayout.addWidget(self.set_pressure_button, 0, 8, 1, 1)
-        algorithmLayout.addWidget(request_releasepressure_button, 1, 7, 1, 1)
-        algorithmLayout.addWidget(request_applypressure_button, 1, 8, 1, 1)
-        algorithmContainer.setLayout(algorithmLayout)
-=======
         pressureLayout.addWidget(self.pressureLabel, 0, 0, 1, 2)
         pressureLayout.addWidget(self.set_pressure_button, 0, 2, 1, 1)
-        pressureLayout.addWidget(self.request_releasepressure_button, 1, 0, 1, 1)
-        pressureLayout.addWidget(self.request_recordpressure_button, 1, 1, 1, 1)
+        pressureLayout.addWidget(request_releasepressure_button, 1, 0, 1, 1)
+        pressureLayout.addWidget(request_recordpressure_button, 1, 1, 1, 1)
         pressureLayout.addWidget(request_applypressure_button, 1, 2, 1, 1)
         pressureContainer.setLayout(pressureLayout)
->>>>>>> Stashed changes
         
         """
         ---------------------- Add widgets and set Layout ---------------------
@@ -617,15 +602,11 @@ class PatchClampUI(QWidget):
     
     
     
-<<<<<<< Updated upstream
-=======
     def update_pressure(self, data):
         # pressure_in = data[1]
         pressure_out = self.backend._pressure_append_(data[0])
         self.pressurePlot.setData(pressure_out)
         self.pressureLabel.setText("Pressure (in mBar): %.1f" % pressure_out[-1])
-    
->>>>>>> Stashed changes
     
     def STOP(self):
         if self.STOP_button.isChecked():
