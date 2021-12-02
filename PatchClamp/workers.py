@@ -18,7 +18,7 @@ from PatchClamp.ImageProcessing_patchclamp import PatchClampImageProcessing as i
 
 class Worker(QObject):
     draw = pyqtSignal(list)
-    sharpnessfunction = pyqtSignal(np.ndarray)
+    graph = pyqtSignal(np.ndarray)
     progress = pyqtSignal()
     finished = pyqtSignal()
     
@@ -39,6 +39,7 @@ class Worker(QObject):
     @pyqtSlot()
     def mockworker(self):
         print('printed in thread')
+        self.graph.emit(np.array([1,2,3]))
         self.draw.emit(['cross',1000,1000])
         self.draw.emit(['calibrationline',500,500,-(10)])
         self.draw.emit(['calibrationline',500,500,-(10-90)])
@@ -311,7 +312,7 @@ class Worker(QObject):
         while lookingforpeak:
             
             # emit graph
-            self.sharpnessfunction.emit(np.vstack([positionhistory,penaltyhistory]))
+            self.graph.emit(np.vstack([positionhistory,penaltyhistory]))
             
             #II) check which side of the sharpness graph to extend
             move = None
@@ -444,7 +445,7 @@ class Worker(QObject):
             z = positions[i_max]
             
             # emit graph
-            self.sharpnessfunction.emit(np.vstack([positionhistory,penaltyhistory]))
+            self.graph.emit(np.vstack([positionhistory,penaltyhistory]))
         
         #VII) correct for bias in focus height and move pipette into focus
         foundfocus = z
@@ -507,7 +508,6 @@ class Worker(QObject):
         III) Pipette tip descent until resistance increases slightly.
         IV) Release pressure, possibly apply light suction, to form Gigaseal
         
-        
         Safety measures in place:
             <!>     Pipette descent range: <50 microns so pipette does not
                     penatrate the petridish.
@@ -529,7 +529,7 @@ class Worker(QObject):
         PIPETTE_DESCENT_RANGE = 50  # microns
         RESISTANCE_DROP = 0.1       # drop-ratio
         # Algorithm variables
-        R_INCREASE = 1e6            # MΩ
+        R_INCREASE = 0.3e6          # MΩ
         STEPSIZE = 0.1              # microns
         TIMEOUT = 30                # seconds
         
@@ -558,7 +558,7 @@ class Worker(QObject):
             position = micromanipulator.getPos()[2]
             time.sleep(0.01)
             resistance = np.nanmean(self._parent.resistance[-10::])
-#            self.sharpnessfunction.emit(resistance)
+            self.graph.emit(resistancehistory)
             
             # safety checks on maximum descent range and resistance drop
             if resistance < np.nanmax(resistancehistory)*RESISTANCE_DROP:
@@ -578,7 +578,7 @@ class Worker(QObject):
         start = time.time()
         while resistance < 1e9 and time.time()-start < TIMEOUT:
             resistance = np.nanmax(self._parent.resistance[-10::])
-#            self.sharpnessfunction.emit(resistance)
+            self.graph.emit(resistancehistory)
             resistancehistory = np.append(resistancehistory, resistance)
             time.sleep(0.1)
         

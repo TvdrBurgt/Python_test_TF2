@@ -133,11 +133,11 @@ class PatchClampUI(QWidget):
         sensorLayout = QGridLayout()
         
         sensorWidget = pg.GraphicsLayoutWidget()
-        algorithm = sensorWidget.addPlot(1, 0, 1, 1)
-        algorithm.setTitle('sharpness score')
-        algorithm.setLabel("left", units='a.u.')
-        algorithm.setLabel("bottom", text="height (um)")
-        self.algorithm = algorithm.plot(pen=(1,3))
+        self.algorithm = sensorWidget.addPlot(1, 0, 1, 1)
+        self.algorithm.setTitle("Algorithm graph")
+        self.algorithm.setLabel("left", units="a.u.")
+        self.algorithm.setLabel("bottom", units="a.u.")
+        self.algorithmPlot = self.algorithm.plot(pen=(1,3))
         
         currentPlot = sensorWidget.addPlot(2, 0, 1, 1)
         currentPlot.setTitle("Current")
@@ -148,7 +148,7 @@ class PatchClampUI(QWidget):
         pressurePlot = sensorWidget.addPlot(3, 0, 1, 1)
         pressurePlot.setTitle("Pressure")
         pressurePlot.setLabel("left", units="mBar")
-        pressurePlot.setLabel("bottom", units='a.u.', text="time")
+        pressurePlot.setLabel("bottom", text="time", units="")
         pressurePlot.setRange(yRange=[-250,250])
         self.pressurePlot = pressurePlot.plot(pen=(3,3))
         
@@ -288,7 +288,7 @@ class PatchClampUI(QWidget):
         
         self.backend = SmartPatcher()
         self.backend.worker.draw.connect(self.draw_roi)
-        self.backend.worker.sharpnessfunction.connect(self.update_focusscore)
+        self.backend.worker.graph.connect(self.update_algorithmplot)
         self.backend.worker.progress.connect(self.mocksignal)
         self.backend.worker.finished.connect(self.mocksignal)
         
@@ -383,7 +383,7 @@ class PatchClampUI(QWidget):
             
             # self.signal_sealtest = sealtestthread.measurementThread.measurement
             self.signal_sealtest = sealtestthread.measurement
-            self.signal_sealtest.connect(self.update_currentvoltage)
+            self.signal_sealtest.connect(self.update_currentvoltageplot)
             
             self.backend.sealtestthread = sealtestthread
         else:
@@ -403,7 +403,7 @@ class PatchClampUI(QWidget):
             pressurethread = PressureThread(address='COM4', baud=9600)
             
             self.signal_pressure = pressurethread.measurement
-            self.signal_pressure.connect(self.update_pressure)
+            self.signal_pressure.connect(self.update_pressureplot)
             
             self.backend.pressurethread = pressurethread
         else:
@@ -457,6 +457,12 @@ class PatchClampUI(QWidget):
         self.backend.request(name='target2center')
     
     def request_autofocustip(self):
+        # Clear the plot and update all labels
+        self.algorithmPlot.setData()
+        self.algorithm.setTitle('Autofocus')
+        self.algorithm.setLabel("left", text="sharpness", units="a.u.")
+        self.algorithm.setLabel("bottom", text="height", units="um")
+        
         self.backend.request(name='autofocustip')
     
     def request_selecttarget(self):
@@ -495,6 +501,12 @@ class PatchClampUI(QWidget):
             self.backend.target_coordinates = np.array([x,y,None])
     
     def request_formgigaseal(self):
+        # Clear the plot and update all labels
+        self.algorithmPlot.setData()
+        self.algorithm.setTitle('Pipette resistance')
+        self.algorithm.setLabel("left", text="R", units='Ohm')
+        self.algorithm.setLabel("bottom", text="time", units="")
+        
         self.backend.request(name='gigaseal')
     
     
@@ -548,12 +560,16 @@ class PatchClampUI(QWidget):
         self.snapImageItem.setImage(image)
     
     
-    def update_focusscore(self, data):
-        positions = data[0,:]
-        penalties = data[1,:]
-        self.algorithm.setData(positions,penalties)
+    def update_algorithmplot(self, data):
+        if data.ndim == 1:
+            xs = data
+            self.algorithmPlot.setData(xs)
+        else:
+            xs = data[0,:]
+            ys = data[1,:]
+            self.algorithmPlot.setData(xs,ys)
     
-    def update_pressure(self, data):
+    def update_pressureplot(self, data):
         # pressure_in = data[1]
         self.backend._pressure_append_(data[0])
         pressure_out = self.backend.pressure
@@ -561,7 +577,7 @@ class PatchClampUI(QWidget):
         self.pressurePlot.setData(pressure_out)
         self.pressureLabel.setText("Pressure (in mBar): %.1f" % pressure_out[-1])
     
-    def update_currentvoltage(self, voltOut, curOut):
+    def update_currentvoltageplot(self, voltOut, curOut):
         self.backend._voltage_append_(voltOut / 10)
         self.backend._current_append_(curOut / 1 / (100*10**6))
         # voltage = self.backend.voltage

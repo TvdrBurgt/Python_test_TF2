@@ -106,6 +106,7 @@ class SmartPatcher(QObject):
                     else:
                         self.thread.started.connect(self.worker.formgigaseal)
                 elif name == 'mockworker':
+                    
                     self.thread.started.connect(self.worker.mockworker)
                 
                 # start worker
