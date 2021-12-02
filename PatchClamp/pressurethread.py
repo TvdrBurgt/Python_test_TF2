@@ -31,7 +31,6 @@ class PressureThread(QThread):
         self.started.connect(self.measure)
         
         # Serial attributes
-        self.ATM = False        # Only true if 'release pressure' is pressed
         self.port = address     # COM port micromanipulator is connected to
         self.baudrate = baud    # Baudrate of the micromanipulator
         self.ENDOFLINE = '\n'   # Carriage return
@@ -72,21 +71,20 @@ class PressureThread(QThread):
         
         command = "P %d" % pressure + self.ENDOFLINE
         
+        # Remove any active waveform
+        del self.waveform
+        
         # Encode the command to ascii and send to the device
         self.controller.write(command.encode('ascii'))
     
-    def release_pressure(self):
-        """
-        Calling this function once, releases sets the pressure to ATM
-        immediately and stops writing the waveform. Calling this function a
-        second time releases the block on waveform writing.
-        """
-        self.ATM = not self.ATM
-        if self.ATM:
-            self.set_pressure(0)
-    
     def set_waveform(self, high, low, high_T, low_T):
-        
+        """
+        This function writes a lambda function P(t) to the waveform attribute.
+        The pre-set wave is a square wave denoted by a high pressure with
+        duration high_T, and a low pressure with a duration low_T. Note that
+        P(t) can be any function handle you desire, but note that the pressure-
+        controller has its high-, low-, and cooldown limit.
+        """
         P = lambda t: high*(np.heaviside(t%(high_T+low_T),1) - np.heaviside(t%(high_T+low_T)-high_T,1)) + \
             low*(np.heaviside(t%(high_T+low_T)-high_T,1) - np.heaviside(t%(high_T+low_T)-high_T-low_T,1))
         
@@ -124,7 +122,7 @@ class PressureThread(QThread):
             # Write waveform if active
             if self.waveform is not None:
                 new_pressure = self.waveform(time.time()-start)
-                if new_pressure != old_pressure and not self.ATM:
+                if new_pressure != old_pressure:
                     self.set_pressure(new_pressure)
                     old_pressure = new_pressure
             
@@ -180,21 +178,15 @@ class PressureThread(QThread):
 
 
 # class PressureThread(QThread):
-#     """ Pressure control through serial communication
-#     This class is for controlling the Pressure Controller.
+#     """ Pressure control simulator
+#     This class simulates the pressure controller output.
 #     """
 #     measurement = pyqtSignal(np.ndarray)
     
-#     def __init__(self, address='COM4', baud=9600):
+#     def __init__(self, address, baud):
 #         self.parent = None
 #         self.waveform = None
-        
-#         self.port = address     # COM port micromanipulator is connected to
-#         self.baudrate = baud    # Baudrate of the micromanipulator
-#         self.ENDOFLINE = '\n'   # Carriage return
-        
 #         self.pressure_offset = 0
-#         self.ATM = False
         
 #         # QThread attributes
 #         super().__init__()
@@ -232,47 +224,34 @@ class PressureThread(QThread):
 #     def set_pressure(self, target_pressure):
 #         self.pressure_offset = target_pressure
     
-#     def release_pressure(self):
-#         self.ATM = not self.ATM
-#         if self.ATM:
-#             self.set_pressure(0)
-    
 #     def set_waveform(self, high, low, high_T, low_T):
-        
 #         P = lambda t: high*(np.heaviside(t%(high_T+low_T),1) - np.heaviside(t%(high_T+low_T)-high_T,1)) + \
 #             low*(np.heaviside(t%(high_T+low_T)-high_T,1) - np.heaviside(t%(high_T+low_T)-high_T-low_T,1))
-        
 #         self.waveform = P
     
 #     @pyqtSlot()
 #     def measure(self):
 #         logging.info('pressure thread started')
-        
 #         self.isrunning = True
 #         start = time.time()
 #         old_pressure = 0
 #         while self.isrunning:
 #             output = self.pressure_offset + np.random.rand(2)*10-5
 #             self.measurement.emit(np.array([output[0], output[1]]))
-            
-#             # Write waveform if active
 #             if self.waveform is not None:
 #                 new_pressure = self.waveform(time.time()-start, -100, -200, 1, 1)
-#                 if new_pressure != old_pressure and not self.ATM:
+#                 if new_pressure != old_pressure:
 #                     self.set_pressure(new_pressure)
 #                     old_pressure = new_pressure
-            
-#             # Enter the record function
 #             if not self.isrecording:
 #                 QThread.msleep(10)
 #             else:
 #                 self.record()
-        
+#         self.set_pressure(0)
 #         logging.info('pressure thread stopped')
 
 #     def record(self):
 #         logging.info("pressure recording started")
-        
 #         PS1 = []
 #         PS2 = []
 #         timing = []
@@ -280,13 +259,9 @@ class PressureThread(QThread):
 #         while self.isrecording:
 #             output = self.pressure_offset + np.random.rand(2)*10-5
 #             T = time.time() - start
-            
 #             PS1.append(output[0])
 #             PS2.append(output[1])
 #             timing.append(T)
 #             self.measurement.emit(np.array([PS1[-1], PS2[-1]]))
-            
-#             # Determines the sampling rate
 #             QThread.msleep(5)
-            
 #         logging.info('pressure recording stopped')

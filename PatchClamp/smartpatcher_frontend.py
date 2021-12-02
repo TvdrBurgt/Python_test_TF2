@@ -431,7 +431,7 @@ class PatchClampUI(QWidget):
     
     
     def request_release_pressure(self):
-        self.backend.pressurethread.release_pressure()
+        self.backend.pressurethread.set_pressure(0)
     
     def request_record_pressure(self):
         if self.request_recordpressure_button.isChecked():
