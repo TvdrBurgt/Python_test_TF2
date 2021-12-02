@@ -40,6 +40,7 @@ class Worker(QObject):
     def mockworker(self):
         print('printed in thread')
         self.graph.emit(np.array([1,2,3]))
+        self.draw.emit(['threshold',2+5, 2-5])
         self.draw.emit(['cross',1000,1000])
         self.draw.emit(['calibrationline',500,500,-(10)])
         self.draw.emit(['calibrationline',500,500,-(10-90)])
@@ -523,13 +524,15 @@ class Worker(QObject):
         tipcoords_manip,tipcoords_cam = self._parent.pipette_coordinates_pair
         xtarget,ytarget,_ = self._parent.target_coordinates
         
-        # Safety measures in place
-        PIPETTE_DESCENT_RANGE = 50  # microns
-        RESISTANCE_DROP = 0.1       # drop-ratio
         # Algorithm variables
-        R_INCREASE = 0.1e6          # MΩ
+        R_CRITICAL = 0.1e6          # MΩ
+        PIPETTE_DESCENT_RANGE = 50  # microns
         STEPSIZE = 0.1              # microns
         TIMEOUT = 30                # seconds
+        EMERGENCY = False
+        
+        # Emit resistance thresholds for visualization
+        self.draw.emit(['threshold',resistance_reference+R_CRITICAL, resistance_reference-R_CRITICAL])
         
         # #Ia) calculate shortest trajectory to target and apply coordinate transformation
         # micromanipulator.moveAbs(x=tipcoords_manip[0], y=tipcoords_manip[1], z=tipcoords_manip[2])
@@ -550,8 +553,7 @@ class Worker(QObject):
         position = micromanipulator.getPos()[2]
         resistancehistory = np.array([resistance])
         positionhistory = np.array([position])
-        print((resistance_reference + R_INCREASE)/1e6)
-        while resistance < resistance_reference + R_INCREASE:
+        while resistance < resistance_reference + R_CRITICAL:
             # step down and measure the resistance
             micromanipulator.moveRel(dx=0, dy=0, dz=-STEPSIZE)
             position = micromanipulator.getPos()[2]
@@ -559,7 +561,7 @@ class Worker(QObject):
             self.graph.emit(resistancehistory)
             
             # safety checks on maximum descent range and resistance drop
-            if resistance < np.nanmax(resistancehistory)*RESISTANCE_DROP:
+            if resistance < resistance_reference-R_CRITICAL:
                 logging.info("Tip broke")
                 break
             else:
@@ -577,7 +579,7 @@ class Worker(QObject):
         #IVb) wait for Gigaseal
         logging.info("Attempting gigaseal...")
         start = time.time()
-        while resistance < 1e9 and time.time()-start < 5:
+        while resistance < 1e9 and time.time()-start < 5 and not EMERGENCY:
             resistance = np.nanmax(self._parent.resistance[-10::])
             self.graph.emit(resistancehistory)
             resistancehistory = np.append(resistancehistory, resistance)
@@ -586,7 +588,7 @@ class Worker(QObject):
         #IVc) wait for Gigaseal with suction pulses
         if resistance > 1e9:
             logging.info("Gigaseal formed!")
-        else:
+        elif not EMERGENCY:
             logging.info("Timeout reached, starting suction pulses...")
             start = time.time()
             pressurecontroller.set_waveform(high=-10, low=-30, high_T=2, low_T=0.5)
@@ -600,7 +602,7 @@ class Worker(QObject):
             if resistance > 1e9:
                 logging.info("Gigaseal formed!")
             else:
-                logging.info("Find an easier cell")
+                logging.info("Gigaseal failed, find an easier cell please...")
         
         timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))   
         np.save(save_directory+'gigaseal_positionhistory_'+timestamp, positionhistory)      #FLAG: relevant for MSc thesis

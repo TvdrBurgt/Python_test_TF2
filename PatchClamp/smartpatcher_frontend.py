@@ -542,6 +542,10 @@ class PatchClampUI(QWidget):
             idx = self.roimanager.giveROIindex('target')[-1]
             x,y = self.liveView.addedItems[idx].state['pos']
             self.liveView.addedItems[idx].setPos([x-dx,y-dy])
+        elif label == 'threshold':
+            upper_threshold = args[0][1]
+            lower_threshold = args[0][2]
+            self.algorithm.setRange(yRange=[lower_threshold,upper_threshold])
         else:
             print(label + ' is not a known draw-label')
     
