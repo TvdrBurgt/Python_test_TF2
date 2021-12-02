@@ -21,6 +21,7 @@ from PyQt5.QtCore import pyqtSignal, pyqtSlot, QThread
     
 #     def __init__(self, address='COM4', baud=9600):
 #         self.parent = None
+#         self.waveform = None
         
 #         # QThread attributes
 #         super().__init__()
@@ -43,6 +44,19 @@ from PyQt5.QtCore import pyqtSignal, pyqtSlot, QThread
 #     @parent.setter
 #     def parent(self, parent):
 #         self._parent = parent
+    
+#     @property
+#     def waveform(self):
+#         return self._waveform
+    
+#     @waveform.setter
+#     def waveform(self, function_handle):
+#         self._waveform = function_handle
+    
+#     @waveform.deleter
+#     def waveform(self):
+#         self._waveform = None
+        
     
 #     def stop(self):
 #         self.isrecording = False
@@ -71,12 +85,12 @@ from PyQt5.QtCore import pyqtSignal, pyqtSlot, QThread
 #         if self.ATM:
 #             self.set_pressure(0)
     
-#     def waveform(self, t, high, low, high_T, low_T):
+#     def set_waveform(self, high, low, high_T, low_T):
         
 #         P = lambda t: high*(np.heaviside(t%(high_T+low_T),1) - np.heaviside(t%(high_T+low_T)-high_T,1)) + \
 #             low*(np.heaviside(t%(high_T+low_T)-high_T,1) - np.heaviside(t%(high_T+low_T)-high_T-low_T,1))
         
-#         return P(t)
+#         self.waveform = P
         
         
 #     @pyqtSlot()
@@ -104,11 +118,12 @@ from PyQt5.QtCore import pyqtSignal, pyqtSlot, QThread
 #                         PS2 = float(response[2])
 #                         self.measurement.emit(np.array([PS1, PS2]))
             
-#             # Set waveform 
-#             new_pressure = self.waveform(time.time()-start, 0, -45, 10, 10)
-#             if new_pressure != old_pressure and not self.ATM:
-#                 self.set_pressure(new_pressure)
-#                 old_pressure = new_pressure
+#             # Write waveform if active
+#             if self.waveform is not None:
+#                 new_pressure = self.waveform(time.time()-start, 0, -45, 10, 10)
+#                 if new_pressure != old_pressure and not self.ATM:
+#                     self.set_pressure(new_pressure)
+#                     old_pressure = new_pressure
             
 #             # Enter the record function
 #             if not self.isrecording:
@@ -169,6 +184,7 @@ class PressureThread(QThread):
     
     def __init__(self, address='COM4', baud=9600):
         self.parent = None
+        self.waveform = None
         
         self.port = address     # COM port micromanipulator is connected to
         self.baudrate = baud    # Baudrate of the micromanipulator
@@ -192,6 +208,18 @@ class PressureThread(QThread):
     def parent(self, parent):
         self._parent = parent
     
+    @property
+    def waveform(self):
+        return self._waveform
+    
+    @waveform.setter
+    def waveform(self, function_handle):
+        self._waveform = function_handle
+    
+    @waveform.deleter
+    def waveform(self):
+        self._waveform = None
+    
     def stop(self):
         self.isrecording = False
         self.isrunning = False
@@ -206,12 +234,12 @@ class PressureThread(QThread):
         if self.ATM:
             self.set_pressure(0)
     
-    def waveform(self, t, high, low, high_T, low_T):
+    def set_waveform(self, high, low, high_T, low_T):
         
         P = lambda t: high*(np.heaviside(t%(high_T+low_T),1) - np.heaviside(t%(high_T+low_T)-high_T,1)) + \
             low*(np.heaviside(t%(high_T+low_T)-high_T,1) - np.heaviside(t%(high_T+low_T)-high_T-low_T,1))
         
-        return P(t)
+        self.waveform = P
     
     @pyqtSlot()
     def measure(self):
@@ -224,11 +252,12 @@ class PressureThread(QThread):
             output = self.pressure_offset + np.random.rand(2)*10-5
             self.measurement.emit(np.array([output[0], output[1]]))
             
-            # Set waveform 
-            new_pressure = self.waveform(time.time()-start, -100, -200, 1, 1)
-            if new_pressure != old_pressure and not self.ATM:
-                self.set_pressure(new_pressure)
-                old_pressure = new_pressure
+            # Write waveform if active
+            if self.waveform is not None:
+                new_pressure = self.waveform(time.time()-start, -100, -200, 1, 1)
+                if new_pressure != old_pressure and not self.ATM:
+                    self.set_pressure(new_pressure)
+                    old_pressure = new_pressure
             
             # Enter the record function
             if not self.isrecording:
