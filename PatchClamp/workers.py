@@ -288,7 +288,6 @@ class Worker(QObject):
         
         # algorithm variables
         stepsize = 10
-        focusbias = 10
         min_taillength = 10
         
         reference = micromanipulator.getPos()
@@ -449,8 +448,7 @@ class Worker(QObject):
         
         #VII) correct for bias in focus height and move pipette into focus
         foundfocus = z
-        pipette_in_focus = foundfocus - focusbias
-        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pipette_in_focus)
+        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=foundfocus)
         
         I = camera.snap()                                                                   #FLAG: relevant for MSc thesis
         io.imsave(save_directory+'autofocus_'+timestamp+'.tif', I, check_contrast=False)    #FLAG: relevant for MSc thesis
@@ -548,6 +546,7 @@ class Worker(QObject):
         resistance_reference = np.nanmean(self._parent.resistance)
         
         #III) descent pipette with one micron at a time until R increases
+        logging.info("Tip descent started...")
         resistance = resistance_reference
         position = micromanipulator.getPos()[2]
         resistancehistory = np.array([resistance])
@@ -575,6 +574,7 @@ class Worker(QObject):
         pressurecontroller.set_pressure(0)
         
         #IVb) wait for Gigaseal
+        logging.info("Attempting gigaseas...")
         start = time.time()
         while resistance < 1e9 and time.time()-start < TIMEOUT:
             resistance = np.nanmax(self._parent.resistance[-10::])
@@ -582,7 +582,19 @@ class Worker(QObject):
             resistancehistory = np.append(resistancehistory, resistance)
             time.sleep(0.1)
         
-        logging.info("Gigaseal formed!")
+        #IVc) wait for Gigaseal with suction pulses
+        if resistance > 1e9:
+            logging.info("Gigaseal formed!")
+        else:
+            logging.info("Timeout reached, starting suction pulses...")
+            pressurecontroller.set_waveform(high=-10, low=-30, high_T=2, low_T=0.5)
+            while resistance < 1e9 and time.time()-start < TIMEOUT:
+                resistance = np.nanmax(self._parent.resistance[-10::])
+                self.graph.emit(resistancehistory)
+                resistancehistory = np.append(resistancehistory, resistance)
+                time.sleep(0.1)
+            del pressurecontroller.waveform
+            pressurecontroller.set_pressure(0)
         
         timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))   
         np.save(save_directory+'gigaseal_positionhistory_'+timestamp, positionhistory)      #FLAG: relevant for MSc thesis
