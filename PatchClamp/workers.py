@@ -235,7 +235,7 @@ class Worker(QObject):
             
             # pipette tip detection algorithm
             x1, y1 = ia.detectPipettetip(image_left, image_right, diameter=D, orientation=O)
-#            self.draw.emit(['cross',x1,y1])
+            self.draw.emit(['cross',x1,y1])
             W = ia.makeGaussian(size=image_left.shape, mu=(x1,y1), sigma=(image_left.shape[0]//12,image_left.shape[1]//12))
             camera.snapsignal.emit(np.multiply(image_right,W))
             x, y = ia.detectPipettetip(np.multiply(image_left,W), np.multiply(image_right,W), diameter=(5/4)*D, orientation=O)
@@ -527,22 +527,21 @@ class Worker(QObject):
         PIPETTE_DESCENT_RANGE = 50  # microns
         RESISTANCE_DROP = 0.1       # drop-ratio
         # Algorithm variables
-        R_INCREASE = 0.3e6          # MΩ
+        R_INCREASE = 0.1e6          # MΩ
         STEPSIZE = 0.1              # microns
         TIMEOUT = 30                # seconds
         
-        #Ia) calculate shortest trajectory to target and apply coordinate transformation
-        micromanipulator.moveAbs(x=tipcoords_manip[0], y=tipcoords_manip[1], z=tipcoords_manip[2])
-        dx = xtarget - tipcoords_cam[0]                     #x trajectory (in pixels)
-        dy = ytarget - tipcoords_cam[1]                     #y trajectory (in pixels)
-        trajectory = np.array([dx,dy,0])*pixelsize/1000     #trajectory (in microns)
-        trajectory = account4rotation(origin=tipcoords_manip, target=tipcoords_manip+trajectory)
+        # #Ia) calculate shortest trajectory to target and apply coordinate transformation
+        # micromanipulator.moveAbs(x=tipcoords_manip[0], y=tipcoords_manip[1], z=tipcoords_manip[2])
+        # dx = xtarget - tipcoords_cam[0]                     #x trajectory (in pixels)
+        # dy = ytarget - tipcoords_cam[1]                     #y trajectory (in pixels)
+        # trajectory = np.array([dx,dy,0])*pixelsize/1000     #trajectory (in microns)
+        # trajectory = account4rotation(origin=np.zeros(3), target=trajectory)
         
-        #Ib) manoeuvre the micromanipulator above the target
-        micromanipulator.moveRel(dx=trajectory[0], dy=trajectory[1], dz=trajectory[2])
+        # # #Ib) manoeuvre the micromanipulator above the target
+        # micromanipulator.moveRel(dx=trajectory[0], dy=trajectory[1], dz=trajectory[2])
         
         #II) apply small pressure to the pipette for final approach
-        pressurecontroller.set_pressure(30)
         resistance_reference = np.nanmean(self._parent.resistance)
         
         #III) descent pipette with one micron at a time until R increases
@@ -551,20 +550,22 @@ class Worker(QObject):
         position = micromanipulator.getPos()[2]
         resistancehistory = np.array([resistance])
         positionhistory = np.array([position])
+        print((resistance_reference + R_INCREASE)/1e6)
         while resistance < resistance_reference + R_INCREASE:
             # step down and measure the resistance
             micromanipulator.moveRel(dx=0, dy=0, dz=-STEPSIZE)
             position = micromanipulator.getPos()[2]
-            time.sleep(0.01)
             resistance = np.nanmean(self._parent.resistance[-10::])
             self.graph.emit(resistancehistory)
             
             # safety checks on maximum descent range and resistance drop
             if resistance < np.nanmax(resistancehistory)*RESISTANCE_DROP:
+                logging.info("Tip broke")
                 break
             else:
                 resistancehistory = np.append(resistancehistory, resistance)
             if positionhistory[-1]-positionhistory[0] >= PIPETTE_DESCENT_RANGE:
+                logging.info("Maximum descent range achieved")
                 break
             else:
                 positionhistory = np.append(positionhistory, position)
@@ -574,9 +575,9 @@ class Worker(QObject):
         pressurecontroller.set_pressure(0)
         
         #IVb) wait for Gigaseal
-        logging.info("Attempting gigaseas...")
+        logging.info("Attempting gigaseal...")
         start = time.time()
-        while resistance < 1e9 and time.time()-start < TIMEOUT:
+        while resistance < 1e9 and time.time()-start < 5:
             resistance = np.nanmax(self._parent.resistance[-10::])
             self.graph.emit(resistancehistory)
             resistancehistory = np.append(resistancehistory, resistance)
@@ -587,6 +588,7 @@ class Worker(QObject):
             logging.info("Gigaseal formed!")
         else:
             logging.info("Timeout reached, starting suction pulses...")
+            start = time.time()
             pressurecontroller.set_waveform(high=-10, low=-30, high_T=2, low_T=0.5)
             while resistance < 1e9 and time.time()-start < TIMEOUT:
                 resistance = np.nanmax(self._parent.resistance[-10::])
@@ -595,6 +597,10 @@ class Worker(QObject):
                 time.sleep(0.1)
             del pressurecontroller.waveform
             pressurecontroller.set_pressure(0)
+            if resistance > 1e9:
+                logging.info("Gigaseal formed!")
+            else:
+                logging.info("Find an easier cell")
         
         timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))   
         np.save(save_directory+'gigaseal_positionhistory_'+timestamp, positionhistory)      #FLAG: relevant for MSc thesis

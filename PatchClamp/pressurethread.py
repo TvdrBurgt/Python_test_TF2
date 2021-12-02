@@ -19,7 +19,7 @@ class PressureThread(QThread):
     """
     measurement = pyqtSignal(np.ndarray)
     
-    def __init__(self, address='COM4', baud=9600):
+    def __init__(self, address='COM21', baud=9600):
         self.parent = None
         self.waveform = None
         
@@ -114,13 +114,16 @@ class PressureThread(QThread):
                 response = response.split()
                 if len(response) > 0:
                     if response[0] == "PS":
-                        PS1 = float(response[1])
-                        PS2 = float(response[2])
-                        self.measurement.emit(np.array([PS1, PS2]))
+                        try:
+                            PS1 = float(response[1])
+                            PS2 = float(response[2])
+                            self.measurement.emit(np.array([PS1, PS2]))
+                        except ValueError:
+                            pass
             
             # Write waveform if active
             if self.waveform is not None:
-                new_pressure = self.waveform(time.time()-start, 0, -45, 10, 10)
+                new_pressure = self.waveform(time.time()-start)
                 if new_pressure != old_pressure and not self.ATM:
                     self.set_pressure(new_pressure)
                     old_pressure = new_pressure
