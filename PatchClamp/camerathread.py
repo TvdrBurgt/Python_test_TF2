@@ -20,7 +20,7 @@ class CameraThread(QThread):
     livesignal = pyqtSignal(np.ndarray)
     
     def __init__(self, camerahandle=None):
-        self.exposuretime = 0.02    # seconds
+        self.exposuretime = 0.1    # seconds
         self.GUIframerate = 25      # frames per second
         self.sleeptime = np.max([1/self.GUIframerate, self.exposuretime])
         self.frame = np.random.rand(2048, 2048)

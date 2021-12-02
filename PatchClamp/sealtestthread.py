@@ -57,7 +57,7 @@ class SealTestThread(QThread):
         self.patchVoltInChan = None
         
         # generate wave function from loaded constants
-        self.wave = zeros(self.readNumber)
+        self.wave = np.zeros(self.readNumber)
         self.setWave(1,0,0)
         
         
