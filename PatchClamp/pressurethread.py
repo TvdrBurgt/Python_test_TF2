@@ -71,6 +71,20 @@ class PressureThread(QThread):
         
         command = "P %d" % pressure + self.ENDOFLINE
         
+        # # Remove any active waveform
+        # del self.waveform
+        
+        # Encode the command to ascii and send to the device
+        self.controller.write(command.encode('ascii'))
+    
+    def set_spike(self, pressure):
+        """
+        Sets a pressure pulse by building up pressure to release if immediately
+        after it reaches the desired pressure.
+        """
+        
+        command = "S %d" % pressure + self.ENDOFLINE
+        
         # Remove any active waveform
         del self.waveform
         

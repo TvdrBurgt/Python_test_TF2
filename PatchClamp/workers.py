@@ -531,21 +531,19 @@ class Worker(QObject):
         TIMEOUT = 30                # seconds
         EMERGENCY = False
         
-        # Emit resistance thresholds for visualization
-        self.draw.emit(['threshold',resistance_reference+R_CRITICAL, resistance_reference-R_CRITICAL])
+        #Ia) calculate shortest trajectory to target and apply coordinate transformation
+        micromanipulator.moveAbs(x=tipcoords_manip[0], y=tipcoords_manip[1], z=tipcoords_manip[2])
+        dx = xtarget - tipcoords_cam[0]                     #x trajectory (in pixels)
+        dy = ytarget - tipcoords_cam[1]                     #y trajectory (in pixels)
+        trajectory = np.array([dx,dy,0])*pixelsize/1000     #trajectory (in microns)
+        trajectory = account4rotation(origin=np.zeros(3), target=trajectory)
         
-        # #Ia) calculate shortest trajectory to target and apply coordinate transformation
-        # micromanipulator.moveAbs(x=tipcoords_manip[0], y=tipcoords_manip[1], z=tipcoords_manip[2])
-        # dx = xtarget - tipcoords_cam[0]                     #x trajectory (in pixels)
-        # dy = ytarget - tipcoords_cam[1]                     #y trajectory (in pixels)
-        # trajectory = np.array([dx,dy,0])*pixelsize/1000     #trajectory (in microns)
-        # trajectory = account4rotation(origin=np.zeros(3), target=trajectory)
+        # Ib) manoeuvre the micromanipulator above the target
+        micromanipulator.moveRel(dx=trajectory[0], dy=trajectory[1], dz=trajectory[2])
         
-        # # #Ib) manoeuvre the micromanipulator above the target
-        # micromanipulator.moveRel(dx=trajectory[0], dy=trajectory[1], dz=trajectory[2])
-        
-        #II) apply small pressure to the pipette for final approach
+        # II) measure resistance and use it as reference value
         resistance_reference = np.nanmean(self._parent.resistance)
+        self.draw.emit(['threshold',resistance_reference+R_CRITICAL, resistance_reference-R_CRITICAL])
         
         #III) descent pipette with one micron at a time until R increases
         logging.info("Tip descent started...")
@@ -571,7 +569,6 @@ class Worker(QObject):
                 break
             else:
                 positionhistory = np.append(positionhistory, position)
-            
         
         #IVa) set pressure to ATM
         pressurecontroller.set_pressure(0)
@@ -610,6 +607,49 @@ class Worker(QObject):
         
         self.finished.emit()
         
+    @pyqtSlot
+    def break_in(self):
+        """
+        Apply suction pulses according to:
+            Gigaseal formed. Break-in via suction pulses. (time = 0.5+0.2*attempt sec)
+            Pulses of:  -140, -100
+        """
+        save_directory = self._parent.save_directory
+        pressurecontroller = self._parent.pressurethread
+        sealtestthread = self._parent.sealtestthread
+        
+        # Algorithm variables
+        N = 100                     # number of samples
+        TIMEOUT = 30                # seconds
+        
+        # I) average a few sliding windows of current recordings for reference
+        slidingwindow_reference = self._parent.current
+        for i in range(0,N):
+            slidingwindow_reference += self._parent.current
+        slidingwindow_reference = slidingwindow_reference/N
+        
+        # II) try breaking in by suction pulses
+        logging.info("Attempting break-in...")
+        start = time.time()
+        while time.time()-start < TIMEOUT:
+            pressurecontroller.set_spike(-100)
+            time.sleep(0.5)
+            pressurecontroller.set_spike(-150)
+            time.sleep(0.5)
+            
+            
+        # Continue the resistance graph
+        
+        # Check current and resistance requirements for breakin
+        
+        
+        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))   
+        np.save(save_directory+'breakin_referencecurrent_'+timestamp, slidingwindow_reference)  #FLAG: relevant for MSc thesis
+        
+        self.finished.emit()
+    
+    
+    
     
     
     # @pyqtSlot()

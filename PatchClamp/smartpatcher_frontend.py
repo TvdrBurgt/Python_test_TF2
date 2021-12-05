@@ -191,7 +191,7 @@ class PatchClampUI(QWidget):
         self.membraneVoltLabel = QLabel("Vm: ")
         
         request_gigaseal_button = QPushButton(text="Gigaseal", clicked=self.request_formgigaseal)
-        request_breakin_button = QPushButton(text="Break-in", clicked=self.mockfunction)
+        request_breakin_button = QPushButton(text="Break-in", clicked=self.request_breakin)
         request_zap_button = QPushButton(text="ZAP", clicked=self.mockfunction)
         
         sealtestLayout.addWidget(self.resistanceLabel, 0, 0, 1, 3)
@@ -441,6 +441,7 @@ class PatchClampUI(QWidget):
     
     def request_apply_pressure(self):
         target_pressure = self.set_pressure_button.value()
+        del self.backend.pressurethread.waveform
         self.backend.pressurethread.set_pressure(target_pressure)
     
     
@@ -501,13 +502,16 @@ class PatchClampUI(QWidget):
             self.backend.target_coordinates = np.array([x,y,None])
     
     def request_formgigaseal(self):
-        # Clear the plot and update all labels
+        # Clear the algorithm plot and update all labels
         self.algorithmPlot.setData()
         self.algorithm.setTitle('Pipette resistance')
         self.algorithm.setLabel("left", text="R", units='Ohm')
         self.algorithm.setLabel("bottom", text="time", units="")
         
         self.backend.request(name='gigaseal')
+    
+    def request_breakin(self):
+        self.backend.request(name='breakin')
     
     
     def draw_roi(self, *args):
