@@ -148,7 +148,7 @@ class PatchClampUI(QWidget):
         pressurePlot = sensorWidget.addPlot(3, 0, 1, 1)
         pressurePlot.setTitle("Pressure")
         pressurePlot.setLabel("left", units="mBar")
-        pressurePlot.setLabel("bottom", units='a.u.', text="time")
+        pressurePlot.setLabel("bottom", units='s', text="time")
         pressurePlot.setRange(yRange=[-250,250])
         self.pressurePlot = pressurePlot.plot(pen=(3,3))
         
@@ -400,7 +400,7 @@ class PatchClampUI(QWidget):
         """
         logging.info('connect pressurethread button pushed')
         if self.connect_pressurecontroller_button.isChecked():
-            pressurethread = PressureThread(address='COM4', baud=9600)
+            pressurethread = PressureThread(pressurecontroller_handle=None)
             
             self.signal_pressure = pressurethread.measurement
             self.signal_pressure.connect(self.update_pressure)
@@ -409,8 +409,8 @@ class PatchClampUI(QWidget):
         else:
             del self.backend.pressurethread
             del self.signal_pressure
-        
-        
+    
+    
     def toggle_pauselive(self):
         if hasattr(self, 'signal_camera_live'):
             if self.request_pause_button.isChecked():
@@ -431,7 +431,7 @@ class PatchClampUI(QWidget):
     
     
     def request_release_pressure(self):
-        self.backend.pressurethread.release_pressure()
+        self.backend.pressurethread.set_pressure_stop_waveform(0)
     
     def request_record_pressure(self):
         if self.request_recordpressure_button.isChecked():
@@ -441,7 +441,7 @@ class PatchClampUI(QWidget):
     
     def request_apply_pressure(self):
         target_pressure = self.set_pressure_button.value()
-        self.backend.pressurethread.set_pressure(target_pressure)
+        self.backend.pressurethread.set_pressure_stop_waveform(target_pressure)
     
     
     def request_hardcalibration_xy(self):
@@ -641,10 +641,9 @@ class PatchClampUI(QWidget):
     
     
     def update_pressure(self, data):
-        # pressure_in = data[1]
-        pressure_out = self.backend._pressure_append_(data[0])
-        self.pressurePlot.setData(pressure_out)
-        self.pressureLabel.setText("Pressure (in mBar): %.1f" % pressure_out[-1])
+        pressure, timestamps  = self.backend._pressure_append_(data[0], data[1])
+        self.pressurePlot.setData(timestamps, pressure)
+        self.pressureLabel.setText("Pressure (in mBar): %.1f" % pressure[-1])
     
     def STOP(self):
         if self.STOP_button.isChecked():

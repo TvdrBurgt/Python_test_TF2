@@ -39,6 +39,7 @@ class SmartPatcher(QObject):
         self.n_v = 0
         self.window_size_p = 200
         self.pressure = np.array([])
+        self.pressure_timestamps = np.array([])
         self.n_p = 0
         
         # Hardware devices
@@ -188,18 +189,20 @@ class SmartPatcher(QObject):
         
         return self.voltage
     
-    def _pressure_append_(self, values):
+    def _pressure_append_(self, values, timings):
         """Append new values to a sliding window."""
         length = 1
         if self.n_p + length > self.window_size_p:
             # Buffer is full so make room.
             copySize = self.window_size_p - length
             self.pressure = self.pressure[-copySize:]
+            self.pressure_timestamps = self.pressure_timestamps[-copySize:]
             self.n_p = copySize
         self.pressure = np.append(self.pressure, values)
+        self.pressure_timestamps = np.append(self.pressure_timestamps, timings)
         self.n_p += length
         
-        return self.pressure
+        return self.pressure, self.pressure_timestamps
     
     
     @property
