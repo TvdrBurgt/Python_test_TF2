@@ -148,7 +148,7 @@ class PatchClampUI(QWidget):
         pressurePlot = sensorWidget.addPlot(3, 0, 1, 1)
         pressurePlot.setTitle("Pressure")
         pressurePlot.setLabel("left", units="mBar")
-        pressurePlot.setLabel("bottom", text="time", units="")
+        pressurePlot.setLabel("bottom", text="time", units="s")
         pressurePlot.setRange(yRange=[-250,250])
         self.pressurePlot = pressurePlot.plot(pen=(3,3))
         
@@ -221,8 +221,7 @@ class PatchClampUI(QWidget):
         self.set_pressure_button.setSingleStep(10)
         
         # Button to release pressure instantaneous
-        self.request_releasepressure_button = QPushButton(text="Release pressure", clicked=self.request_release_pressure)
-        self.request_releasepressure_button.setCheckable(True)
+        request_releasepressure_button = QPushButton(text="Release pressure", clicked=self.request_release_pressure)
         
         # Button to record pressure input
         self.request_recordpressure_button = QPushButton(text="Record pressure", clicked=self.request_record_pressure)
@@ -233,7 +232,7 @@ class PatchClampUI(QWidget):
         
         pressureLayout.addWidget(self.pressureLabel, 0, 0, 1, 2)
         pressureLayout.addWidget(self.set_pressure_button, 0, 2, 1, 1)
-        pressureLayout.addWidget(self.request_releasepressure_button, 1, 0, 1, 1)
+        pressureLayout.addWidget(request_releasepressure_button, 1, 0, 1, 1)
         pressureLayout.addWidget(self.request_recordpressure_button, 1, 1, 1, 1)
         pressureLayout.addWidget(request_applypressure_button, 1, 2, 1, 1)
         pressureContainer.setLayout(pressureLayout)
@@ -400,7 +399,7 @@ class PatchClampUI(QWidget):
         """
         logging.info('connect pressurethread button pushed')
         if self.connect_pressurecontroller_button.isChecked():
-            pressurethread = PressureThread(address='COM4', baud=9600)
+            pressurethread = PressureThread(pressurecontroller_handle=None)
             
             self.signal_pressure = pressurethread.measurement
             self.signal_pressure.connect(self.update_pressureplot)
@@ -409,8 +408,8 @@ class PatchClampUI(QWidget):
         else:
             del self.backend.pressurethread
             del self.signal_pressure
-        
-        
+    
+    
     def toggle_pauselive(self):
         if hasattr(self, 'signal_camera_live'):
             if self.request_pause_button.isChecked():
@@ -429,9 +428,8 @@ class PatchClampUI(QWidget):
             self.update_snap(I)
             raise ValueError('no camera connected')
     
-    
     def request_release_pressure(self):
-        self.backend.pressurethread.set_pressure(0)
+        self.backend.pressurethread.set_pressure_stop_waveform(0)
     
     def request_record_pressure(self):
         if self.request_recordpressure_button.isChecked():
@@ -441,9 +439,7 @@ class PatchClampUI(QWidget):
     
     def request_apply_pressure(self):
         target_pressure = self.set_pressure_button.value()
-        del self.backend.pressurethread.waveform
-        self.backend.pressurethread.set_pressure(target_pressure)
-    
+        self.backend.pressurethread.set_pressure_stop_waveform(target_pressure)
     
     def request_hardcalibration_xy(self):
         self.backend.request(name='hardcalibration', mode='XY')
@@ -578,12 +574,12 @@ class PatchClampUI(QWidget):
             self.algorithmPlot.setData(xs,ys)
     
     def update_pressureplot(self, data):
-        # pressure_in = data[1]
-        self.backend._pressure_append_(data[0])
-        pressure_out = self.backend.pressure
+        self.backend._pressure_append_(data[0], data[1])
+        pressuredata = self.backend.pressure
         
-        self.pressurePlot.setData(pressure_out)
-        self.pressureLabel.setText("Pressure (in mBar): %.1f" % pressure_out[-1])
+        self.pressurePlot.setData(pressuredata[1], pressuredata[0])
+        self.pressureLabel.setText("Pressure (in mBar): %.1f" % pressuredata[0,-1])
+        
     
     def update_currentvoltageplot(self, voltOut, curOut):
         self.backend._voltage_append_(voltOut / 10)

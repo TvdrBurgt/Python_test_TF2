@@ -607,7 +607,7 @@ class Worker(QObject):
         
         self.finished.emit()
         
-    @pyqtSlot
+    @pyqtSlot()
     def break_in(self):
         """
         Apply suction pulses according to:
