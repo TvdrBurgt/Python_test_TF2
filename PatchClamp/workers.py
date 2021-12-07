@@ -518,7 +518,6 @@ class Worker(QObject):
         save_directory = self._parent.save_directory
         micromanipulator = self._parent.micromanipulator
         pressurecontroller = self._parent.pressurethread
-        sealtestthread = self._parent.sealtestthread
         account4rotation = self._parent.account4rotation
         pixelsize = self._parent.pixel_size
         tipcoords_manip,tipcoords_cam = self._parent.pipette_coordinates_pair
@@ -526,7 +525,7 @@ class Worker(QObject):
         resistance_reference = self._parent.resistance_reference
         
         # Algorithm variables
-        R_CRITICAL = 0.1e6          # MΩ
+        R_CRITICAL = 0.1e6          # ohm
         PIPETTE_DESCENT_RANGE = 50  # microns
         STEPSIZE = 0.1              # microns
         TIMEOUT = 30                # seconds
@@ -544,7 +543,7 @@ class Worker(QObject):
         micromanipulator.moveRel(dx=trajectory[0], dy=trajectory[1], dz=trajectory[2])
         
         # II) make sure pressure is set and check if tip is not clogged
-        pressurecontroller.set_pressure(50)
+        pressurecontroller.set_pressure_stop_waveform(50)
         resistance_ref = np.nanmean(self._parent.resistance)
         if resistance_reference > resistance_ref + R_CRITICAL:
             logging.info("Pipette tip is contaminated")
@@ -578,7 +577,7 @@ class Worker(QObject):
                 positionhistory = np.append(positionhistory, position)
         
         #IVa) set pressure to ATM
-        pressurecontroller.set_pressure(0)
+        pressurecontroller.set_pressure_stop_waveform(0)
         
         #IVb) wait for Gigaseal
         logging.info("Attempting gigaseal...")
@@ -601,8 +600,7 @@ class Worker(QObject):
                 self.graph.emit(resistancehistory)
                 resistancehistory = np.append(resistancehistory, resistance)
                 time.sleep(0.1)
-            del pressurecontroller.waveform
-            pressurecontroller.set_pressure(0)
+            pressurecontroller.set_pressure_stop_waveform(0)
             if resistance > 1e9:
                 logging.info("Gigaseal formed!")
             else:
@@ -616,42 +614,52 @@ class Worker(QObject):
         
     @pyqtSlot()
     def break_in(self):
-        """
-        Apply suction pulses according to:
-            Gigaseal formed. Break-in via suction pulses. (time = 0.5+0.2*attempt sec)
-            Pulses of:  -140, -100
+        """ Break-in applies pressure pulses to rupture the membrane patch.
+        
+        I) Apply suction pulses for 30 seconds with increasing vacuum pressure.
+        II) Apply long suction while zapping the membrane as a last resort.
+        
+        The break-in is successful if the resistance drops below 300MΩ and the
+        current is in the range [-300, 300]pA.
         """
         save_directory = self._parent.save_directory
         pressurecontroller = self._parent.pressurethread
-        sealtestthread = self._parent.sealtestthread
         
         # Algorithm variables
-        N = 100                     # number of samples
-        TIMEOUT = 30                # seconds
+        TIMEOUT = 30                        # seconds
+        I_BREAKIN_CONDITION = 300*1e-12     # ampere absolute valued
+        R_BREAKIN_CONDITION = 300*1e6       # ohm
+        EMERGENCY= False
         
-        # I) average a few sliding windows of current recordings for reference
-        slidingwindow_reference = self._parent.current
-        for i in range(0,N):
-            slidingwindow_reference += self._parent.current
-        slidingwindow_reference = slidingwindow_reference/N
-        
-        # II) try breaking in by suction pulses
+        # I) attempt breaking in by increasing suction pulses 
         logging.info("Attempting break-in...")
+        resistancehistory = np.array([])
+        currenthistory = np.array([[],[]])
         start = time.time()
-        while time.time()-start < TIMEOUT:
-            pressurecontroller.set_spike(-100)
-            time.sleep(0.5)
-            pressurecontroller.set_spike(-150)
-            time.sleep(0.5)
-            
-            
-        # Continue the resistance graph
+        while time.time()-start < TIMEOUT and not EMERGENCY:
+            magnitude = round(start - time.time())
+            pressurecontroller.set_pulse_stop_waveform(-magnitude)
+            time.sleep(0.8)
+            resistance = np.nanmax(self._parent.resistance[-10::])
+            Imax = np.max(self._parent.current)
+            Imin = np.min(self._parent.current)
+            if Imax <= I_BREAKIN_CONDITION and Imin >= -I_BREAKIN_CONDITION \
+                and resistance <= R_BREAKIN_CONDITION:
+                    break
+            else:
+                currenthistory = np.append(currenthistory, np.array([[Imax],[Imin]]), axis=1)
+                resistancehistory = np.append(resistancehistory, resistance)
+            self.graph.emit(resistancehistory)
         
-        # Check current and resistance requirements for breakin
+        slidingwindow_current = self._parent.current
+        for i in range(0,10):
+            slidingwindow_current += self._parent.current
+        slidingwindow_current = slidingwindow_current/10
         
-        
-        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))   
-        np.save(save_directory+'breakin_referencecurrent_'+timestamp, slidingwindow_reference)  #FLAG: relevant for MSc thesis
+        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
+        np.save(save_directory+'breakin_currenthistory_'+timestamp, currenthistory)  #FLAG: relevant for MSc thesis
+        np.save(save_directory+'breakin_resistancehistory_'+timestamp, resistancehistory)  #FLAG: relevant for MSc thesis
+        np.save(save_directory+'breakin_slidingwindowcurrent_'+timestamp, slidingwindow_current)  #FLAG: relevant for MSc thesis
         
         self.finished.emit()
     
