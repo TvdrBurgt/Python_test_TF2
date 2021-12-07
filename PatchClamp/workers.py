@@ -523,6 +523,7 @@ class Worker(QObject):
         pixelsize = self._parent.pixel_size
         tipcoords_manip,tipcoords_cam = self._parent.pipette_coordinates_pair
         xtarget,ytarget,_ = self._parent.target_coordinates
+        resistance_reference = self._parent.resistance_reference
         
         # Algorithm variables
         R_CRITICAL = 0.1e6          # MΩ
@@ -530,6 +531,7 @@ class Worker(QObject):
         STEPSIZE = 0.1              # microns
         TIMEOUT = 30                # seconds
         EMERGENCY = False
+        
         
         #Ia) calculate shortest trajectory to target and apply coordinate transformation
         micromanipulator.moveAbs(x=tipcoords_manip[0], y=tipcoords_manip[1], z=tipcoords_manip[2])
@@ -541,17 +543,22 @@ class Worker(QObject):
         # Ib) manoeuvre the micromanipulator above the target
         micromanipulator.moveRel(dx=trajectory[0], dy=trajectory[1], dz=trajectory[2])
         
-        # II) measure resistance and use it as reference value
-        resistance_reference = np.nanmean(self._parent.resistance)
-        self.draw.emit(['threshold',resistance_reference+R_CRITICAL, resistance_reference-R_CRITICAL])
+        # II) make sure pressure is set and check if tip is not clogged
+        pressurecontroller.set_pressure(50)
+        resistance_ref = np.nanmean(self._parent.resistance)
+        if resistance_reference > resistance_ref + R_CRITICAL:
+            logging.info("Pipette tip is contaminated")
+            EMERGENCY = True;
+        else:
+            self.draw.emit(['threshold',resistance_ref+R_CRITICAL, resistance_ref-R_CRITICAL])
         
         #III) descent pipette with one micron at a time until R increases
         logging.info("Tip descent started...")
-        resistance = resistance_reference
+        resistance = resistance_ref
         position = micromanipulator.getPos()[2]
         resistancehistory = np.array([resistance])
         positionhistory = np.array([position])
-        while resistance < resistance_reference + R_CRITICAL:
+        while resistance < resistance_ref + R_CRITICAL and not EMERGENCY:
             # step down and measure the resistance
             micromanipulator.moveRel(dx=0, dy=0, dz=-STEPSIZE)
             position = micromanipulator.getPos()[2]
@@ -559,7 +566,7 @@ class Worker(QObject):
             self.graph.emit(resistancehistory)
             
             # safety checks on maximum descent range and resistance drop
-            if resistance < resistance_reference-R_CRITICAL:
+            if resistance < resistance_ref-R_CRITICAL:
                 logging.info("Tip broke")
                 break
             else:

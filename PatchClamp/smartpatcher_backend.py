@@ -32,6 +32,7 @@ class SmartPatcher(QObject):
             [[None,None,None], [None,None,None]])
         self._target_coordinates = np.array(        # [X, Y, Z] in pixels
             [None,None,None])
+        self._resistance_reference = None           # in MΩ
         self.window_size_c = 200
         self.window_size_v = 200
         self.window_size_p = 200
@@ -487,6 +488,18 @@ class SmartPatcher(QObject):
     def target_coordinates(self):
         self._pipette_coordinates = np.array([None, None, None])
     
+    
+    @property
+    def resistance_reference(self):
+        return self._resistance_reference
+    
+    @resistance_reference.setter
+    def resistance_reference(self, resistance):
+        self._resistance_reference = resistance
+    
+    @resistance_reference.deleter
+    def resistance_reference(self):
+        self._resistance_reference = None
     
     
     @property
