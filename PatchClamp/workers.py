@@ -624,6 +624,7 @@ class Worker(QObject):
         """
         save_directory = self._parent.save_directory
         pressurecontroller = self._parent.pressurethread
+        sealtestthread = self._parent.sealtestthread
         
         # Algorithm variables
         TIMEOUT = 30                        # seconds
@@ -651,6 +652,15 @@ class Worker(QObject):
                 resistancehistory = np.append(resistancehistory, resistance)
             self.graph.emit(resistancehistory)
         
+        # # II) second attempt but with zap
+        # resistance = np.nanmax(self._parent.resistance[-10::])
+        # Imax = np.max(self._parent.current)
+        # Imin = np.min(self._parent.current)
+        # if Imax <= I_BREAKIN_CONDITION and Imin >= -I_BREAKIN_CONDITION \
+        #     and resistance <= R_BREAKIN_CONDITION:
+        #         # zap membrane
+        #         # apply long suction
+        
         slidingwindow_current = self._parent.current
         for i in range(0,10):
             slidingwindow_current += self._parent.current
@@ -667,19 +677,48 @@ class Worker(QObject):
     
     
     
-    # @pyqtSlot()
-    # def request_imagexygrid(self):
-    #     save_directory = self._parent.save_directory
-    #     micromanipulator = self._parent.micromanipulator
-    #     camera = self._parent.camerathread
-    #     x,y,z = micromanipulator.getPos()
-    #     stepsize = 50
-    #     for i in range(0, 11):
-    #         for j in range(0, 11):
-    #             micromanipulator.moveAbs(x+i*stepsize, y+j*stepsize,z)
-    #             for k in ['a','b']:
-    #                 if k == 'b':
-    #                     micromanipulator.moveRel(dx=5, dy=0, dz=0)
-    #                 snap = camera.snap()
-    #                 io.imsave(save_directory+'X%dY%d'%(i*stepsize,j*stepsize)+k+'.tif', snap, check_contrast=False)
+    
+    @pyqtSlot()
+    def request_imagexygrid(self):
+        save_directory = self._parent.save_directory
+        micromanipulator = self._parent.micromanipulator
+        camera = self._parent.camerathread
+        x,y,z = micromanipulator.getPos()
+        stepsize = 50
+        positionhistory = np.array([[],[]])
+        for i in range(0, 11):
+            for j in range(0, 11):
+                micromanipulator.moveAbs(x+i*stepsize, y+j*stepsize,z)
+                for k in ['a','b']:
+                    if k == 'b':
+                        micromanipulator.moveRel(dx=5, dy=0, dz=0)
+                    snap = camera.snap()
+                    io.imsave(save_directory+'_imagexygrid_'+'X%dY%d'%(i*stepsize,j*stepsize)+k+'.tif', snap, check_contrast=False)
+                    x2,y2,z2 = micromanipulator.getPos()
+                    positionhistory = np.append(positionhistory, np.array([[x2],[y2]]))
+        np.save(save_directory+'_imagexygrid_', positionhistory)
+        self.finished.emit()
+    
+    
+    @pyqtSlot()
+    def request_imagezstack(self):
+        save_directory = self._parent.save_directory
+        micromanipulator = self._parent.micromanipulator
+        camera = self._parent.camerathread
+        x,y,z = micromanipulator.getPos()
+        stepsize = 10
+        positionhistory = np.array([])
+        for i in range(0,201):
+            micromanipulator.moveAbs(x,y,z=z+i*stepsize)
+            snap = camera.snap()
+            io.imsave(save_directory+'_imagezstack_'+'Z%d'%(z+i*stepsize)+'a'+'.tif', snap, check_contrast=False)
+            micromanipulator.moveRel(dx=5)
+            snap = camera.snap()
+            io.imsave(save_directory+'_imagezstack_'+'Z%d'%(z+i*stepsize)+'b'+'.tif', snap, check_contrast=False)
+            micromanipulator.moveRel(dx=-5)
+            x2,y2,z2 = micromanipulator.getPos()
+            positionhistory = np.append(positionhistory, z2)
+        np.save(save_directory+'_imagezstack_', positionhistory)
+        self.finished.emit()
+                    
 

@@ -107,8 +107,11 @@ class SmartPatcher(QObject):
                     else:
                         self.thread.started.connect(self.worker.formgigaseal)
                 elif name == 'mockworker':
-                    
                     self.thread.started.connect(self.worker.mockworker)
+                elif name == 'request_imagexygrid':
+                    self.thread.started.connect(self.worker.request_imagexygrid)
+                elif name == 'request_imagezstack':
+                    self.thread.started.connect(self.worker.request_imagezstack)
                 
                 # start worker
                 self.thread.start()

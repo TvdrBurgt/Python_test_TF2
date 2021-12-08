@@ -190,8 +190,10 @@ class PatchClampUI(QWidget):
         self.ratioLabel = QLabel("Ratio: ")
         self.membraneVoltLabel = QLabel("Vm: ")
         
-        request_gigaseal_button = QPushButton(text="Gigaseal", clicked=self.request_formgigaseal)
-        request_breakin_button = QPushButton(text="Break-in", clicked=self.request_breakin)
+        # request_gigaseal_button = QPushButton(text="Gigaseal", clicked=self.request_formgigaseal)
+        # request_breakin_button = QPushButton(text="Break-in", clicked=self.request_breakin)
+        request_gigaseal_button = QPushButton(text="XY grid", clicked=self.request_imagexygrid)
+        request_breakin_button = QPushButton(text="Z stack", clicked=self.request_imagezstack)
         request_zap_button = QPushButton(text="ZAP", clicked=self.mockfunction)
         
         sealtestLayout.addWidget(self.resistanceLabel, 0, 0, 1, 3)
@@ -508,6 +510,12 @@ class PatchClampUI(QWidget):
     
     def request_breakin(self):
         self.backend.request(name='breakin')
+    
+    def request_imagexygrid(self):
+        self.backend.request(name='request_imagexygrid')
+    
+    def request_imagezstack(self):
+        self.backend.request(name='request_imagezstack')
     
     
     def draw_roi(self, *args):
