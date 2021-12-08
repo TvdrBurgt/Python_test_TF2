@@ -630,6 +630,7 @@ class Worker(QObject):
         TIMEOUT = 30                        # seconds
         I_BREAKIN_CONDITION = 300*1e-12     # ampere absolute valued
         R_BREAKIN_CONDITION = 300*1e6       # ohm
+        F_BREAKIN_CONDITION = [80,120]      # range 1e-? farad/??
         EMERGENCY= False
         
         # I) attempt breaking in by increasing suction pulses 
@@ -709,13 +710,12 @@ class Worker(QObject):
         stepsize = 10
         positionhistory = np.array([])
         for i in range(0,201):
-            micromanipulator.moveAbs(x,y,z=z+i*stepsize)
+            micromanipulator.moveAbs(x, y, z=z+i*stepsize)
             snap = camera.snap()
-            io.imsave(save_directory+'_imagezstack_'+'Z%d'%(z+i*stepsize)+'a'+'.tif', snap, check_contrast=False)
-            micromanipulator.moveRel(dx=5)
+            io.imsave(save_directory+'_imagezstack_'+'Z%d'%(i*stepsize)+'a'+'.tif', snap, check_contrast=False)
+            micromanipulator.moveAbs(x=x+5, y=y, z=z+i*stepsize)
             snap = camera.snap()
-            io.imsave(save_directory+'_imagezstack_'+'Z%d'%(z+i*stepsize)+'b'+'.tif', snap, check_contrast=False)
-            micromanipulator.moveRel(dx=-5)
+            io.imsave(save_directory+'_imagezstack_'+'Z%d'%(i*stepsize)+'b'+'.tif', snap, check_contrast=False)
             x2,y2,z2 = micromanipulator.getPos()
             positionhistory = np.append(positionhistory, z2)
         np.save(save_directory+'_imagezstack_', positionhistory)
