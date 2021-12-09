@@ -22,7 +22,8 @@ class SmartPatcher(QObject):
         self._image_size = [2048, 2048]             # dimension of FOV in pix
         self._pipette_orientation = 0               # in radians
         self._pipette_diameter = 16                 # in pixels (16=patchclamp, ??=cell-picking)
-        self._rotation_angles = [0,0,0]      # (alp,bet,gam) in radians
+        self._rotation_angles = [0,0,0.043767]      # (alp,bet,gam) in radians
+        self._focus_offset = 30                     # in micron above coverslip
         self.update_constants_from_JSON()           # rewrites above default constants
         
         # Algorithm constants
@@ -101,6 +102,12 @@ class SmartPatcher(QObject):
                         raise ValueError('XY stage not connected')
                     else:
                         self.thread.started.connect(self.worker.target2center)
+                elif name == 'pipette2target':
+                    if self.micromanipulator == None or np.array_equal(self.target_coordinates, [None,None,None]) or \
+                        np.array_equal(self.pipette_coordinates_pair, [[None,None,None], [None,None,None]]):
+                        raise ValueError('Target not selected, pipette tip not detected, and/or micromanipulator not connected')
+                    else:
+                        self.thread.started.connect(self.worker.pipette2target)
                 elif name == 'gigaseal':
                     if self.sealtestthread == None or self.pressurethread == None or self.micromanipulator == None:
                         raise ValueError('Sealtest, pressure controller and/or micromanipulator not connected')
@@ -154,6 +161,7 @@ class SmartPatcher(QObject):
     #         self.pipette_orientation = data["pipette_orientation"]
     #         self.pipette_diameter = data["pipette_diameter"]
     #         self.rotation_angles = data["rotation_angles"]
+    #         self.focus_offset = data["focus_offset"]
     #     except:
     #         self.write_constants_to_JSON()
 
@@ -166,6 +174,7 @@ class SmartPatcher(QObject):
         self.pipette_orientation = data["pipette_orientation"]
         self.pipette_diameter = data["pipette_diameter"]
         self.rotation_angles = data["rotation_angles"]
+        self.focus_offset = data["focus_offset"]
         
     def write_constants_to_JSON(self):
         data = {
@@ -173,7 +182,8 @@ class SmartPatcher(QObject):
             "image_size": self.image_size,
             "pipette_orientation": self.pipette_orientation,
             "pipette_diameter": self.pipette_diameter,
-            "rotation_angles": self.rotation_angles
+            "rotation_angles": self.rotation_angles,
+            "focus_offset": self.focus_offset
             }
         with open("autopatch_configuration.txt", "w") as json_outfile:
             json.dump(data, json_outfile)
@@ -411,6 +421,19 @@ class SmartPatcher(QObject):
     def rotation_angles(self):
         self._rotation_angles = [0,0,0]
         del self.R
+    
+    @property
+    def focus_offset(self):
+        return self._focus_offset
+    
+    @focus_offset.setter
+    def focus_offset(self, offset):
+        self._focus_offset = offset
+    
+    @focus_offset.deleter
+    def focus_offset(self):
+        self._focus_offset = None
+    
     
     @property
     def R(self):

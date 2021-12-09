@@ -13,7 +13,7 @@ class PressureController(serial.Serial):
     This class is for controlling the Pressure Controller.
     """
     
-    def __init__(self, address='COM4', baud=9600):
+    def __init__(self, address, baud):
         super().__init__(port=address, baudrate=baud, timeout=1)
         self.ENDOFLINE = '\n'   # Carriage return
     
@@ -51,7 +51,6 @@ class PressureController(serial.Serial):
             Send: S -100
         """
         command = "S %d" % magnitude + self.ENDOFLINE
-        print(command)
         
         # Encode the command to ascii and send to the device
         self.write(command.encode('ascii'))

@@ -168,6 +168,7 @@ class PatchClampUI(QWidget):
         request_confirmtarget_button = QPushButton(text="Confirm target", clicked=self.request_confirmtarget)
         request_softcalibration_button = QPushButton(text="Detect tip", clicked=self.request_softcalibration)
         request_target2center_button = QPushButton(text="Move target to center", clicked=self.request_target2center)
+        request_pipette2target_button = QPushButton(text="Move pipette to target", clicked=self.request_pipette2target)
         request_autofocustip = QPushButton(text="Autofocus tip", clicked=self.request_autofocustip)
         request_softcalibration_button = QPushButton(text="Detect tip", clicked=self.request_softcalibration)
         
@@ -175,7 +176,8 @@ class PatchClampUI(QWidget):
         algorithmLayout.addWidget(request_hardcalibrationxyz_button, 1, 0, 1, 1)
         algorithmLayout.addWidget(request_selecttarget_button, 0, 1, 1, 1)
         algorithmLayout.addWidget(request_confirmtarget_button, 1, 1, 1, 1)
-        algorithmLayout.addWidget(request_target2center_button, 0, 2, 2, 1)
+        algorithmLayout.addWidget(request_target2center_button, 0, 2, 1, 1)
+        algorithmLayout.addWidget(request_pipette2target_button, 1, 2, 1, 1)
         algorithmLayout.addWidget(request_autofocustip, 0, 3, 1, 1)
         algorithmLayout.addWidget(request_softcalibration_button, 1, 3, 1, 1)
         algorithmContainer.setLayout(algorithmLayout)
@@ -340,7 +342,7 @@ class PatchClampUI(QWidget):
         the device is connected to. Deleting the object stops stage movement.
         """
         if self.connect_XYstage_button.isChecked():
-            ludlStage = LudlStage("COM12")
+            ludlStage = LudlStage('COM12')
             
             self.backend.XYstage = ludlStage
         else:
@@ -468,6 +470,9 @@ class PatchClampUI(QWidget):
     
     def request_target2center(self):
         self.backend.request(name='target2center')
+    
+    def request_pipette2target(self):
+        self.backend.request(name='pipette2target')
     
     def request_autofocustip(self):
         # Clear the plot and update all labels
@@ -717,7 +722,7 @@ class PatchClampUI(QWidget):
         event.accept()
         
         # Frees the console by quitting the application entirely
-        # QtWidgets.QApplication.quit() # remove when part of Tupolev!!
+        QtWidgets.QApplication.quit() # remove when part of Tupolev!!
         
         
 

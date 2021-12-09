@@ -7,7 +7,7 @@ Created on Thu Dec  9 10:18:47 2021
 
 
 import sys
-import time
+import logging
 
 sys.path.append('../')
 from pipython import GCSDevice, pitools
@@ -23,12 +23,11 @@ class PIMotor:
     def __init__(self, objective_motor_handle=None):
         # Connect the objective motor if it is not given
         if objective_motor_handle == None:
-            print("objective connecting...")
+            logging.info("objective connecting...")
             self.objective = GCSDevice(gcsdll=__file__+'/../../'+'/PI_ObjectiveMotor/PI_GCS2_DLL_x64.dll')
-            # serialstring = self.objective.EnumerateUSB()
-            print("objective still connecting...")
+            logging.info("connecting takes a while, hold on...")
             self.objective.ConnectUSB(serialnum='PI C-863 Mercury SN 0185500828')
-            print("objective connected successfully")
+            logging.info("objective connected successfully")
         else:
             self.objective = objective_motor_handle
     
@@ -50,7 +49,7 @@ class PIMotor:
         self.objective.MOV(self.objective.axes, z)
         pitools.waitontarget(self.objective)
         
-        # below this line is necessary?
+        # below this line is not really necessary
         positions = self.objective.qPOS(self.objective.axes)
         for axis in self.objective.axes:
             print('position of axis {} = {:.5f}'.format(axis, positions[axis]))
@@ -62,16 +61,6 @@ class PIMotor:
         Example: 
             position = 3.45 means the motor position is 3.45 millimeters from 0
         """
-        # positions is a dictionary with key being axis name, here '1'.
         positions = self.objective.qPOS(self.objective.axes)
         
         return positions['1']
-    
-
-
-
-
-
-if __name__ == '__main__':
-    objective = PIMotor()
-    print(objective.getPos())
