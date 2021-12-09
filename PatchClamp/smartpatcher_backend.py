@@ -286,14 +286,17 @@ class SmartPatcher(QObject):
     
     @property
     def objectivemotor(self):
+        logging.info('objectivemotor get')
         return self._objectivemotor
     
     @objectivemotor.setter
     def objectivemotor(self, objective):
+        logging.info('objectivemotor set')
         self._objectivemotor = objective
     
     @objectivemotor.deleter
     def objectivemotor(self):
+        self._objectivemotor.disconnect()
         self._objectivemotor = None
     
     

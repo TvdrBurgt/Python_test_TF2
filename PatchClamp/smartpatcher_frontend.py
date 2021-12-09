@@ -25,6 +25,7 @@ from PatchClamp.smartpatcher_backend import SmartPatcher
 from PatchClamp.camerathread import CameraThread
 from PatchClamp.sealtestthread import SealTestThread
 from PatchClamp.pressurethread import PressureThread
+from PatchClamp.objective import PIMotor
 from PatchClamp.micromanipulator import ScientificaPatchStar
 from PatchClamp.stage import LudlStage
 
@@ -54,7 +55,7 @@ class PatchClampUI(QWidget):
         self.connect_camerathread_button.setCheckable(True)
         
         # Button to (dis)connect objective motor
-        self.connect_objectivemotor_button = QPushButton(text="Objective motor", clicked=self.mockfunction)
+        self.connect_objectivemotor_button = QPushButton(text="Objective motor", clicked=self.connect_objectivemotor)
         self.connect_objectivemotor_button.setCheckable(True)
         
         # Button to (dis)connect micromanipulator
@@ -192,11 +193,6 @@ class PatchClampUI(QWidget):
         
         request_gigaseal_button = QPushButton(text="Gigaseal", clicked=self.request_formgigaseal)
         request_breakin_button = QPushButton(text="Break-in", clicked=self.request_breakin)
-<<<<<<< Updated upstream
-=======
-        # request_gigaseal_button = QPushButton(text="XY grid", clicked=self.request_imagexygrid)
-        # request_breakin_button = QPushButton(text="Z stack", clicked=self.request_imagezstack)
->>>>>>> Stashed changes
         request_zap_button = QPushButton(text="ZAP", clicked=self.mockfunction)
         
         sealtestLayout.addWidget(self.resistanceLabel, 0, 0, 1, 3)
@@ -349,6 +345,21 @@ class PatchClampUI(QWidget):
             self.backend.XYstage = ludlStage
         else:
             del self.backend.XYstage
+    
+    
+    def connect_objectivemotor(self):
+        """
+        We initiate the objective motor by creating the PIMotor object. This
+        takes time in which the GUI freezes, this issue can be solved by
+        passing the objective motor instance from Tupolev/Fiumicino as an
+        objective_motor_handle. Deleting the object disconnects the objective
+        motor.
+        """
+        if self.connect_objectivemotor_button.isChecked():
+            objectivemotor = PIMotor(objective_motor_handle=None)
+            self.backend.objectivemotor = objectivemotor
+        else:
+            del self.backend.objectivemotor
     
     
     def connect_camerathread(self):
@@ -513,16 +524,6 @@ class PatchClampUI(QWidget):
     
     def request_breakin(self):
         self.backend.request(name='breakin')
-    
-<<<<<<< Updated upstream
-=======
-    # def request_imagexygrid(self):
-    #     self.backend.request(name='request_imagexygrid')
-    
-    # def request_imagezstack(self):
-    #     self.backend.request(name='request_imagezstack')
-    
->>>>>>> Stashed changes
     
     def draw_roi(self, *args):
         label = args[0][0]
