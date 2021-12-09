@@ -38,13 +38,13 @@ class PIMotor:
         self.objective.CloseConnection()
     
     
-    def move(self, target):
+    def moveAbs(self, z):
         """
-        Moves the objective motor to a target position, 'target' is a position
-        on the z-axis with units 10 micron. Example:
-            target = 3.45 moves the objective 34.5 micrometers above zero.
+        Moves the objective motor to a target position, 'z' is the position
+        on the z-axis in millimeters. Example:
+            z = 3.45 moves the objective 3.45 millimeters above zero.
         """
-        self.objective.MOV(self.objective.axes, target)
+        self.objective.MOV(self.objective.axes, z)
         pitools.waitontarget(self.objective)
         
         # below this line is necessary?
@@ -58,7 +58,7 @@ class PIMotor:
         """
         Reports the position of the objective motor in units of 10 micron.
         Example: 
-            position = 3.45 means the motor position is 34.5 microns from 0.
+            position = 3.45 means the motor position is 3.45 millimeters from 0
         """
         # positions is a dictionary with key being axis name, here '1'.
         positions = self.objective.qPOS(self.objective.axes)
