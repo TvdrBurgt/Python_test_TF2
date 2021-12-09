@@ -285,17 +285,24 @@ class Worker(QObject):
         # get all relevant parent attributes
         save_directory = self._parent.save_directory
         micromanipulator = self._parent.micromanipulator
+        objective = self._parent.objectivemotor
         camera = self._parent.camerathread
         
         # algorithm variables
-        stepsize = 10
-        min_taillength = 10
+        stepsize = 10           # micron
+        min_taillength = 10     # datapoints (=X*stepsize in micron)
+        focus_offset = 50       # micron
         
         reference = micromanipulator.getPos()
         penaltyhistory = np.array([])
         positionhistory = np.array([])
         
-        #I) fill first three sharpness scores towards the tail of the graph
+        #I) move objective up to not penatrate cells when focussing
+        logging.info('Move objective up to offset')
+        objective_position_reference = objective.getPos()
+        objective.moveAbs(z=objective_position_reference+focus_offset/1000)
+        
+        #II) fill first three sharpness scores towards the tail of the graph
         pen = np.zeros(3)
         pos = np.zeros(3)
         for i in range(0,3):
@@ -314,14 +321,14 @@ class Worker(QObject):
             # emit graph
             self.graph.emit(np.vstack([positionhistory,penaltyhistory]))
             
-            #II) check which side of the sharpness graph to extend
+            #IIIa) check which side of the sharpness graph to extend
             move = None
             if going_up:
                 pen = penaltyhistory[-3::]
             else:
                 pen = penaltyhistory[0:3]
             
-            #III) check where maximum penalty score is: left, middle, right
+            #IIIb) check where maximum penalty score is: left, middle, right
             if np.argmax(pen) == 0:
                 maximum = 'left'
             elif np.argmax(pen) == 1:
@@ -447,9 +454,11 @@ class Worker(QObject):
             # emit graph
             self.graph.emit(np.vstack([positionhistory,penaltyhistory]))
         
-        #VII) correct for bias in focus height and move pipette into focus
+        #VII) move pipette into focus and return objective to original position
         foundfocus = z
         micromanipulator.moveAbs(x=reference[0], y=reference[1], z=foundfocus)
+        logging.info('Move objective down to original position')
+        objective.moveAbs(z=objective_position_reference)
         
         I = camera.snap()                                                                   #FLAG: relevant for MSc thesis
         io.imsave(save_directory+'autofocus_'+timestamp+'.tif', I, check_contrast=False)    #FLAG: relevant for MSc thesis

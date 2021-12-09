@@ -92,8 +92,8 @@ class SmartPatcher(QObject):
                     else:
                         self.thread.started.connect(self.worker.hardcalibration)
                 elif name == 'autofocustip':
-                    if self.camerathread == None or self.micromanipulator == None:
-                        raise ValueError('Camera and/or micromanipulator not connected')
+                    if self.camerathread == None or self.micromanipulator == None or self.objectivemotor == None:
+                        raise ValueError('Camera, objective and/or micromanipulator not connected')
                     else:
                         self.thread.started.connect(self.worker.autofocus_tip)
                 elif name == 'target2center':
