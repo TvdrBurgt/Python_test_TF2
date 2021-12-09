@@ -18,11 +18,11 @@ class SmartPatcher(QObject):
     
     def __init__(self):
         # Default hardware constants
-        self._pixel_size = 244.8                    # in nanometers
+        self._pixel_size = 229.8                    # in nanometers
         self._image_size = [2048, 2048]             # dimension of FOV in pix
         self._pipette_orientation = 0               # in radians
         self._pipette_diameter = 16                 # in pixels (16=patchclamp, ??=cell-picking)
-        self._rotation_angles = [0,0,0]             # (alp,bet,gam) in degree
+        self._rotation_angles = [0,0,0.057]         # (alp,bet,gam) in radians
         self.update_constants_from_JSON()           # rewrites above default constants
         
         # Algorithm constants
