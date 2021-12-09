@@ -25,6 +25,7 @@ from PatchClamp.smartpatcher_backend import SmartPatcher
 from PatchClamp.camerathread import CameraThread
 from PatchClamp.sealtestthread import SealTestThread
 from PatchClamp.pressurethread import PressureThread
+from PatchClamp.objective import PIMotor
 from PatchClamp.micromanipulator import ScientificaPatchStar
 from PatchClamp.stage import LudlStage
 
@@ -54,7 +55,7 @@ class PatchClampUI(QWidget):
         self.connect_camerathread_button.setCheckable(True)
         
         # Button to (dis)connect objective motor
-        self.connect_objectivemotor_button = QPushButton(text="Objective motor", clicked=self.mockfunction)
+        self.connect_objectivemotor_button = QPushButton(text="Objective motor", clicked=self.connect_objectivemotor)
         self.connect_objectivemotor_button.setCheckable(True)
         
         # Button to (dis)connect micromanipulator
@@ -167,6 +168,7 @@ class PatchClampUI(QWidget):
         request_confirmtarget_button = QPushButton(text="Confirm target", clicked=self.request_confirmtarget)
         request_softcalibration_button = QPushButton(text="Detect tip", clicked=self.request_softcalibration)
         request_target2center_button = QPushButton(text="Move target to center", clicked=self.request_target2center)
+        request_pipette2target_button = QPushButton(text="Move pipette to target", clicked=self.request_pipette2target)
         request_autofocustip = QPushButton(text="Autofocus tip", clicked=self.request_autofocustip)
         request_softcalibration_button = QPushButton(text="Detect tip", clicked=self.request_softcalibration)
         
@@ -174,7 +176,8 @@ class PatchClampUI(QWidget):
         algorithmLayout.addWidget(request_hardcalibrationxyz_button, 1, 0, 1, 1)
         algorithmLayout.addWidget(request_selecttarget_button, 0, 1, 1, 1)
         algorithmLayout.addWidget(request_confirmtarget_button, 1, 1, 1, 1)
-        algorithmLayout.addWidget(request_target2center_button, 0, 2, 2, 1)
+        algorithmLayout.addWidget(request_target2center_button, 0, 2, 1, 1)
+        algorithmLayout.addWidget(request_pipette2target_button, 1, 2, 1, 1)
         algorithmLayout.addWidget(request_autofocustip, 0, 3, 1, 1)
         algorithmLayout.addWidget(request_softcalibration_button, 1, 3, 1, 1)
         algorithmContainer.setLayout(algorithmLayout)
@@ -341,11 +344,26 @@ class PatchClampUI(QWidget):
         the device is connected to. Deleting the object stops stage movement.
         """
         if self.connect_XYstage_button.isChecked():
-            ludlStage = LudlStage("COM12")
+            ludlStage = LudlStage('COM12')
             
             self.backend.XYstage = ludlStage
         else:
             del self.backend.XYstage
+    
+    
+    def connect_objectivemotor(self):
+        """
+        We initiate the objective motor by creating the PIMotor object. This
+        takes time in which the GUI freezes, this issue can be solved by
+        passing the objective motor instance from Tupolev/Fiumicino as an
+        objective_motor_handle. Deleting the object disconnects the objective
+        motor.
+        """
+        if self.connect_objectivemotor_button.isChecked():
+            objectivemotor = PIMotor(objective_motor_handle=None)
+            self.backend.objectivemotor = objectivemotor
+        else:
+            del self.backend.objectivemotor
     
     
     def connect_camerathread(self):
@@ -454,6 +472,9 @@ class PatchClampUI(QWidget):
     
     def request_target2center(self):
         self.backend.request(name='target2center')
+    
+    def request_pipette2target(self):
+        self.backend.request(name='pipette2target')
     
     def request_autofocustip(self):
         # Clear the plot and update all labels

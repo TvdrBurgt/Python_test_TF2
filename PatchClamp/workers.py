@@ -208,23 +208,29 @@ class Worker(QObject):
         # get all relevant parent attributes
         save_directory = self._parent.save_directory
         micromanipulator = self._parent.micromanipulator
+        objective = self._parent.objectivemotor
         camera = self._parent.camerathread
+        focus_offset = self._parent.focus_offset
         account4rotation = self._parent.account4rotation
         D = self._parent.pipette_diameter
         O = self._parent.pipette_orientation
         
-        positions = np.array([[-100,-50,0],
-                              [0,-50,0],
-                              [100,-50,0],
-                              [-100,50,0],
-                              [0,50,0],
-                              [100,50,0]])
-        tipcoords = positions[:,0:2] * 0
-        reference = micromanipulator.getPos()
+        # algorithm variables
+        CALIBRATION_HEIGHT = focus_offset+20  #microns above coverslip (autofocus has bias of ~20micron)
+        POSITIONS = np.array([[-25,-25,0],
+                              [25,-25,0],
+                              [25,25,0],
+                              [-25,25,0]])
         
-        for i in range(0, positions.shape[0]):
+        # bring focal plane beyond its offset where pipette tip is in focus
+        objective_position_reference = objective.getPos()
+        objective.moveAbs(z=objective_position_reference+CALIBRATION_HEIGHT/1000)
+        
+        tipcoords = POSITIONS[:,0:2] * 0
+        reference = micromanipulator.getPos()
+        for i in range(0, POSITIONS.shape[0]):
             # snap images for pipettet tip detection
-            x,y,z = account4rotation(origin=reference, target=reference+positions[i])
+            x,y,z = account4rotation(origin=reference, target=reference+POSITIONS[i])
             micromanipulator.moveAbs(x,y,z)
             image_left = camera.snap()
             micromanipulator.moveRel(dx=5)
@@ -259,6 +265,9 @@ class Worker(QObject):
         # set micromanipulator and camera coordinate pair of pipette tip
         self._parent.pipette_coordinates_pair = np.vstack([reference, np.array([tipcoord[0], tipcoord[1], None])])
         
+        # return objective to original position
+        objective.moveAbs(z=objective_position_reference)
+        
         self.finished.emit()
         
     
@@ -285,24 +294,30 @@ class Worker(QObject):
         # get all relevant parent attributes
         save_directory = self._parent.save_directory
         micromanipulator = self._parent.micromanipulator
+        objective = self._parent.objectivemotor
         camera = self._parent.camerathread
+        focus_offset = self._parent.focus_offset
         
         # algorithm variables
-        stepsize = 10
-        min_taillength = 10
+        STEPSIZE = 10           # micron
+        MIN_TAILLENGTH = 12     # datapoints (=X*STEPSIZE in micron)
         
         reference = micromanipulator.getPos()
         penaltyhistory = np.array([])
         positionhistory = np.array([])
         
-        #I) fill first three sharpness scores towards the tail of the graph
+        #I) move objective up to not penatrate cells when focussing
+        objective_position_reference = objective.getPos()
+        objective.moveAbs(z=objective_position_reference+focus_offset/1000)
+        
+        #II) fill first three sharpness scores towards the tail of the graph
         pen = np.zeros(3)
         pos = np.zeros(3)
         for i in range(0,3):
-            micromanipulator.moveRel(dz=+stepsize)
+            micromanipulator.moveRel(dz=+STEPSIZE)
             I = camera.snap()
             pen[i] = ia.comp_variance_of_Laplacian(I)
-            pos[i] = reference[2] + (i+1)*stepsize
+            pos[i] = reference[2] + (i+1)*STEPSIZE
         penaltyhistory = np.append(penaltyhistory, pen)
         positionhistory = np.append(positionhistory, pos)
         
@@ -314,14 +329,14 @@ class Worker(QObject):
             # emit graph
             self.graph.emit(np.vstack([positionhistory,penaltyhistory]))
             
-            #II) check which side of the sharpness graph to extend
+            #IIIa) check which side of the sharpness graph to extend
             move = None
             if going_up:
                 pen = penaltyhistory[-3::]
             else:
                 pen = penaltyhistory[0:3]
             
-            #III) check where maximum penalty score is: left, middle, right
+            #IIIb) check where maximum penalty score is: left, middle, right
             if np.argmax(pen) == 0:
                 maximum = 'left'
             elif np.argmax(pen) == 1:
@@ -340,8 +355,8 @@ class Worker(QObject):
                     pos = positionhistory[-1]
                     micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
                     penaltytail = pen[1::]
-                    for i in range(2, min_taillength):
-                        micromanipulator.moveRel(dz=+stepsize)
+                    for i in range(2, MIN_TAILLENGTH):
+                        micromanipulator.moveRel(dz=+STEPSIZE)
                         I = camera.snap()
                         penalty = ia.comp_variance_of_Laplacian(I)
                         penaltytail = np.append(penaltytail, penalty)
@@ -367,8 +382,8 @@ class Worker(QObject):
                     pos = positionhistory[2]
                     micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
                     penaltytail = pen[2]
-                    for i in range(2, min_taillength):
-                        micromanipulator.moveRel(dz=+stepsize)
+                    for i in range(2, MIN_TAILLENGTH):
+                        micromanipulator.moveRel(dz=+STEPSIZE)
                         I = camera.snap()
                         penalty = ia.comp_variance_of_Laplacian(I)
                         penaltytail = np.append(penaltytail, penalty)
@@ -387,15 +402,15 @@ class Worker(QObject):
                 penaltytail = penaltyhistory[1::]
                 taillength = len(penaltytail)
                 pos = positionhistory[-1]
-                if taillength < min_taillength:
+                if taillength < MIN_TAILLENGTH:
                     micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
-                    for i in range(taillength, min_taillength):
-                        micromanipulator.moveRel(dz=+stepsize)
+                    for i in range(taillength, MIN_TAILLENGTH):
+                        micromanipulator.moveRel(dz=+STEPSIZE)
                         I = camera.snap()
                         penalty = ia.comp_variance_of_Laplacian(I)
                         penaltytail = np.append(penaltytail, penalty)
                 else:
-                    penaltytail = penaltytail[0:min_taillength]
+                    penaltytail = penaltytail[0:MIN_TAILLENGTH]
                 monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
                 if monotonicity_condition:
                     logging.info("Detected maximum is a sharpness peak!")
@@ -408,14 +423,14 @@ class Worker(QObject):
         
             #V) extend the sharpness function on either side
             if move == 'step up':
-                pos = positionhistory[-1] + stepsize
+                pos = positionhistory[-1] + STEPSIZE
                 micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
                 I = camera.snap()
                 pen = ia.comp_variance_of_Laplacian(I)
                 penaltyhistory = np.append(penaltyhistory, pen)
                 positionhistory = np.append(positionhistory, pos)
             elif move == 'step down':
-                pos = positionhistory[0] - stepsize
+                pos = positionhistory[0] - STEPSIZE
                 micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
                 I = camera.snap()
                 pen = ia.comp_variance_of_Laplacian(I)
@@ -429,7 +444,7 @@ class Worker(QObject):
         #VI) continue with finding the fine focus position
         logging.info('Coarse focus found, continue with finetuning')
         _,_,z = micromanipulator.getPos()
-        for step in [stepsize, stepsize/5, stepsize/25]:
+        for step in [STEPSIZE, STEPSIZE/5, STEPSIZE/25]:
             # Sample six points between the last three penalty scores
             penalties = np.zeros(6)
             positions = np.linspace(z-step, z+step, 6)
@@ -447,9 +462,10 @@ class Worker(QObject):
             # emit graph
             self.graph.emit(np.vstack([positionhistory,penaltyhistory]))
         
-        #VII) correct for bias in focus height and move pipette into focus
+        #VII) move pipette into focus and return objective to original position
         foundfocus = z
         micromanipulator.moveAbs(x=reference[0], y=reference[1], z=foundfocus)
+        objective.moveAbs(z=objective_position_reference)
         
         I = camera.snap()                                                                   #FLAG: relevant for MSc thesis
         io.imsave(save_directory+'autofocus_'+timestamp+'.tif', I, check_contrast=False)    #FLAG: relevant for MSc thesis
@@ -498,14 +514,38 @@ class Worker(QObject):
     
     
     @pyqtSlot()
+    def pipette2target(self):
+        """ Pipette tip to target manoeuvres the micromanipulator to a target
+        in the camera field-of-view
+        """
+        micromanipulator = self._parent.micromanipulator
+        account4rotation = self._parent.account4rotation
+        pixelsize = self._parent.pixel_size
+        tipcoords_manip,tipcoords_cam = self._parent.pipette_coordinates_pair
+        xtarget,ytarget,_ = self._parent.target_coordinates
+        
+        # Calculate shortest trajectory to target and apply coordinate transformation
+        dx = xtarget - tipcoords_cam[0]                     #x trajectory (in pixels)
+        dy = ytarget - tipcoords_cam[1]                     #y trajectory (in pixels)
+        trajectory = np.array([dx,dy,0])*pixelsize/1000     #trajectory (in microns)
+        trajectory = account4rotation(origin=np.zeros(3), target=trajectory)
+        
+        # Manoeuvre pipette above target and descent the focal offset
+        micromanipulator.moveAbs(x=tipcoords_manip[0]+trajectory[0],
+                                 y=tipcoords_manip[1]+trajectory[1],
+                                 z=tipcoords_manip[2]+trajectory[2])
+    
+    
+    @pyqtSlot()
     def formgigaseal(self):
         """ Form Gigaseal brings the pipette to the target cell and forms a 
         gigaseal with the membrane.
         
-        I) Calculate trajectory and bring pipette tip above the target cell.
-        II) Adjust pipette pressure to small overpressure.
+        I) Set pressure to 100 mBar.
+        II) Calculate trajectory and bring pipette tip above the target cell.
         III) Pipette tip descent until resistance increases slightly.
-        IV) Release pressure, possibly apply light suction, to form Gigaseal
+        IV) Set pressure to ATM.
+        V) Release pressure, possibly apply light suction, to form Gigaseal.
         
         Safety measures in place:
             <!>     Pipette descent range: <50 microns so pipette does not
@@ -518,40 +558,43 @@ class Worker(QObject):
         save_directory = self._parent.save_directory
         micromanipulator = self._parent.micromanipulator
         pressurecontroller = self._parent.pressurethread
+        focus_offset = self._parent.focus_offset
         account4rotation = self._parent.account4rotation
         pixelsize = self._parent.pixel_size
         tipcoords_manip,tipcoords_cam = self._parent.pipette_coordinates_pair
         xtarget,ytarget,_ = self._parent.target_coordinates
-        resistance_reference = self._parent.resistance_reference
+        # resistance_reference = self._parent.resistance_reference
         
         # Algorithm variables
-        R_CRITICAL = 0.1e6          # ohm
+        R_CRITICAL = 0.15e6         # ohm
         PIPETTE_DESCENT_RANGE = 50  # microns
-        STEPSIZE = 0.1              # microns
+        STEPSIZE = 0.2              # microns
         TIMEOUT = 30                # seconds
         EMERGENCY = False
         
+        #I) make sure pressure is set at the right value
+        pressurecontroller.set_pressure_stop_waveform(50)
         
-        #Ia) calculate shortest trajectory to target and apply coordinate transformation
-        micromanipulator.moveAbs(x=tipcoords_manip[0], y=tipcoords_manip[1], z=tipcoords_manip[2])
+        #IIa) calculate shortest trajectory to target and apply coordinate transformation
         dx = xtarget - tipcoords_cam[0]                     #x trajectory (in pixels)
         dy = ytarget - tipcoords_cam[1]                     #y trajectory (in pixels)
         trajectory = np.array([dx,dy,0])*pixelsize/1000     #trajectory (in microns)
         trajectory = account4rotation(origin=np.zeros(3), target=trajectory)
         
-        # Ib) manoeuvre the micromanipulator above the target
-        micromanipulator.moveRel(dx=trajectory[0], dy=trajectory[1], dz=trajectory[2])
+        #IIb) manoeuvre pipette above target and descent the focal offset
+        micromanipulator.moveAbs(x=tipcoords_manip[0]+trajectory[0],
+                                 y=tipcoords_manip[1]+trajectory[1],
+                                 z=tipcoords_manip[2]+trajectory[2])
+        micromanipulator.moveRel(dz=10-focus_offset)
+        time.sleep(0.5)
         
-        # II) make sure pressure is set and check if tip is not clogged
-        pressurecontroller.set_pressure_stop_waveform(50)
+        #IIIa) measure resistance and set graph thresholds
         resistance_ref = np.nanmean(self._parent.resistance)
-        if resistance_reference > resistance_ref + R_CRITICAL:
-            logging.info("Pipette tip is contaminated")
-            EMERGENCY = True;
-        else:
-            self.draw.emit(['threshold',resistance_ref+R_CRITICAL, resistance_ref-R_CRITICAL])
+        self.draw.emit(['threshold',resistance_ref+1.2*R_CRITICAL, resistance_ref-1.2*R_CRITICAL])
+        logging.info("Upper threshold"+str(resistance_ref+R_CRITICAL))
+        logging.info("Lower threshold"+str(resistance_ref-R_CRITICAL))
         
-        #III) descent pipette with one micron at a time until R increases
+        #IIIb) descent pipette until R increases by R_CRITICAL
         logging.info("Tip descent started...")
         resistance = resistance_ref
         position = micromanipulator.getPos()[2]
@@ -576,10 +619,10 @@ class Worker(QObject):
             else:
                 positionhistory = np.append(positionhistory, position)
         
-        #IVa) set pressure to ATM
+        #IV) set pressure to ATM
         pressurecontroller.set_pressure_stop_waveform(0)
         
-        #IVb) wait for Gigaseal
+        #Va) wait for Gigaseal
         logging.info("Attempting gigaseal...")
         start = time.time()
         while resistance < 1e9 and time.time()-start < 5 and not EMERGENCY:
@@ -588,13 +631,13 @@ class Worker(QObject):
             resistancehistory = np.append(resistancehistory, resistance)
             time.sleep(0.1)
         
-        #IVc) wait for Gigaseal with suction pulses
+        #Vb) wait for Gigaseal with suction pulses
         if resistance > 1e9:
             logging.info("Gigaseal formed!")
         elif not EMERGENCY:
             logging.info("Timeout reached, starting suction pulses...")
             start = time.time()
-            pressurecontroller.set_waveform(high=-10, low=-30, high_T=2, low_T=0.5)
+            pressurecontroller.set_waveform(high=-10, low=-30, high_T=2, low_T=1)
             while resistance < 1e9 and time.time()-start < TIMEOUT:
                 resistance = np.nanmax(self._parent.resistance[-10::])
                 self.graph.emit(resistancehistory)
@@ -605,6 +648,7 @@ class Worker(QObject):
                 logging.info("Gigaseal formed!")
             else:
                 logging.info("Gigaseal failed, find an easier cell please...")
+                pressurecontroller.set_pressure_stop_waveform(50)
         
         timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))   
         np.save(save_directory+'gigaseal_positionhistory_'+timestamp, positionhistory)      #FLAG: relevant for MSc thesis
@@ -631,6 +675,7 @@ class Worker(QObject):
         I_BREAKIN_CONDITION = 300*1e-12     # ampere absolute valued
         R_BREAKIN_CONDITION = 300*1e6       # ohm
         F_BREAKIN_CONDITION = [80,120]      # range 1e-? farad/??
+        PULSES = np.linspace(-20, -300, 15)
         EMERGENCY= False
         
         # I) attempt breaking in by increasing suction pulses 
@@ -638,10 +683,10 @@ class Worker(QObject):
         resistancehistory = np.array([])
         currenthistory = np.array([[],[]])
         start = time.time()
+        i = 0
         while time.time()-start < TIMEOUT and not EMERGENCY:
-            magnitude = round(start - time.time())
-            pressurecontroller.set_pulse_stop_waveform(-magnitude)
-            time.sleep(0.8)
+            pressurecontroller.set_pulse_stop_waveform(PULSES[i%len(PULSES)])
+            time.sleep(1)
             resistance = np.nanmax(self._parent.resistance[-10::])
             Imax = np.max(self._parent.current)
             Imin = np.min(self._parent.current)
@@ -673,10 +718,6 @@ class Worker(QObject):
         np.save(save_directory+'breakin_slidingwindowcurrent_'+timestamp, slidingwindow_current)  #FLAG: relevant for MSc thesis
         
         self.finished.emit()
-    
-    
-    
-    
     
     
     @pyqtSlot()

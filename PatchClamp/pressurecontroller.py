@@ -13,7 +13,7 @@ class PressureController(serial.Serial):
     This class is for controlling the Pressure Controller.
     """
     
-    def __init__(self, address='COM4', baud=9600):
+    def __init__(self, address, baud):
         super().__init__(port=address, baudrate=baud, timeout=1)
         self.ENDOFLINE = '\n'   # Carriage return
     

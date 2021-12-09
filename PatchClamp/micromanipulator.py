@@ -16,7 +16,7 @@ class ScientificaPatchStar:
     This class is for controlling the Scientifica PatchStar micromanipulator.
     """
     
-    def __init__(self, address='COM16', baud=38400):
+    def __init__(self, address, baud):
         self.port = address     # COM port micromanipulator is connected to
         self.baudrate = baud    # Baudrate of the micromanipulator
         self.ENDOFLINE = '\r'   # Carriage return
