@@ -22,7 +22,7 @@ class SmartPatcher(QObject):
         self._image_size = [2048, 2048]             # dimension of FOV in pix
         self._pipette_orientation = 0               # in radians
         self._pipette_diameter = 16                 # in pixels (16=patchclamp, ??=cell-picking)
-        self._rotation_angles = [0,0,0.057]         # (alp,bet,gam) in radians
+        self._rotation_angles = [0,0,0]      # (alp,bet,gam) in radians
         self.update_constants_from_JSON()           # rewrites above default constants
         
         # Algorithm constants
@@ -106,6 +106,11 @@ class SmartPatcher(QObject):
                         raise ValueError('Sealtest, pressure controller and/or micromanipulator not connected')
                     else:
                         self.thread.started.connect(self.worker.formgigaseal)
+                elif name == 'breakin':
+                    if self.sealtestthread == None or self.pressurethread == None:
+                        raise ValueError('Sealtest and/or pressure controller not connected')
+                    else:
+                        self.thread.started.connect(self.worker.break_in)
                 elif name == 'mockworker':
                     
                     self.thread.started.connect(self.worker.mockworker)
@@ -280,7 +285,6 @@ class SmartPatcher(QObject):
     @micromanipulator.deleter
     def micromanipulator(self):
         self._micromanipulator.stop()
-        self._micromanipulator.close()
         self._micromanipulator = None
     
     

@@ -26,7 +26,7 @@ class PressureThread(QThread):
         
         # Pressure controller attributes
         if pressurecontroller_handle == None:
-            self.pressurecontroller = PressureController()
+            self.pressurecontroller = PressureController(address='COM21')
         else:
             self.pressurecontroller = pressurecontroller_handle
         

@@ -51,6 +51,7 @@ class PressureController(serial.Serial):
             Send: S -100
         """
         command = "S %d" % magnitude + self.ENDOFLINE
+        print(command)
         
         # Encode the command to ascii and send to the device
         self.write(command.encode('ascii'))

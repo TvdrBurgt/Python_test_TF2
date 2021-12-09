@@ -717,7 +717,7 @@ class PatchClampUI(QWidget):
         event.accept()
         
         # Frees the console by quitting the application entirely
-        QtWidgets.QApplication.quit() # remove when part of Tupolev!!
+        # QtWidgets.QApplication.quit() # remove when part of Tupolev!!
         
         
 

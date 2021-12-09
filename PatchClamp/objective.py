@@ -23,9 +23,12 @@ class PIMotor:
     def __init__(self, objective_motor_handle=None):
         # Connect the objective motor if it is not given
         if objective_motor_handle == None:
+            print("objective connecting...")
             self.objective = GCSDevice(gcsdll=__file__+'/../../'+'/PI_ObjectiveMotor/PI_GCS2_DLL_x64.dll')
             # serialstring = self.objective.EnumerateUSB()
+            print("objective still connecting...")
             self.objective.ConnectUSB(serialnum='PI C-863 Mercury SN 0185500828')
+            print("objective connected successfully")
         else:
             self.objective = objective_motor_handle
     
@@ -48,7 +51,6 @@ class PIMotor:
         pitools.waitontarget(self.objective)
         
         # below this line is necessary?
-        time.sleep(0.3)
         positions = self.objective.qPOS(self.objective.axes)
         for axis in self.objective.axes:
             print('position of axis {} = {:.5f}'.format(axis, positions[axis]))
@@ -72,3 +74,4 @@ class PIMotor:
 
 if __name__ == '__main__':
     objective = PIMotor()
+    print(objective.getPos())

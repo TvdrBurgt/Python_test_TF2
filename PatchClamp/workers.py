@@ -208,10 +208,16 @@ class Worker(QObject):
         # get all relevant parent attributes
         save_directory = self._parent.save_directory
         micromanipulator = self._parent.micromanipulator
+        objective = self._parent.objectivemotor
         camera = self._parent.camerathread
         account4rotation = self._parent.account4rotation
         D = self._parent.pipette_diameter
         O = self._parent.pipette_orientation
+        
+        logging.info('Move objective up to offset')
+        objective_position_reference = objective.getPos()
+        focus_offset = 45
+        objective.moveAbs(z=objective_position_reference+focus_offset/1000)
         
         positions = np.array([[-100,-50,0],
                               [0,-50,0],
@@ -259,6 +265,9 @@ class Worker(QObject):
         # set micromanipulator and camera coordinate pair of pipette tip
         self._parent.pipette_coordinates_pair = np.vstack([reference, np.array([tipcoord[0], tipcoord[1], None])])
         
+        logging.info('Move objective down to original position')
+        objective.moveAbs(z=objective_position_reference)
+        
         self.finished.emit()
         
     
@@ -290,8 +299,8 @@ class Worker(QObject):
         
         # algorithm variables
         stepsize = 10           # micron
-        min_taillength = 10     # datapoints (=X*stepsize in micron)
-        focus_offset = 50       # micron
+        min_taillength = 12     # datapoints (=X*stepsize in micron)
+        focus_offset = 25       # micron
         
         reference = micromanipulator.getPos()
         penaltyhistory = np.array([])
@@ -536,29 +545,35 @@ class Worker(QObject):
         # Algorithm variables
         R_CRITICAL = 0.1e6          # ohm
         PIPETTE_DESCENT_RANGE = 50  # microns
-        STEPSIZE = 0.1              # microns
+        STEPSIZE = 0.2              # microns
         TIMEOUT = 30                # seconds
         EMERGENCY = False
+        focus_offset = 25 #micron
         
+        pressurecontroller.set_pressure_stop_waveform(50)
         
         #Ia) calculate shortest trajectory to target and apply coordinate transformation
-        micromanipulator.moveAbs(x=tipcoords_manip[0], y=tipcoords_manip[1], z=tipcoords_manip[2])
+        # micromanipulator.moveAbs(x=tipcoords_manip[0], y=tipcoords_manip[1], z=tipcoords_manip[2])
         dx = xtarget - tipcoords_cam[0]                     #x trajectory (in pixels)
         dy = ytarget - tipcoords_cam[1]                     #y trajectory (in pixels)
         trajectory = np.array([dx,dy,0])*pixelsize/1000     #trajectory (in microns)
         trajectory = account4rotation(origin=np.zeros(3), target=trajectory)
         
         # Ib) manoeuvre the micromanipulator above the target
-        micromanipulator.moveRel(dx=trajectory[0], dy=trajectory[1], dz=trajectory[2])
+        micromanipulator.moveAbs(x=tipcoords_manip[0]+trajectory[0], y=tipcoords_manip[1]+trajectory[1], z=tipcoords_manip[2]+trajectory[2])
+        micromanipulator.moveRel(dz=10-focus_offset)
         
         # II) make sure pressure is set and check if tip is not clogged
-        pressurecontroller.set_pressure_stop_waveform(50)
-        resistance_ref = np.nanmean(self._parent.resistance)
-        if resistance_reference > resistance_ref + R_CRITICAL:
-            logging.info("Pipette tip is contaminated")
-            EMERGENCY = True;
-        else:
-            self.draw.emit(['threshold',resistance_ref+R_CRITICAL, resistance_ref-R_CRITICAL])
+        time.sleep(1)
+        resistance_ref = np.nanmean(self._parent.resistance) #TypeError: '<' not supported between instances of 'float' and 'NoneType'
+        # if resistance_reference > resistance_ref + R_CRITICAL:
+        #     logging.info("Pipette tip is contaminated")
+        #     EMERGENCY = True;
+        # else:
+        #     self.draw.emit(['threshold',resistance_ref+R_CRITICAL, resistance_ref-R_CRITICAL])
+        self.draw.emit(['threshold',resistance_ref+R_CRITICAL, resistance_ref-R_CRITICAL])
+        logging.info("Upper threshold"+str(resistance_ref+R_CRITICAL))
+        logging.info("Lower threshold"+str(resistance_ref-R_CRITICAL))
         
         #III) descent pipette with one micron at a time until R increases
         logging.info("Tip descent started...")
@@ -603,7 +618,7 @@ class Worker(QObject):
         elif not EMERGENCY:
             logging.info("Timeout reached, starting suction pulses...")
             start = time.time()
-            pressurecontroller.set_waveform(high=-10, low=-30, high_T=2, low_T=0.5)
+            pressurecontroller.set_waveform(high=-10, low=-30, high_T=2, low_T=1)
             while resistance < 1e9 and time.time()-start < TIMEOUT:
                 resistance = np.nanmax(self._parent.resistance[-10::])
                 self.graph.emit(resistancehistory)
@@ -646,15 +661,15 @@ class Worker(QObject):
         currenthistory = np.array([[],[]])
         start = time.time()
         while time.time()-start < TIMEOUT and not EMERGENCY:
-            magnitude = round(start - time.time())
-            pressurecontroller.set_pulse_stop_waveform(-magnitude)
-            time.sleep(0.8)
+            magnitude = round(time.time() - start)
+            pressurecontroller.set_pulse_stop_waveform(-magnitude*10)
+            time.sleep(2)
             resistance = np.nanmax(self._parent.resistance[-10::])
             Imax = np.max(self._parent.current)
             Imin = np.min(self._parent.current)
             if Imax <= I_BREAKIN_CONDITION and Imin >= -I_BREAKIN_CONDITION \
                 and resistance <= R_BREAKIN_CONDITION:
-                    break
+                    pass
             else:
                 currenthistory = np.append(currenthistory, np.array([[Imax],[Imin]]), axis=1)
                 resistancehistory = np.append(resistancehistory, resistance)
