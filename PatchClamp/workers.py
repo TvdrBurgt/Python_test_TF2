@@ -216,7 +216,7 @@ class Worker(QObject):
         O = self._parent.pipette_orientation
         
         # algorithm variables
-        CALIBRATION_HEIGHT = focus_offset+20  #microns above coverslip (autofocus has bias of ~20micron)
+        CALIBRATION_HEIGHT = focus_offset+10  #microns above coverslip (autofocus has bias of ~20micron)
         POSITIONS = np.array([[-25,-25,0],
                               [25,-25,0],
                               [25,25,0],
@@ -444,7 +444,7 @@ class Worker(QObject):
         #VI) continue with finding the fine focus position
         logging.info('Coarse focus found, continue with finetuning')
         _,_,z = micromanipulator.getPos()
-        for step in [STEPSIZE, STEPSIZE/5, STEPSIZE/25]:
+        for step in [STEPSIZE, STEPSIZE/5]:
             # Sample six points between the last three penalty scores
             penalties = np.zeros(6)
             positions = np.linspace(z-step, z+step, 6)
@@ -534,6 +534,8 @@ class Worker(QObject):
         micromanipulator.moveAbs(x=tipcoords_manip[0]+trajectory[0],
                                  y=tipcoords_manip[1]+trajectory[1],
                                  z=tipcoords_manip[2]+trajectory[2])
+        
+        self.finished.emit()
     
     
     @pyqtSlot()
@@ -569,7 +571,7 @@ class Worker(QObject):
         R_CRITICAL = 0.15e6         # ohm
         PIPETTE_DESCENT_RANGE = 50  # microns
         STEPSIZE = 0.2              # microns
-        TIMEOUT = 30                # seconds
+        TIMEOUT = 50                # seconds
         EMERGENCY = False
         
         #I) make sure pressure is set at the right value
@@ -621,6 +623,7 @@ class Worker(QObject):
         
         #IV) set pressure to ATM
         pressurecontroller.set_pressure_stop_waveform(0)
+        time.sleep(3)
         
         #Va) wait for Gigaseal
         logging.info("Attempting gigaseal...")
@@ -637,7 +640,7 @@ class Worker(QObject):
         elif not EMERGENCY:
             logging.info("Timeout reached, starting suction pulses...")
             start = time.time()
-            pressurecontroller.set_waveform(high=-10, low=-30, high_T=2, low_T=1)
+            pressurecontroller.set_waveform(high=-10, low=-30, high_T=3, low_T=1.5)
             while resistance < 1e9 and time.time()-start < TIMEOUT:
                 resistance = np.nanmax(self._parent.resistance[-10::])
                 self.graph.emit(resistancehistory)
@@ -671,11 +674,11 @@ class Worker(QObject):
         sealtestthread = self._parent.sealtestthread
         
         # Algorithm variables
-        TIMEOUT = 30                        # seconds
+        TIMEOUT = 90                        # seconds
         I_BREAKIN_CONDITION = 300*1e-12     # ampere absolute valued
         R_BREAKIN_CONDITION = 300*1e6       # ohm
         F_BREAKIN_CONDITION = [80,120]      # range 1e-? farad/??
-        PULSES = np.linspace(-20, -300, 15)
+        PULSES = np.linspace(-100, -300, 15)
         EMERGENCY= False
         
         # I) attempt breaking in by increasing suction pulses 
@@ -685,8 +688,9 @@ class Worker(QObject):
         start = time.time()
         i = 0
         while time.time()-start < TIMEOUT and not EMERGENCY:
+            i += 1
             pressurecontroller.set_pulse_stop_waveform(PULSES[i%len(PULSES)])
-            time.sleep(1)
+            time.sleep(2)
             resistance = np.nanmax(self._parent.resistance[-10::])
             Imax = np.max(self._parent.current)
             Imin = np.min(self._parent.current)

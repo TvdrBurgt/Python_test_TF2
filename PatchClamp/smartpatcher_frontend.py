@@ -193,10 +193,10 @@ class PatchClampUI(QWidget):
         self.ratioLabel = QLabel("Ratio: ")
         self.membraneVoltLabel = QLabel("Vm: ")
         
-        # request_gigaseal_button = QPushButton(text="Gigaseal", clicked=self.request_formgigaseal)
-        # request_breakin_button = QPushButton(text="Break-in", clicked=self.request_breakin)
-        request_gigaseal_button = QPushButton(text="XY grid", clicked=self.request_imagexygrid)
-        request_breakin_button = QPushButton(text="Z stack", clicked=self.request_imagezstack)
+        request_gigaseal_button = QPushButton(text="Gigaseal", clicked=self.request_formgigaseal)
+        request_breakin_button = QPushButton(text="Break-in", clicked=self.request_breakin)
+        # request_gigaseal_button = QPushButton(text="XY grid", clicked=self.request_imagexygrid)
+        # request_breakin_button = QPushButton(text="Z stack", clicked=self.request_imagezstack)
         request_zap_button = QPushButton(text="ZAP", clicked=self.mockfunction)
         
         sealtestLayout.addWidget(self.resistanceLabel, 0, 0, 1, 3)
@@ -731,7 +731,7 @@ class PatchClampUI(QWidget):
         event.accept()
         
         # Frees the console by quitting the application entirely
-        QtWidgets.QApplication.quit() # remove when part of Tupolev!!
+        # QtWidgets.QApplication.quit() # remove when part of Tupolev!!
         
         
 

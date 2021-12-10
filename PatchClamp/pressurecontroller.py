@@ -78,3 +78,10 @@ class PressureController(serial.Serial):
         
         # Encode the command to ascii and send to the device
         self.write(command.encode('ascii'))
+
+
+if __name__ == "__main__":
+    PS = PressureController(address='COM21', baud=9600)
+    
+    
+    

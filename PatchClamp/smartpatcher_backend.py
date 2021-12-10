@@ -22,7 +22,7 @@ class SmartPatcher(QObject):
         self._image_size = [2048, 2048]             # dimension of FOV in pix
         self._pipette_orientation = 0               # in radians
         self._pipette_diameter = 16                 # in pixels (16=patchclamp, ??=cell-picking)
-        self._rotation_angles = [0,0,0.043767]      # (alp,bet,gam) in radians
+        self._rotation_angles = [0,0,0]      # (alp,bet,gam) in radians
         self._focus_offset = 30                     # in micron above coverslip
         self.update_constants_from_JSON()           # rewrites above default constants
         
