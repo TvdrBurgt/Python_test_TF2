@@ -37,15 +37,16 @@ class SmartPatcher(QObject):
         self.window_size_c = 200
         self.window_size_v = 200
         self.window_size_p = 200
-        self.window_size_r = 200
+        self.window_size_rc = 200
         self.n_c = 0
         self.n_v = 0
         self.n_p = 0
-        self.n_r = 0
+        self.n_rc = 0
         self._current = np.array([])
         self._voltage = np.array([])
         self._pressure = np.array([[],[]])
         self._resistance = np.array([])
+        self._capacitance = np.array([])
         
         # Hardware devices
         self._camerathread = None
@@ -75,7 +76,7 @@ class SmartPatcher(QObject):
                 # disconnect the started method to prevent double execution
                 try:
                     self.thread.started.disconnect()
-                except:
+                except TypeError:
                     logging.info('Thread is free to use')
                     
                 # workers can use operation modes for extra variable input
@@ -224,16 +225,18 @@ class SmartPatcher(QObject):
         self.pressure = np.append(self.pressure, np.array([[values],[timings]]), axis=1)
         self.n_p += length
     
-    def _resistance_append_(self, values):
+    def _resistance_capacitance_append_(self, Rvalues, Cvalues):
         """Append new values to a sliding window."""
         length = 1
-        if self.n_r + length > self.window_size_r:
+        if self.n_rc + length > self.window_size_rc:
             # Buffer is full so make room.
-            copySize = self.window_size_r - length
+            copySize = self.window_size_rc - length
             self.resistance = self.resistance[-copySize:]
-            self.n_r = copySize
-        self.resistance = np.append(self.resistance, values)
-        self.n_r += length
+            self.capacitance = self.capacitance[-copySize:]
+            self.n_rc = copySize
+        self.resistance = np.append(self.resistance, Rvalues)
+        self.capacitance = np.append(self.capacitance, Cvalues)
+        self.n_rc += length
     
     
     @property
@@ -582,6 +585,18 @@ class SmartPatcher(QObject):
     @resistance.deleter
     def resistance(self):
         self._resistance = np.array([])
+    
+    @property
+    def capacitance(self):
+        return self._capacitance
+    
+    @capacitance.setter
+    def capacitance(self, capacitance_array):
+        self._capacitance = capacitance_array
+    
+    @capacitance.deleter
+    def capacitance(self):
+        self._capacitance = np.array([])
     
     
     @property

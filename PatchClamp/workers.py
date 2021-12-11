@@ -40,7 +40,7 @@ class Worker(QObject):
     def mockworker(self):
         print('printed in thread')
         self.graph.emit(np.array([1,2,3]))
-        self.draw.emit(['threshold',2+5, 2-5])
+        self.draw.emit(['algorithm threshold',2+5, 2-5])
         self.draw.emit(['cross',1000,1000])
         self.draw.emit(['calibrationline',500,500,-(10)])
         self.draw.emit(['calibrationline',500,500,-(10-90)])
@@ -250,7 +250,6 @@ class Worker(QObject):
             # save tip coordinates in an array
             tipcoords[i,:] = x,y
             self.draw.emit(['cross',x,y])
-            np.save(save_directory+'softcalibration', tipcoords)  #FLAG: relevant for MSc thesis
         
         # user bias correction
         tipcoord = np.mean(tipcoords, axis=0)
@@ -267,6 +266,9 @@ class Worker(QObject):
         
         # return objective to original position
         objective.moveAbs(z=objective_position_reference)
+        
+        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                   #FLAG: relevant for MSc thesis
+        np.save(save_directory+'softcalibration_'+timestamp, tipcoords)                 #FLAG: relevant for MSc thesis
         
         self.finished.emit()
         
@@ -452,18 +454,19 @@ class Worker(QObject):
                 micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
                 I = camera.snap()
                 penalties[idx] = ia.comp_variance_of_Laplacian(I)
-                positionhistory = np.append(positionhistory, pos)
-                penaltyhistory = np.append(penaltyhistory, penalties[idx])
+                positionhistory = np.append(pos, positionhistory)
+                penaltyhistory = np.append(penalties[idx], penaltyhistory)
             
             # Locate maximum penalty value
             i_max = np.argmax(penalties)
             z = positions[i_max]
             
             # emit graph
-            self.graph.emit(np.vstack([positionhistory,penaltyhistory]))
+            self.graph.emit(np.vstack([positions,penalties]))
         
         #VII) move pipette into focus and return objective to original position
         foundfocus = z
+        self.graph.emit(np.vstack([positionhistory,penaltyhistory]))
         micromanipulator.moveAbs(x=reference[0], y=reference[1], z=foundfocus)
         objective.moveAbs(z=objective_position_reference)
         
@@ -592,7 +595,7 @@ class Worker(QObject):
         
         #IIIa) measure resistance and set graph thresholds
         resistance_ref = np.nanmean(self._parent.resistance)
-        self.draw.emit(['threshold',resistance_ref+1.2*R_CRITICAL, resistance_ref-1.2*R_CRITICAL])
+        self.draw.emit(['algorithm threshold',resistance_ref+1.2*R_CRITICAL, resistance_ref-1.2*R_CRITICAL])
         logging.info("Upper threshold"+str(resistance_ref+R_CRITICAL))
         logging.info("Lower threshold"+str(resistance_ref-R_CRITICAL))
         
@@ -622,6 +625,7 @@ class Worker(QObject):
                 positionhistory = np.append(positionhistory, position)
         
         #IV) set pressure to ATM
+        self.draw.emit(['remove algorithm threshold'])
         pressurecontroller.set_pressure_stop_waveform(0)
         time.sleep(3)
         
@@ -675,9 +679,9 @@ class Worker(QObject):
         
         # Algorithm variables
         TIMEOUT = 90                        # seconds
-        I_BREAKIN_CONDITION = 300*1e-12     # ampere absolute valued
+        I_BREAKIN_CONDITION = 1e-9          # ampere absolute valued
         R_BREAKIN_CONDITION = 300*1e6       # ohm
-        F_BREAKIN_CONDITION = [80,120]      # range 1e-? farad/??
+        C_BREAKIN_CONDITION = [50,200]      # units? farad? farad per surface unit?
         PULSES = np.linspace(-100, -300, 15)
         EMERGENCY= False
         
@@ -691,25 +695,33 @@ class Worker(QObject):
             i += 1
             pressurecontroller.set_pulse_stop_waveform(PULSES[i%len(PULSES)])
             time.sleep(2)
-            resistance = np.nanmax(self._parent.resistance[-10::])
             Imax = np.max(self._parent.current)
             Imin = np.min(self._parent.current)
+            resistance = np.nanmax(self._parent.resistance[-10::])
+            capacitance = np.nanmean(self._parent.capacitance[-10::])
             if Imax <= I_BREAKIN_CONDITION and Imin >= -I_BREAKIN_CONDITION \
-                and resistance <= R_BREAKIN_CONDITION:
-                    break
+                and capacitance > C_BREAKIN_CONDITION[0] and capacitance < C_BREAKIN_CONDITION[1] \
+                     and resistance <= R_BREAKIN_CONDITION:
+                         break
             else:
                 currenthistory = np.append(currenthistory, np.array([[Imax],[Imin]]), axis=1)
                 resistancehistory = np.append(resistancehistory, resistance)
             self.graph.emit(resistancehistory)
         
         # # II) second attempt but with zap
-        # resistance = np.nanmax(self._parent.resistance[-10::])
-        # Imax = np.max(self._parent.current)
-        # Imin = np.min(self._parent.current)
-        # if Imax <= I_BREAKIN_CONDITION and Imin >= -I_BREAKIN_CONDITION \
-        #     and resistance <= R_BREAKIN_CONDITION:
+        # while time.time()-start < TIMEOUT and not EMERGENCY:
+        #     Imax = np.max(self._parent.current)
+        #     Imin = np.min(self._parent.current)
+        #     resistance = np.nanmax(self._parent.resistance[-10::])
+        #     capacitance = np.nanmean(self._parent.capacitance[-10::])
+        #     if Imax <= I_BREAKIN_CONDITION and Imin >= -I_BREAKIN_CONDITION \
+        #         and capacitance > C_BREAKIN_CONDITION[0] and capacitance < C_BREAKIN_CONDITION[1] \
+        #             and resistance <= R_BREAKIN_CONDITION:
+        #                 break
+        #     else:
         #         # zap membrane
         #         # apply long suction
+        #         pass
         
         slidingwindow_current = self._parent.current
         for i in range(0,10):

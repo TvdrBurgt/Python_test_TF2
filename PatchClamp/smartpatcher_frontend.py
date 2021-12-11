@@ -571,10 +571,14 @@ class PatchClampUI(QWidget):
             idx = self.roimanager.giveROIindex('target')[-1]
             x,y = self.liveView.addedItems[idx].state['pos']
             self.liveView.addedItems[idx].setPos([x-dx,y-dy])
-        elif label == 'threshold':
+        elif label == 'algorithm threshold':
             upper_threshold = args[0][1]
             lower_threshold = args[0][2]
-            self.algorithm.setRange(yRange=[lower_threshold,upper_threshold])
+            self.algorithm.addItem(pg.InfiniteLine(pos=upper_threshold, angle=0))
+            self.algorithm.addItem(pg.InfiniteLine(pos=lower_threshold, angle=0))
+        elif label == 'remove algorithm threshold':
+            for item in self.algorithm.items[1::]:
+                self.algorithm.removeItem(item)
         else:
             print(label + ' is not a known draw-label')
     
@@ -625,7 +629,9 @@ class PatchClampUI(QWidget):
     def updateLabels(self, curOut, voltOut):
         """Update the resistance and capacitance labels.
         http://scipy-lectures.org/intro/scipy/auto_examples/plot_curve_fit.html
-        https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html"""
+        https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html
+        This function was taken from lhuismans and modified by TvdrBurgt.
+        """
         constants = MeasurementConstants()
         sampPerCyc = int(constants.patchSealSampRate / constants.patchSealFreq)
 
@@ -643,12 +649,12 @@ class PatchClampUI(QWidget):
             dIss = np.mean(curData[int(np.floor(0.15 * sampPerCyc)) : int(np.floor(sampPerCyc / 2)) - 2]) - np.mean(curData[int(np.floor(0.65 * sampPerCyc)) : sampPerCyc - 2])  # Computing the current distance
             membraneResistance = dV / (dIss * 1000000)  # Ohms law (MegaOhm)
             self.resistanceLabel.setText("Resistance:  %.4f M\u03A9" % membraneResistance)
-            self.backend._resistance_append_(membraneResistance*1e6)
+            R_to_append = membraneResistance*1e6
 
             estimated_size_resistance = 10000 / (membraneResistance * 1000000)  # The resistance of a typical patch of membrane, RM is 10000 Omega/{cm}^2
         except:
             self.resistanceLabel.setText("Resistance:  %s" % "NaN")
-            self.backend._resistance_append_(np.nan)
+            R_to_append = np.nan
 
         try:
             measured_vlotage = np.mean(voltData) * 1000
@@ -674,6 +680,7 @@ class PatchClampUI(QWidget):
             tau = -1 / fit[1]
             capacitance = 1000 * tau / resistance
             self.capacitanceLabel.setText("Capacitance:  %.4f" % capacitance)
+            C_to_append = capacitance
 
             estimated_size_capacitance = capacitance * (10 ** -12) * (10 ** 6)
 
@@ -686,7 +693,11 @@ class PatchClampUI(QWidget):
 
         except:
             self.capacitanceLabel.setText("Capacitance:  %s" % "NaN")
+            C_to_append = np.nan
             self.ratioLabel.setText("Ratio:  %s" % "NaN")
+        
+        # store resistance and capacitance values in backend
+        self.backend._resistance_capacitance_append_(R_to_append, C_to_append)
     
     
     def STOP(self):
@@ -775,7 +786,7 @@ class ROIManagerGUI:
     def removeallROIs(self):
         name = list(self.ROIdictionary)
         for name in name:
-            self.removeROI(name, 'all')
+            self.removeROI(name, args='all')
                 
     def contains(self, name):
         if name in self.ROIdictionary:
