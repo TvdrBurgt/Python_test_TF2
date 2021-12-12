@@ -153,7 +153,10 @@ class PatchClampUI(QWidget):
         pressurePlot.setRange(yRange=[-250,250])
         self.pressurePlot = pressurePlot.plot(pen=(3,3))
         
-        sensorLayout.addWidget(sensorWidget)
+        request_resetplots_button = QPushButton(text="Reset all plots", clicked=self.reset_plots)
+        
+        sensorLayout.addWidget(sensorWidget, 0, 0, 1, 1)
+        sensorLayout.addWidget(request_resetplots_button, 1, 0, 1, 1)
         sensorContainer.setLayout(sensorLayout)
         
         """
@@ -617,7 +620,6 @@ class PatchClampUI(QWidget):
         
         self.pressurePlot.setData(pressuredata[1], pressuredata[0])
         self.pressureLabel.setText("Pressure (in mBar): %.1f" % pressuredata[0,-1])
-        
     
     def update_currentvoltageplot(self, voltOut, curOut):
         self.backend._voltage_append_(voltOut / 10)
@@ -703,6 +705,15 @@ class PatchClampUI(QWidget):
         
         # store resistance and capacitance values in backend
         self.backend._resistance_capacitance_append_(R_to_append, C_to_append)
+    
+    
+    def reset_plots(self):
+        del self.backend.current
+        del self.backend.voltage
+        del self.backend.pressure
+        self.algorithmPlot.setData([])
+        self.pressurePlot.setData([0])
+        self.currentPlot.setData([0])
     
     
     def STOP(self):
