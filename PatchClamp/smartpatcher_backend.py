@@ -83,12 +83,17 @@ class SmartPatcher(QObject):
                 self.operation_mode = mode
                 
                 # connected the started method to an executable algorithm
-                if name == 'softcalibration':
+                if name == 'hardcalibration':
                     if self.camerathread == None or self.micromanipulator == None:
                         raise ValueError('Camera and/or micromanipulator not connected')
                     else:
                         self.thread.started.connect(self.worker.softcalibration)
-                elif name == 'hardcalibration':
+                elif name == 'prechecks':
+                    if self.sealtestthread == None or self.pressurethread == None:
+                        raise ValueError('Patch amplifier and/or pressure controller not connected')
+                    else:
+                        self.thread.started.connect(self.worker.prechecks)
+                elif name == 'softcalibration':
                     if self.camerathread == None or self.micromanipulator == None:
                         raise ValueError('Camera and/or micromanipulator not connected')
                     else:
@@ -111,7 +116,7 @@ class SmartPatcher(QObject):
                         self.thread.started.connect(self.worker.pipette2target)
                 elif name == 'gigaseal':
                     if self.sealtestthread == None or self.pressurethread == None or self.micromanipulator == None:
-                        raise ValueError('Sealtest, pressure controller and/or micromanipulator not connected')
+                        raise ValueError('Patch amplifier, pressure controller and/or micromanipulator not connected')
                     else:
                         self.thread.started.connect(self.worker.formgigaseal)
                 elif name == 'breakin':
@@ -531,6 +536,7 @@ class SmartPatcher(QObject):
     
     @resistance_reference.setter
     def resistance_reference(self, resistance):
+        logging.info('Pipette resistance reference set at: '+str(resistance*1e-6)+' MΩ')
         self._resistance_reference = resistance
     
     @resistance_reference.deleter

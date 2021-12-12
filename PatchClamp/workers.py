@@ -46,6 +46,41 @@ class Worker(QObject):
         self.draw.emit(['calibrationline',500,500,-(10-90)])
         self.finished.emit()
     
+    @pyqtSlot()
+    def prechecks(self):
+        """ Pre-checks makes sure the pipette resistance is within its
+        designated range for a good patch and the pipette pressure is set to
+        prevent contamination during tip descent.
+        
+        I) set pressure,
+        II) check if resistance is within 3 to 11 MΩ.
+        """
+        # get all relevant parent attributes
+        save_directory = self._parent.save_directory
+        pressurecontroller = self._parent.pressurethread
+        
+        # Algorithm variables
+        R_PRECHECK_CONDITION = [3,11]   # MΩ
+        
+        #I) set pressure to prevent pipette contamination
+        pressurecontroller.set_pressure_stop_waveform(100)
+        
+        #II) measure pipette resistance and check if it is consistent
+        resistance = np.zeros(10)
+        for i in range(0,10):
+            resistance[i] = np.nanmax(self._parent.resistance[-10::])
+        if all(resistance >= R_PRECHECK_CONDITION[0]*1e6) and all(resistance <= R_PRECHECK_CONDITION[1]*1e6):
+            self._parent.resistance_reference = np.nanmean(resistance)
+            logging.info('Pre-checks passed')
+        else:
+            del self._parent.resistance_reference
+            logging.info('Pre-checks not passed')
+        
+        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                   #FLAG: relevant for MSc thesis
+        np.save(save_directory+'precheckresistance_'+timestamp, resistance)             #FLAG: relevant for MSc thesis
+        
+        self.finished.emit()
+    
     
     @pyqtSlot()
     def hardcalibration(self):
@@ -107,6 +142,7 @@ class Worker(QObject):
         reference = micromanipulator.getPos()
         
         # move hardware to retrieve tip coordinates
+        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                   #FLAG: relevant for MSc thesis
         for i in range(dimension):
             for j, pos in enumerate(positions):
                 # snap images for pipettet tip detection
@@ -126,7 +162,7 @@ class Worker(QObject):
                 # save tip coordinates
                 tipcoords[i,j,:] = np.array([x,y,np.nan])
                 self.draw.emit(['cross',x,y])
-                np.save(save_directory+'hardcalibration'+mode, tipcoords)  #FLAG: relevant for MSc thesis
+                np.save(save_directory+'hardcalibration_'+timestamp, tipcoords)  #FLAG: relevant for MSc thesis
         
         # move hardware back to start position
         x,y,z = reference
@@ -259,7 +295,8 @@ class Worker(QObject):
         tipcoord += userbias
         self.draw.emit(['cross',tipcoord[0],tipcoord[1]])
         I = camera.snap()
-        io.imsave(save_directory+'softcalibration'+'.tif', I, check_contrast=False)    #FLAG: relevant for MSc thesis
+        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                           #FLAG: relevant for MSc thesis
+        io.imsave(save_directory+'softcalibration_'+timestamp+'.tif', I, check_contrast=False)  #FLAG: relevant for MSc thesis
         
         # set micromanipulator and camera coordinate pair of pipette tip
         self._parent.pipette_coordinates_pair = np.vstack([reference, np.array([tipcoord[0], tipcoord[1], None])])
@@ -267,8 +304,7 @@ class Worker(QObject):
         # return objective to original position
         objective.moveAbs(z=objective_position_reference)
         
-        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                   #FLAG: relevant for MSc thesis
-        np.save(save_directory+'softcalibration_'+timestamp, tipcoords)                 #FLAG: relevant for MSc thesis
+        np.save(save_directory+'softcalibration_'+timestamp, tipcoords)                         #FLAG: relevant for MSc thesis
         
         self.finished.emit()
         
@@ -468,6 +504,7 @@ class Worker(QObject):
         foundfocus = z
         self.graph.emit(np.vstack([positionhistory,penaltyhistory]))
         micromanipulator.moveAbs(x=reference[0], y=reference[1], z=foundfocus)
+        I = camera.snap()                                                                   #FLAG: relevant for MSc thesis
         objective.moveAbs(z=objective_position_reference)
         
         I = camera.snap()                                                                   #FLAG: relevant for MSc thesis

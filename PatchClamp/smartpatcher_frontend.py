@@ -164,6 +164,7 @@ class PatchClampUI(QWidget):
         
         request_hardcalibrationxy_button = QPushButton(text="Calibrate XY", clicked=self.request_hardcalibration_xy)
         request_hardcalibrationxyz_button = QPushButton(text="Calibrate pixelsize", clicked=self.request_hardcalibration_pixelsize)
+        request_prechecks_button = QPushButton(text="Pre-checks", clicked=self.request_prechecks)
         request_selecttarget_button = QPushButton(text="Select target", clicked=self.request_selecttarget)
         request_confirmtarget_button = QPushButton(text="Confirm target", clicked=self.request_confirmtarget)
         request_softcalibration_button = QPushButton(text="Detect tip", clicked=self.request_softcalibration)
@@ -174,12 +175,13 @@ class PatchClampUI(QWidget):
         
         algorithmLayout.addWidget(request_hardcalibrationxy_button, 0, 0, 1, 1)
         algorithmLayout.addWidget(request_hardcalibrationxyz_button, 1, 0, 1, 1)
-        algorithmLayout.addWidget(request_selecttarget_button, 0, 1, 1, 1)
-        algorithmLayout.addWidget(request_confirmtarget_button, 1, 1, 1, 1)
-        algorithmLayout.addWidget(request_target2center_button, 0, 2, 1, 1)
-        algorithmLayout.addWidget(request_pipette2target_button, 1, 2, 1, 1)
-        algorithmLayout.addWidget(request_autofocustip, 0, 3, 1, 1)
-        algorithmLayout.addWidget(request_softcalibration_button, 1, 3, 1, 1)
+        algorithmLayout.addWidget(request_prechecks_button, 0, 1, 2, 1)
+        algorithmLayout.addWidget(request_selecttarget_button, 0, 2, 1, 1)
+        algorithmLayout.addWidget(request_confirmtarget_button, 1, 2, 1, 1)
+        algorithmLayout.addWidget(request_target2center_button, 0, 3, 1, 1)
+        algorithmLayout.addWidget(request_pipette2target_button, 1, 3, 1, 1)
+        algorithmLayout.addWidget(request_autofocustip, 0, 4, 1, 1)
+        algorithmLayout.addWidget(request_softcalibration_button, 1, 4, 1, 1)
         algorithmContainer.setLayout(algorithmLayout)
         
         """
@@ -466,6 +468,9 @@ class PatchClampUI(QWidget):
         
     def request_hardcalibration_pixelsize(self):
         self.backend.request(name='hardcalibration', mode='pixelsize')
+    
+    def request_prechecks(self):
+        self.backend.request(name='prechecks')
     
     def request_softcalibration(self):
         self.backend.request(name='softcalibration')
