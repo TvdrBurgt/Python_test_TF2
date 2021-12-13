@@ -739,6 +739,8 @@ class PatchClampUI(QWidget):
         be reused in the main widget, only then we accept the close event.
         and quit the widget.
         """
+        self.backend.STOP = True
+        
         try:
             del self.backend.camerathread
         except AttributeError:
