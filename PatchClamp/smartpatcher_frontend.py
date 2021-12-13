@@ -10,6 +10,8 @@ import numpy as np
 import logging
 import matplotlib.pyplot as plt
 
+from skimage import io
+
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QPen, QColor
 from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QDoubleSpinBox, QGroupBox, QLabel, QStackedWidget, QComboBox
@@ -165,7 +167,7 @@ class PatchClampUI(QWidget):
         algorithmContainer = QGroupBox()
         algorithmLayout = QGridLayout()
         
-        request_hardcalibrationxy_button = QPushButton(text="Calibrate XY (don't use!')", clicked=self.request_hardcalibration_xy)
+        request_hardcalibrationxy_button = QPushButton(text="Calibrate XY", clicked=self.request_hardcalibration_xy)
         request_hardcalibrationxyz_button = QPushButton(text="Calibrate pixelsize", clicked=self.request_hardcalibration_pixelsize)
         request_prechecks_button = QPushButton(text="Pre-checks", clicked=self.request_prechecks)
         request_selecttarget_button = QPushButton(text="Select target", clicked=self.request_selecttarget)
@@ -447,7 +449,9 @@ class PatchClampUI(QWidget):
         
     def request_snap(self):
         if self.backend.camerathread != None:
-            self.backend.camerathread.snap()
+            I = self.backend.camerathread.snap()
+            io.imsave(self.backend.save_directory+'.tif', I, check_contrast=False)
+            self.update_snap(I)
         else:
             I = plt.imread("testimage.tif")
             self.update_snap(I)
@@ -467,8 +471,7 @@ class PatchClampUI(QWidget):
         self.backend.pressurethread.set_pressure_stop_waveform(target_pressure)
     
     def request_hardcalibration_xy(self):
-        # self.backend.request(name='hardcalibration', mode='XY')
-        pass
+        self.backend.request(name='hardcalibration', mode='XY')
         
     def request_hardcalibration_pixelsize(self):
         self.backend.request(name='hardcalibration', mode='pixelsize')

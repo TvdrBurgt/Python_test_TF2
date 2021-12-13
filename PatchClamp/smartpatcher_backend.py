@@ -22,7 +22,7 @@ class SmartPatcher(QObject):
         self._image_size = [2048, 2048]             # dimension of FOV in pix
         self._pipette_orientation = 0               # in radians
         self._pipette_diameter = 16                 # in pixels (16=patchclamp, ??=cell-picking)
-        self._rotation_angles = [0,0,0]      # (alp,bet,gam) in radians
+        self._rotation_angles = [0,0,0.043767]      # (alp,bet,gam) in radians
         self._focus_offset = 30                     # in micron above coverslip
         self.update_constants_from_JSON()           # rewrites above default constants
         
@@ -160,30 +160,19 @@ class SmartPatcher(QObject):
         
         return self.R @ np.subtract(target,origin) + origin
 
-    # def update_constants_from_JSON(self):
-    #     # read json file with autopatcher constants and update them in backend
-    #     try:
-    #         with open("autopatch_configuration.txt", "r") as json_infile:
-    #             data = json.load(json_infile)
-    #         self.pixel_size = data["pixel_size"]
-    #         self.image_size = data["image_size"]
-    #         self.pipette_orientation = data["pipette_orientation"]
-    #         self.pipette_diameter = data["pipette_diameter"]
-    #         self.rotation_angles = data["rotation_angles"]
-    #         self.focus_offset = data["focus_offset"]
-    #     except:
-    #         self.write_constants_to_JSON()
-
     def update_constants_from_JSON(self):
         # read json file with autopatcher constants and update them in backend
-        with open("autopatch_configuration.txt", "r") as json_infile:
-            data = json.load(json_infile)
-        self.pixel_size = data["pixel_size"]
-        self.image_size = data["image_size"]
-        self.pipette_orientation = data["pipette_orientation"]
-        self.pipette_diameter = data["pipette_diameter"]
-        self.rotation_angles = data["rotation_angles"]
-        self.focus_offset = data["focus_offset"]
+        try:
+            with open("autopatch_configuration.txt", "r") as json_infile:
+                data = json.load(json_infile)
+            self.pixel_size = data["pixel_size"]
+            self.image_size = data["image_size"]
+            self.pipette_orientation = data["pipette_orientation"]
+            self.pipette_diameter = data["pipette_diameter"]
+            self.rotation_angles = data["rotation_angles"]
+            self.focus_offset = data["focus_offset"]
+        except:
+            self.write_constants_to_JSON()
         
     def write_constants_to_JSON(self):
         data = {
@@ -419,10 +408,8 @@ class SmartPatcher(QObject):
             alpha,beta,gamma = alphabetagamma
             if type(alpha) and type(beta) and type(gamma) == float or int:
                 logging.info('Set rotation angles alpha beta gamma: '+str(alpha)+' '+str(beta)+' '+str(gamma))
-                alpha_old, beta_old, gamma_old = self.rotation_angles
-                self._rotation_angles = [alpha+alpha_old, beta+beta_old, gamma+gamma_old]
-                self.R = (alpha+alpha_old, beta+beta_old, gamma+gamma_old)
-                self.write_constants_to_JSON()
+                self._rotation_angles = [alpha, beta, gamma]
+                self.R = (alpha, beta, gamma)
             else:
                 raise ValueError('rotation angles should be integers or floats')
         else:
@@ -470,7 +457,6 @@ class SmartPatcher(QObject):
     @R.deleter
     def R(self):
         self._R = np.eye(3)
-        self.write_constants_to_JSON()
     
     
     @property

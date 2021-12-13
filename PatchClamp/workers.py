@@ -138,8 +138,10 @@ class Worker(QObject):
         # modes of operation
         if mode == 'XY':
             dimension = 2
+            self._parent.rotation_angles = (0, 0, 0)
         elif mode == 'XYZ':
             dimension = 3
+            self._parent.rotation_angles = (0, 0, 0)
         elif mode == 'pixelsize':
             dimension = 2
         else:
@@ -171,7 +173,7 @@ class Worker(QObject):
                 # save tip coordinates
                 tipcoords[i,j,:] = np.array([x,y,np.nan])
                 self.draw.emit(['cross',x,y])
-                np.save(save_directory+'hardcalibration_'+timestamp, tipcoords)  #FLAG: relevant for MSc thesis
+                np.save(save_directory+'hardcalibration_'+timestamp, tipcoords)         #FLAG: relevant for MSc thesis
                 
                 # (emergency) stop
                 if self.STOP:
