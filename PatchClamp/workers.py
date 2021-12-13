@@ -75,6 +75,7 @@ class Worker(QObject):
         pressurecontroller.set_pressure_stop_waveform(100)
         
         #II) measure pipette resistance and check if it is consistent
+        del self._parent.resistance_reference
         resistance = np.zeros(10)
         for i in range(0,10):
             resistance[i] = np.nanmax(self._parent.resistance[-10::])
@@ -82,7 +83,6 @@ class Worker(QObject):
             self._parent.resistance_reference = np.nanmean(resistance)
             logging.info('Pre-checks passed')
         else:
-            del self._parent.resistance_reference
             logging.info('Pre-checks not passed')
         
         timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                   #FLAG: relevant for MSc thesis
@@ -304,22 +304,25 @@ class Worker(QObject):
             tipcoords2[idx_possible_outlier,0] = np.mean(tipcoords2[idx_x_interpolation,0])
             tipcoords2[idx_possible_outlier,1] = np.mean(tipcoords2[idx_y_interpolation,1])
         
-        # return pipette and calculate detected tip coordinates
+        # return pipette to starting position
         x,y,z = reference
         micromanipulator.moveAbs(x,y,z)
-        tipcoord = np.mean(tipcoords2, axis=0)
-        self.draw.emit(['cross',tipcoord[0],tipcoord[1]])
-        I = camera.snap()
-        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                                                                       #FLAG: relevant for MSc thesis
-        io.imsave(save_directory+'softcalibration_X'+str(tipcoord[0])+'_Y'+str(tipcoord[1])+'_'+timestamp+'.tif', I, check_contrast=False)  #FLAG: relevant for MSc thesis
-        np.save(save_directory+'softcalibration_'+timestamp, tipcoords2)                                                                    #FLAG: relevant for MSc thesis
         
-        # user bias correction
-        userbias = np.array([0, 0])     #should come from human input!
-        tipcoord += userbias
+        if not self.STOP:
+            # calculate final tip coordinates
+            tipcoord = np.mean(tipcoords2, axis=0)
+            self.draw.emit(['cross',tipcoord[0],tipcoord[1]])
+            I = camera.snap()
+            timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                                                                       #FLAG: relevant for MSc thesis
+            io.imsave(save_directory+'softcalibration_X'+str(tipcoord[0])+'_Y'+str(tipcoord[1])+'_'+timestamp+'.tif', I, check_contrast=False)  #FLAG: relevant for MSc thesis
+            np.save(save_directory+'softcalibration_'+timestamp, tipcoords2)                                                                    #FLAG: relevant for MSc thesis
         
-        # set micromanipulator and camera coordinate pair of pipette tip
-        self._parent.pipette_coordinates_pair = np.vstack([reference, np.array([tipcoord[0], tipcoord[1], None])])
+            # user bias correction
+            userbias = np.array([0, 0])     #should come from human input!
+            tipcoord += userbias
+        
+            # set micromanipulator and camera coordinate pair of pipette tip
+            self._parent.pipette_coordinates_pair = np.vstack([reference, np.array([tipcoord[0], tipcoord[1], None])])
         
         # return objective to original position
         objective.moveAbs(z=objective_position_reference)
@@ -501,6 +504,10 @@ class Worker(QObject):
         logging.info('Coarse focus found, continue with finetuning')
         _,_,z = micromanipulator.getPos()
         for step in [STEPSIZE, STEPSIZE/5]:
+            # (emergency) stop
+            if self.STOP:
+                break
+            
             # Sample six points between the last three penalty scores
             penalties = np.zeros(6)
             positions = np.linspace(z-step, z+step, 6)
@@ -510,30 +517,24 @@ class Worker(QObject):
                 penalties[idx] = ia.comp_variance_of_Laplacian(I)
                 positionhistory = np.append(pos, positionhistory)
                 penaltyhistory = np.append(penalties[idx], penaltyhistory)
-                
-                # (emergency) stop
-                if self.STOP:
-                    break
             
             # emit graph
             self.graph.emit(np.vstack([positions,penalties]))
-            
-            # (emergency) stop
-            if self.STOP:
-                break
         
-        #VII) move pipette into focus and return objective to original position
-        i_max = np.argmax(penalties)
-        foundfocus = positions[i_max]
-        self.graph.emit(np.vstack([positionhistory,penaltyhistory]))
-        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=foundfocus)
-        I = camera.snap()                                                                   #FLAG: relevant for MSc thesis
-        objective.moveAbs(z=objective_position_reference)
+        #VII) move pipette into focus
+        if not self.STOP:
+            i_max = np.argmax(penalties)
+            foundfocus = positions[i_max]
+            self.graph.emit(np.vstack([positionhistory,penaltyhistory]))
+            micromanipulator.moveAbs(x=reference[0], y=reference[1], z=foundfocus)
         
         I = camera.snap()                                                                   #FLAG: relevant for MSc thesis
         io.imsave(save_directory+'autofocus_'+timestamp+'.tif', I, check_contrast=False)    #FLAG: relevant for MSc thesis
         np.save(save_directory+'autofocus_positionhistory_'+timestamp, positionhistory)     #FLAG: relevant for MSc thesis
         np.save(save_directory+'autofocus_penaltyhistory_'+timestamp, penaltyhistory)       #FLAG: relevant for MSc thesis
+        
+        #VIII) return objective to original position
+        objective.moveAbs(z=objective_position_reference)
         
         self.finished.emit()
     
@@ -565,7 +566,7 @@ class Worker(QObject):
         # Move XY stage a distance (-dx,-dy), note that stage axis are rotated
         ismoving = True
         stage.moveRel(xRel=dy, yRel=-dx)
-        while ismoving and not self.STOP:
+        while ismoving:
             ismoving = not stage.motorsStopped()
             time.sleep(0.1)
         
@@ -660,7 +661,6 @@ class Worker(QObject):
         logging.info("Lower threshold"+str(resistance_ref-R_CRITICAL))
         
         #IIIb) descent pipette until R increases by R_CRITICAL
-        logging.info("Tip descent started...")
         resistance = resistance_ref
         position = micromanipulator.getPos()[2]
         resistancehistory = np.array([resistance])
@@ -823,7 +823,12 @@ class Worker(QObject):
             if self.STOP:
                 break
         
+        # move micromanipulator back to reference position
+        micromanipulator.moveAbs(x=x, y=y, z=z)
+        
+        # save XY-grid of detected tip coordinates
         np.save(save_directory+'_imagexygrid_', positionhistory)
+        
         self.finished.emit()
     
     
@@ -848,8 +853,13 @@ class Worker(QObject):
             # (emergency) stop
             if self.STOP:
                 break
-            
+        
+        # move micromanipulator back to reference position
+        micromanipulator.moveAbs(x=x, y=y, z=z)
+        
+        # save Z-stack of micromanipulator positions
         np.save(save_directory+'_imagezstack_', positionhistory)
+        
         self.finished.emit()
                     
 
