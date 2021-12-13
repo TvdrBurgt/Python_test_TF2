@@ -440,9 +440,18 @@ class PatchClampUI(QWidget):
     def toggle_pauselive(self):
         if hasattr(self, 'signal_camera_live'):
             if self.request_pause_button.isChecked():
-                self.signal_camera_live.disconnect()
+                try:
+                    self.signal_camera_live.disconnect()
+                except TypeError:
+                    pass
+                self.request_pause_button.setChecked(True)
             else:
+                try:
+                    self.signal_camera_live.disconnect()
+                except TypeError:
+                    pass
                 self.signal_camera_live.connect(self.update_live)
+                self.request_pause_button.setChecked(False)
         else:
             self.request_pause_button.setChecked(False)
         
@@ -504,6 +513,9 @@ class PatchClampUI(QWidget):
         recycle it. If the target ROI got removed then we place it back to its
         last known position.
         """
+        self.request_pause_button.setChecked(True)
+        self.toggle_pauselive()
+        
         coords = self.backend.target_coordinates
         if all(values is None for values in coords):
             coords = (0,0)
@@ -715,7 +727,7 @@ class PatchClampUI(QWidget):
         del self.backend.current
         del self.backend.voltage
         del self.backend.pressure
-        self.algorithmPlot.setData([])
+        self.algorithmPlot.setData([0])
         self.pressurePlot.setData([0])
         self.currentPlot.setData([0])
     
