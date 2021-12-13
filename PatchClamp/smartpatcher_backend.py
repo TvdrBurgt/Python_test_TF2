@@ -621,10 +621,6 @@ class SmartPatcher(QObject):
             self._STOP = True
             logging.info('Emergency stop active')
             self.worker.STOP = True
-            if self.micromanipulator != None:
-                self._micromanipulator.stop()
-                self._micromanipulator.stop()
-                self._micromanipulator.stop()
         elif state == False:
             self._STOP = False
             logging.info('Emergency stop standby')

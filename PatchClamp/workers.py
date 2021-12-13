@@ -35,6 +35,14 @@ class Worker(QObject):
     def parent(self, parent):
         self._parent = parent
     
+    @property
+    def STOP(self):
+        return self._STOP
+    
+    @STOP.setter
+    def STOP(self, state):
+        self._STOP = state
+    
     
     @pyqtSlot()
     def mockworker(self):
@@ -44,6 +52,7 @@ class Worker(QObject):
         self.draw.emit(['cross',1000,1000])
         self.draw.emit(['calibrationline',500,500,-(10)])
         self.draw.emit(['calibrationline',500,500,-(10-90)])
+        self.draw.emit(['remove algorithm threshold'])
         self.finished.emit()
     
     @pyqtSlot()
@@ -163,6 +172,14 @@ class Worker(QObject):
                 tipcoords[i,j,:] = np.array([x,y,np.nan])
                 self.draw.emit(['cross',x,y])
                 np.save(save_directory+'hardcalibration_'+timestamp, tipcoords)  #FLAG: relevant for MSc thesis
+                
+                # (emergency) stop
+                if self.STOP:
+                    break
+            
+            # (emergency) stop
+            if self.STOP:
+                break
         
         # move hardware back to start position
         x,y,z = reference
@@ -181,15 +198,15 @@ class Worker(QObject):
         beta = np.arcsin((-E[2,0]*np.cos(gamma) + E[2,1]*np.sin(gamma))/np.cos(alpha))
         
         # set rotation angles or calculate pixelsize
-        if mode == 'XY':
+        if mode == 'XY' and not self.STOP:
             self._parent.rotation_angles = (0, 0, -gamma)
             self.draw.emit(['calibrationline',tipcoords[0,3,0],tipcoords[0,3,1],-np.rad2deg(gamma)])
             self.draw.emit(['calibrationline',tipcoords[0,3,0],tipcoords[0,3,1],-np.rad2deg(gamma-np.pi/2)])
-        elif mode == 'XYZ':
+        elif mode == 'XYZ' and not self.STOP:
             self._parent.rotation_angles = (-alpha, -beta, -gamma)
             self.draw.emit(['calibrationline',tipcoords[0,3,0],tipcoords[0,3,1],-np.rad2deg(gamma)])
             self.draw.emit(['calibrationline',tipcoords[0,3,0],tipcoords[0,3,1],-np.rad2deg(gamma-np.pi/2)])
-        elif mode == 'pixelsize':
+        elif mode == 'pixelsize' and not self.STOP:
             # get all micromanipulator-pixel pairs in the XY plane
             pixcoords = tipcoords[0:2,:,0:2]
             realcoords = np.tile(np.nan, (2,len(positions),2))
@@ -209,20 +226,6 @@ class Worker(QObject):
             # set pixelsize to backend
             self._parent.pixelsize = sample_mean
             logging.info('pixelsize estimation: mean +/- s.d. = ' + str(sample_mean) + ' +/- ' + str(np.sqrt(sample_var)))
-            
-            # # simulate pixel size estimation
-            # real = np.array([np.transpose([np.linspace(0,100,7),np.linspace(0,100,7)]),np.transpose([np.linspace(0,100,7),-np.linspace(0,100,7)])])
-            # pix = np.array([np.transpose([np.linspace(750,1250,7),np.linspace(750,1250,7)]),np.transpose([np.linspace(750,1250,7),-np.linspace(750,1250,7)])])
-            # real += np.random.rand(2,7,2)+1555
-            # pix += np.random.rand(2,7,2)*10
-            # diff_real = np.abs(np.diff(real, axis=1))
-            # diff_pix = np.abs(np.diff(pix, axis=1))
-            # smp = diff_real/diff_pix
-            # smp_mean = np.mean(smp)
-            # smp_var = np.var(smp)
-            # print('mean pixel size = ' + str(smp_mean))
-            # print('variance pixel size = ' + str(smp_var))
-            # print('true pixel size = ' + str((101/7)/(501/7)))
         
         self.finished.emit()
     
@@ -262,7 +265,8 @@ class Worker(QObject):
         objective_position_reference = objective.getPos()
         objective.moveAbs(z=objective_position_reference+CALIBRATION_HEIGHT/1000)
         
-        tipcoords = POSITIONS[:,0:2] * 0
+        tipcoords1 = POSITIONS[:,0:2] * 0
+        tipcoords2 = POSITIONS[:,0:2] * 0
         reference = micromanipulator.getPos()
         for i in range(0, POSITIONS.shape[0]):
             # snap images for pipettet tip detection
@@ -272,39 +276,53 @@ class Worker(QObject):
             micromanipulator.moveRel(dx=5)
             image_right = camera.snap()
             
-            # emergency stop
-            if self.STOP == True:
-                break
-            
             # pipette tip detection algorithm
             x1, y1 = ia.detectPipettetip(image_left, image_right, diameter=D, orientation=O)
             self.draw.emit(['cross',x1,y1])
             W = ia.makeGaussian(size=image_left.shape, mu=(x1,y1), sigma=(image_left.shape[0]//12,image_left.shape[1]//12))
             camera.snapsignal.emit(np.multiply(image_right,W))
-            x, y = ia.detectPipettetip(np.multiply(image_left,W), np.multiply(image_right,W), diameter=(5/4)*D, orientation=O)
+            x2, y2 = ia.detectPipettetip(np.multiply(image_left,W), np.multiply(image_right,W), diameter=(5/4)*D, orientation=O)
+            self.draw.emit(['cross',x2,y2])
             
             # save tip coordinates in an array
-            tipcoords[i,:] = x,y
-            self.draw.emit(['cross',x,y])
+            tipcoords1[i,:] = x1,y1
+            tipcoords2[i,:] = x2,y2
+            
+            # (emergency) stop
+            if self.STOP:
+                break
         
-        # user bias correction
-        tipcoord = np.mean(tipcoords, axis=0)
+        # outlier detection, replace outlier with mean-interpolation
+        norm_dist = np.sqrt(np.sum((tipcoords1-tipcoords2)**2, axis=1))
+        idx_possible_outlier = np.argmax(norm_dist)
+        if norm_dist[idx_possible_outlier] > 50:
+            positions = POSITIONS*1.    #converts array of ints to array floas (just in case)
+            posx,posy,_ = positions[idx_possible_outlier]
+            positions[idx_possible_outlier,:] = np.array([np.nan, np.nan, np.nan])
+            idx_x_interpolation = np.where(positions[:,0] == posx)
+            idx_y_interpolation = np.where(positions[:,1] == posy)
+            tipcoords2[idx_possible_outlier,0] = np.mean(tipcoords2[idx_x_interpolation,0])
+            tipcoords2[idx_possible_outlier,1] = np.mean(tipcoords2[idx_y_interpolation,1])
+        
+        # return pipette and calculate detected tip coordinates
         x,y,z = reference
         micromanipulator.moveAbs(x,y,z)
-        userbias = np.array([0, 0])     #should come from human input!
-        tipcoord += userbias
+        tipcoord = np.mean(tipcoords2, axis=0)
         self.draw.emit(['cross',tipcoord[0],tipcoord[1]])
         I = camera.snap()
-        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                           #FLAG: relevant for MSc thesis
-        io.imsave(save_directory+'softcalibration_'+timestamp+'.tif', I, check_contrast=False)  #FLAG: relevant for MSc thesis
+        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                                                                       #FLAG: relevant for MSc thesis
+        io.imsave(save_directory+'softcalibration_X'+str(tipcoord[0])+'_Y'+str(tipcoord[1])+'_'+timestamp+'.tif', I, check_contrast=False)  #FLAG: relevant for MSc thesis
+        np.save(save_directory+'softcalibration_'+timestamp, tipcoords2)                                                                    #FLAG: relevant for MSc thesis
+        
+        # user bias correction
+        userbias = np.array([0, 0])     #should come from human input!
+        tipcoord += userbias
         
         # set micromanipulator and camera coordinate pair of pipette tip
         self._parent.pipette_coordinates_pair = np.vstack([reference, np.array([tipcoord[0], tipcoord[1], None])])
         
         # return objective to original position
         objective.moveAbs(z=objective_position_reference)
-        
-        np.save(save_directory+'softcalibration_'+timestamp, tipcoords)                         #FLAG: relevant for MSc thesis
         
         self.finished.emit()
         
@@ -362,7 +380,7 @@ class Worker(QObject):
         going_up = True
         going_down = not going_up
         lookingforpeak = True
-        while lookingforpeak:
+        while lookingforpeak and not self.STOP:
             
             # emit graph
             self.graph.emit(np.vstack([positionhistory,penaltyhistory]))
@@ -492,16 +510,21 @@ class Worker(QObject):
                 penalties[idx] = ia.comp_variance_of_Laplacian(I)
                 positionhistory = np.append(pos, positionhistory)
                 penaltyhistory = np.append(penalties[idx], penaltyhistory)
-            
-            # Locate maximum penalty value
-            i_max = np.argmax(penalties)
-            z = positions[i_max]
+                
+                # (emergency) stop
+                if self.STOP:
+                    break
             
             # emit graph
             self.graph.emit(np.vstack([positions,penalties]))
+            
+            # (emergency) stop
+            if self.STOP:
+                break
         
         #VII) move pipette into focus and return objective to original position
-        foundfocus = z
+        i_max = np.argmax(penalties)
+        foundfocus = positions[i_max]
         self.graph.emit(np.vstack([positionhistory,penaltyhistory]))
         micromanipulator.moveAbs(x=reference[0], y=reference[1], z=foundfocus)
         I = camera.snap()                                                                   #FLAG: relevant for MSc thesis
@@ -542,7 +565,7 @@ class Worker(QObject):
         # Move XY stage a distance (-dx,-dy), note that stage axis are rotated
         ismoving = True
         stage.moveRel(xRel=dy, yRel=-dx)
-        while ismoving:
+        while ismoving and not self.STOP:
             ismoving = not stage.motorsStopped()
             time.sleep(0.1)
         
@@ -612,10 +635,10 @@ class Worker(QObject):
         PIPETTE_DESCENT_RANGE = 50  # microns
         STEPSIZE = 0.2              # microns
         TIMEOUT = 50                # seconds
-        EMERGENCY = False
+        PIPETTE_PRESSURE = 50       # mBar
         
         #I) make sure pressure is set at the right value
-        pressurecontroller.set_pressure_stop_waveform(50)
+        pressurecontroller.set_pressure_stop_waveform(PIPETTE_PRESSURE)
         
         #IIa) calculate shortest trajectory to target and apply coordinate transformation
         dx = xtarget - tipcoords_cam[0]                     #x trajectory (in pixels)
@@ -627,7 +650,7 @@ class Worker(QObject):
         micromanipulator.moveAbs(x=tipcoords_manip[0]+trajectory[0],
                                  y=tipcoords_manip[1]+trajectory[1],
                                  z=tipcoords_manip[2]+trajectory[2])
-        micromanipulator.moveRel(dz=10-focus_offset)
+        micromanipulator.moveRel(dz=20-focus_offset)
         time.sleep(0.5)
         
         #IIIa) measure resistance and set graph thresholds
@@ -642,7 +665,7 @@ class Worker(QObject):
         position = micromanipulator.getPos()[2]
         resistancehistory = np.array([resistance])
         positionhistory = np.array([position])
-        while resistance < resistance_ref + R_CRITICAL and not EMERGENCY:
+        while resistance < resistance_ref + R_CRITICAL and not self.STOP:
             # step down and measure the resistance
             micromanipulator.moveRel(dx=0, dy=0, dz=-STEPSIZE)
             position = micromanipulator.getPos()[2]
@@ -663,13 +686,14 @@ class Worker(QObject):
         
         #IV) set pressure to ATM
         self.draw.emit(['remove algorithm threshold'])
-        pressurecontroller.set_pressure_stop_waveform(0)
-        time.sleep(3)
+        if not self.STOP:
+            pressurecontroller.set_pressure_stop_waveform(0)
+            time.sleep(3)
         
         #Va) wait for Gigaseal
         logging.info("Attempting gigaseal...")
         start = time.time()
-        while resistance < 1e9 and time.time()-start < 5 and not EMERGENCY:
+        while resistance < 1e9 and time.time()-start < 5 and not self.STOP:
             resistance = np.nanmax(self._parent.resistance[-10::])
             self.graph.emit(resistancehistory)
             resistancehistory = np.append(resistancehistory, resistance)
@@ -678,11 +702,11 @@ class Worker(QObject):
         #Vb) wait for Gigaseal with suction pulses
         if resistance > 1e9:
             logging.info("Gigaseal formed!")
-        elif not EMERGENCY:
+        elif not self.STOP:
             logging.info("Timeout reached, starting suction pulses...")
             start = time.time()
             pressurecontroller.set_waveform(high=-10, low=-30, high_T=3, low_T=1.5)
-            while resistance < 1e9 and time.time()-start < TIMEOUT:
+            while resistance < 1e9 and time.time()-start < TIMEOUT and not self.STOP:
                 resistance = np.nanmax(self._parent.resistance[-10::])
                 self.graph.emit(resistancehistory)
                 resistancehistory = np.append(resistancehistory, resistance)
@@ -692,7 +716,7 @@ class Worker(QObject):
                 logging.info("Gigaseal formed!")
             else:
                 logging.info("Gigaseal failed, find an easier cell please...")
-                pressurecontroller.set_pressure_stop_waveform(50)
+                pressurecontroller.set_pressure_stop_waveform(PIPETTE_PRESSURE)
         
         timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))   
         np.save(save_directory+'gigaseal_positionhistory_'+timestamp, positionhistory)      #FLAG: relevant for MSc thesis
@@ -720,7 +744,6 @@ class Worker(QObject):
         R_BREAKIN_CONDITION = 300*1e6       # ohm
         C_BREAKIN_CONDITION = [50,200]      # units? farad? farad per surface unit?
         PULSES = np.linspace(-100, -300, 15)
-        EMERGENCY= False
         
         # I) attempt breaking in by increasing suction pulses 
         logging.info("Attempting break-in...")
@@ -728,7 +751,7 @@ class Worker(QObject):
         currenthistory = np.array([[],[]])
         start = time.time()
         i = 0
-        while time.time()-start < TIMEOUT and not EMERGENCY:
+        while time.time()-start < TIMEOUT and not self.STOP:
             i += 1
             pressurecontroller.set_pulse_stop_waveform(PULSES[i%len(PULSES)])
             time.sleep(2)
@@ -746,7 +769,7 @@ class Worker(QObject):
             self.graph.emit(resistancehistory)
         
         # # II) second attempt but with zap
-        # while time.time()-start < TIMEOUT and not EMERGENCY:
+        # while time.time()-start < TIMEOUT and not self.STOP:
         #     Imax = np.max(self._parent.current)
         #     Imin = np.min(self._parent.current)
         #     resistance = np.nanmax(self._parent.resistance[-10::])
@@ -791,6 +814,15 @@ class Worker(QObject):
                     io.imsave(save_directory+'_imagexygrid_'+'X%dY%d'%(i*stepsize,j*stepsize)+k+'.tif', snap, check_contrast=False)
                     x2,y2,z2 = micromanipulator.getPos()
                     positionhistory = np.append(positionhistory, np.array([[x2],[y2]]))
+                
+                # (emergency) stop
+                if self.STOP:
+                    break
+            
+            # (emergency) stop
+            if self.STOP:
+                break
+        
         np.save(save_directory+'_imagexygrid_', positionhistory)
         self.finished.emit()
     
@@ -812,6 +844,11 @@ class Worker(QObject):
             io.imsave(save_directory+'_imagezstack_'+'Z%d'%(i*stepsize)+'b'+'.tif', snap, check_contrast=False)
             x2,y2,z2 = micromanipulator.getPos()
             positionhistory = np.append(positionhistory, z2)
+            
+            # (emergency) stop
+            if self.STOP:
+                break
+            
         np.save(save_directory+'_imagezstack_', positionhistory)
         self.finished.emit()
                     

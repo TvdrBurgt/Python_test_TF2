@@ -74,8 +74,8 @@ class PatchClampUI(QWidget):
         self.connect_pressurecontroller_button = QPushButton(text="Pressure controller", clicked=self.connect_pressurethread)
         self.connect_pressurecontroller_button.setCheckable(True)
         
-        # Button to stop all hardware in motion
-        self.STOP_button = QPushButton(text="Emergency STOP", clicked=self.STOP)
+        # Button to stop all the running thread
+        self.STOP_button = QPushButton(text="STOP", clicked=self.STOP)
         self.STOP_button.setCheckable(True)
         
         hardwareLayout.addWidget(self.connect_camerathread_button, 0, 0, 1, 1)
@@ -165,7 +165,7 @@ class PatchClampUI(QWidget):
         algorithmContainer = QGroupBox()
         algorithmLayout = QGridLayout()
         
-        request_hardcalibrationxy_button = QPushButton(text="Calibrate XY", clicked=self.request_hardcalibration_xy)
+        request_hardcalibrationxy_button = QPushButton(text="Calibrate XY (don't use!')", clicked=self.request_hardcalibration_xy)
         request_hardcalibrationxyz_button = QPushButton(text="Calibrate pixelsize", clicked=self.request_hardcalibration_pixelsize)
         request_prechecks_button = QPushButton(text="Pre-checks", clicked=self.request_prechecks)
         request_selecttarget_button = QPushButton(text="Select target", clicked=self.request_selecttarget)
@@ -202,7 +202,7 @@ class PatchClampUI(QWidget):
         request_breakin_button = QPushButton(text="Break-in", clicked=self.request_breakin)
         # request_gigaseal_button = QPushButton(text="XY grid", clicked=self.request_imagexygrid)
         # request_breakin_button = QPushButton(text="Z stack", clicked=self.request_imagezstack)
-        request_zap_button = QPushButton(text="ZAP", clicked=self.mockfunction)
+        request_zap_button = QPushButton(text="ZAP (don't use!')", clicked=self.mockfunction)
         
         sealtestLayout.addWidget(self.resistanceLabel, 0, 0, 1, 3)
         sealtestLayout.addWidget(self.capacitanceLabel, 0, 3, 1, 3)
@@ -467,7 +467,8 @@ class PatchClampUI(QWidget):
         self.backend.pressurethread.set_pressure_stop_waveform(target_pressure)
     
     def request_hardcalibration_xy(self):
-        self.backend.request(name='hardcalibration', mode='XY')
+        # self.backend.request(name='hardcalibration', mode='XY')
+        pass
         
     def request_hardcalibration_pixelsize(self):
         self.backend.request(name='hardcalibration', mode='pixelsize')
