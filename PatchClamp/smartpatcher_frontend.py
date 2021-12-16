@@ -204,7 +204,7 @@ class PatchClampUI(QWidget):
         request_breakin_button = QPushButton(text="Break-in", clicked=self.request_breakin)
         # request_gigaseal_button = QPushButton(text="XY grid", clicked=self.request_imagexygrid)
         # request_breakin_button = QPushButton(text="Z stack", clicked=self.request_imagezstack)
-        request_zap_button = QPushButton(text="ZAP (don't use!')", clicked=self.mockfunction)
+        request_zap_button = QPushButton(text="ZAP/Autopatch (don't use!')", clicked=self.request_autopatch)
         
         sealtestLayout.addWidget(self.resistanceLabel, 0, 0, 1, 3)
         sealtestLayout.addWidget(self.capacitanceLabel, 0, 3, 1, 3)
@@ -454,8 +454,8 @@ class PatchClampUI(QWidget):
                 self.request_pause_button.setChecked(False)
         else:
             self.request_pause_button.setChecked(False)
-        
-        
+    
+    
     def request_snap(self):
         if self.backend.camerathread != None:
             I = self.backend.camerathread.snap()
@@ -478,6 +478,9 @@ class PatchClampUI(QWidget):
     def request_apply_pressure(self):
         target_pressure = self.set_pressure_button.value()
         self.backend.pressurethread.set_pressure_stop_waveform(target_pressure)
+    
+    def request_autopatch(self):
+        self.backend.request(name='autopatch')
     
     def request_hardcalibration_xy(self):
         self.backend.request(name='hardcalibration', mode='XY')

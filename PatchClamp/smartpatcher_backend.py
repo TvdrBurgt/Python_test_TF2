@@ -83,7 +83,14 @@ class SmartPatcher(QObject):
                 self.operation_mode = mode
                 
                 # connected the started method to an executable algorithm
-                if name == 'hardcalibration':
+                if name == 'autopatch':
+                    if self.camerathread == None or self.objectivemotor == None or \
+                        self.micromanipulator == None or self.sealtestthread == None or \
+                            self.pressurethread == None or np.array_equal(self.target_coordinates, [None,None,None]):
+                            raise ValueError('Target not selected or Camera, objective, micromanipulator, Patch amplifier, and/or pressure controller not connected')
+                    else:
+                        self.thread.started.connect(self.worker.autopatch)
+                elif name == 'hardcalibration':
                     if self.camerathread == None or self.micromanipulator == None:
                         raise ValueError('Camera and/or micromanipulator not connected')
                     else:

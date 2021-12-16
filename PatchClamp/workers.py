@@ -55,6 +55,34 @@ class Worker(QObject):
         self.draw.emit(['remove algorithm threshold'])
         self.finished.emit()
     
+    
+    def autopatch(self):
+        self.prechecks()
+        precheck_resistance = self._parent.resistance_reference
+        if precheck_resistance is not None:
+            if not self.STOP:
+                logging.info("Continue with tip focusing...")
+                self.autofocus_tip()
+            if not self.STOP:
+                logging.info("Continue with tip detection...")
+                self.softcalibration()
+            if not self.STOP:
+                logging.info("Forming gigaseal...")
+                self.formgigaseal()
+                gigaseal_resistance = self._parent.resistance_reference
+                if abs(precheck_resistance - gigaseal_resistance) > 0.1e6:
+                    logging.warning("Pipette may be contaminated or damaged!")
+                    logging.info("Resistance after pre-checks: "+str(precheck_resistance*1e-6)+' MOhm')
+                    logging.info("Resistance before gigaseal: "+str(gigaseal_resistance*1e-6)+' MOhm')
+            if not self.STOP:
+                logging.info("Breaking-in...")
+                self.break_in()
+        else:
+            logging.info("Try a new pipette")
+        
+        self.finished.emit()
+    
+    
     @pyqtSlot()
     def prechecks(self):
         """ Pre-checks makes sure the pipette resistance is within its
@@ -83,7 +111,7 @@ class Worker(QObject):
             self._parent.resistance_reference = np.nanmean(resistance)
             logging.info('Pre-checks passed')
         else:
-            logging.info('Pre-checks not passed')
+            logging.info('Pre-checks not passed, pipette resistance to high/low')
         
         timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                   #FLAG: relevant for MSc thesis
         np.save(save_directory+'precheckresistance_'+timestamp, resistance)             #FLAG: relevant for MSc thesis
@@ -650,7 +678,6 @@ class Worker(QObject):
         pixelsize = self._parent.pixel_size
         tipcoords_manip,tipcoords_cam = self._parent.pipette_coordinates_pair
         xtarget,ytarget,_ = self._parent.target_coordinates
-        # resistance_reference = self._parent.resistance_reference
         
         # Algorithm variables
         R_CRITICAL = 0.15e6         # ohm
@@ -677,6 +704,7 @@ class Worker(QObject):
         
         #IIIa) measure resistance and set graph thresholds
         resistance_ref = np.nanmean(self._parent.resistance)
+        self._parent.resistance_reference = resistance_ref
         self.draw.emit(['algorithm threshold',resistance_ref+1.2*R_CRITICAL, resistance_ref-1.2*R_CRITICAL])
         logging.info("Upper threshold"+str(resistance_ref+R_CRITICAL))
         logging.info("Lower threshold"+str(resistance_ref-R_CRITICAL))
