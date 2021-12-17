@@ -94,7 +94,7 @@ class SmartPatcher(QObject):
                     if self.camerathread == None or self.micromanipulator == None:
                         raise ValueError('Camera and/or micromanipulator not connected')
                     else:
-                        self.thread.started.connect(self.worker.softcalibration)
+                        self.thread.started.connect(self.worker.hardcalibration)
                 elif name == 'prechecks':
                     if self.sealtestthread == None or self.pressurethread == None:
                         raise ValueError('Patch amplifier and/or pressure controller not connected')
@@ -104,7 +104,7 @@ class SmartPatcher(QObject):
                     if self.camerathread == None or self.micromanipulator == None:
                         raise ValueError('Camera and/or micromanipulator not connected')
                     else:
-                        self.thread.started.connect(self.worker.hardcalibration)
+                        self.thread.started.connect(self.worker.softcalibration)
                 elif name == 'autofocustip':
                     if self.camerathread == None or self.micromanipulator == None or self.objectivemotor == None:
                         raise ValueError('Camera, objective and/or micromanipulator not connected')

@@ -5,6 +5,7 @@ Created on Fri Aug  6 15:15:38 2021
 @author: TvdrBurgt
 """
 
+import os
 import sys
 import numpy as np
 import logging
@@ -18,7 +19,6 @@ from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QDoubleSpinBox, Q
 import pyqtgraph.exporters
 import pyqtgraph as pg
 
-sys.path.append('../')
 from NIDAQ.constants import MeasurementConstants
 from PatchClamp.manualpatcher_frontend import PatchclampSealTestUI
 # from PatchClamp.manualpatcher_backend import PatchclampSealTest
@@ -740,14 +740,6 @@ class PatchClampUI(QWidget):
             self.backend.STOP = True
         else:
             self.backend.STOP = False
-        
-    
-    # def moveEvent(self, event):
-    #     super(PatchClampUI, self).moveEvent(event)
-    #     try:
-    #         self.signal_camera_live.disconnect()
-    #     except:
-    #         pass
     
     
     def closeEvent(self, event):
@@ -779,7 +771,7 @@ class PatchClampUI(QWidget):
         event.accept()
         
         # Frees the console by quitting the application entirely
-        # QtWidgets.QApplication.quit() # remove when part of Tupolev/Fiumicino!!
+        QtWidgets.QApplication.quit() # remove when part of Tupolev/Fiumicino!!
         
         
 
@@ -855,7 +847,9 @@ if __name__ == "__main__":
         mainwin = PatchClampUI()
         mainwin.show()
         app.exec_()
-        
+    
+    
+    os.chdir('..')
     start_logger()
     run_app()
     

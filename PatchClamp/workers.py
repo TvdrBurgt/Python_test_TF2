@@ -388,7 +388,7 @@ class Worker(QObject):
         focus_offset = self._parent.focus_offset
         
         # algorithm variables
-        STEPSIZE = 12           # micron
+        STEPSIZE = 10           # micron
         MIN_TAILLENGTH = 12     # datapoints (=X*STEPSIZE in micron)
         
         reference = micromanipulator.getPos()
@@ -472,24 +472,19 @@ class Worker(QObject):
                 move = 'step down'
             elif maximum == 'right' and going_down:
                 if pen[2] == np.max(penaltyhistory):
-                    penaltytail = penaltyhistory[2::]
-                    taillength = len(penaltytail)
-                    if taillength < MIN_TAILLENGTH:
-                        pos = positionhistory[-1]
-                        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
-                        monotonicity_condition = True
-                        for i in range(2, MIN_TAILLENGTH):
-                            if monotonicity_condition:
-                                micromanipulator.moveRel(dz=+STEPSIZE)
-                                I = camera.snap()
-                                penalty = ia.comp_variance_of_Laplacian(I)
-                                penaltytail = np.append(penaltytail, penalty)
-                                monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
-                            else:
-                                break
-                    else:
-                        penaltytail = penaltytail[0:MIN_TAILLENGTH]
-                        monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
+                    pos = positionhistory[2]
+                    micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
+                    penaltytail = pen[2]
+                    monotonicity_condition = True
+                    for i in range(2, MIN_TAILLENGTH):
+                        if monotonicity_condition:
+                            micromanipulator.moveRel(dz=+STEPSIZE)
+                            I = camera.snap()
+                            penalty = ia.comp_variance_of_Laplacian(I)
+                            penaltytail = np.append(penaltytail, penalty)
+                            monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
+                        else:
+                            break
                     if monotonicity_condition:
                         logging.info("Detected maximum is a sharpness peak!")
                         lookingforpeak = False
@@ -524,6 +519,7 @@ class Worker(QObject):
                     lookingforpeak = False
                     move = None
                     micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positionhistory[1])
+                    foundfocus = positionhistory[1]
                 else:
                     logging.info("Detected maximum is noise")
                     move = 'step down'
@@ -550,39 +546,35 @@ class Worker(QObject):
         
         #VI) continue with finding the fine focus position
         logging.info('Coarse focus found, continue with finetuning')
-        z_peak = positionhistory[np.argmax(penaltyhistory)]
         for step in [STEPSIZE, STEPSIZE/3]:
-            # (emergency) stop
-            if self.STOP:
-                break
-            
             # Sample six points between the last three penalty scores
             penalties = np.zeros(7)
-            positions = np.linspace(z_peak-step, z_peak+step, 7)
+            positions = np.linspace(foundfocus-step, foundfocus+step, 7)
             for idx, pos in enumerate(positions):
+                # (emergency) stop
+                if self.STOP:
+                    break
                 micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
                 I = camera.snap()
                 penalties[idx] = ia.comp_variance_of_Laplacian(I)
-                positionhistory = np.append(pos, positionhistory)
-                penaltyhistory = np.append(penalties[idx], penaltyhistory)
+                positionhistory = np.append(positionhistory, pos)
+                penaltyhistory = np.append(penaltyhistory, penalties[idx])
+            
+            # Locate maximum penalty value
+            foundfocus = positions[np.argmax(penalties)]
             
             # emit graph
-            self.graph.emit(np.vstack([positions,penalties]))
-            
-            # calculate new peak location
-            z_peak = positions[np.argmax(penalties)]
-        
-        #VII) move pipette into focus
-        if not self.STOP:
             self.graph.emit(np.vstack([positionhistory,penaltyhistory]))
-            micromanipulator.moveAbs(x=reference[0], y=reference[1], z=z_peak)
+        
+        #VIIa) move pipette into focus
+        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=foundfocus)
         
         I = camera.snap()                                                                   #FLAG: relevant for MSc thesis
         io.imsave(save_directory+'autofocus_'+timestamp+'.tif', I, check_contrast=False)    #FLAG: relevant for MSc thesis
         np.save(save_directory+'autofocus_positionhistory_'+timestamp, positionhistory)     #FLAG: relevant for MSc thesis
         np.save(save_directory+'autofocus_penaltyhistory_'+timestamp, penaltyhistory)       #FLAG: relevant for MSc thesis
         
-        #VIII) return objective to original position
+        #VIIb) return objective to original position
         objective.moveAbs(z=objective_position_reference)
         
         self.finished.emit()
@@ -706,8 +698,8 @@ class Worker(QObject):
         resistance_ref = np.nanmean(self._parent.resistance)
         self._parent.resistance_reference = resistance_ref
         self.draw.emit(['algorithm threshold',resistance_ref+1.2*R_CRITICAL, resistance_ref-1.2*R_CRITICAL])
-        logging.info("Upper threshold"+str(resistance_ref+R_CRITICAL))
-        logging.info("Lower threshold"+str(resistance_ref-R_CRITICAL))
+        logging.info("Upper threshold: "+str(round((resistance_ref+R_CRITICAL)*1e-6, 2)))
+        logging.info("Lower threshold: "+str(round((resistance_ref-R_CRITICAL)*1e-6, 2)))
         
         #IIIb) descent pipette until R increases by R_CRITICAL
         resistance = resistance_ref
@@ -737,7 +729,7 @@ class Worker(QObject):
         self.draw.emit(['remove algorithm threshold'])
         if not self.STOP:
             pressurecontroller.set_pressure_stop_waveform(0)
-            time.sleep(3)
+            time.sleep(5)
         
         #Va) wait for Gigaseal
         logging.info("Attempting gigaseal...")
