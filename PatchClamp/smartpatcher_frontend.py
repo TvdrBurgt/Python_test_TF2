@@ -21,7 +21,7 @@ import pyqtgraph as pg
 
 from NIDAQ.constants import MeasurementConstants
 from PatchClamp.manualpatcher_frontend import PatchclampSealTestUI
-# from PatchClamp.manualpatcher_backend import PatchclampSealTest
+# from PatchClamp.manualpatcher_backend import PatchclampSealTest   # from manualpatcher!
 
 from PatchClamp.smartpatcher_backend import SmartPatcher
 from PatchClamp.camerathread import CameraThread
@@ -170,6 +170,7 @@ class PatchClampUI(QWidget):
         request_hardcalibrationxy_button = QPushButton(text="Calibrate XY", clicked=self.request_hardcalibration_xy)
         request_hardcalibrationxyz_button = QPushButton(text="Calibrate pixelsize", clicked=self.request_hardcalibration_pixelsize)
         request_prechecks_button = QPushButton(text="Pre-checks", clicked=self.request_prechecks)
+        request_autopatch_button = QPushButton(text="Autopatch", clicked=self.request_autopatch)
         request_selecttarget_button = QPushButton(text="Select target", clicked=self.request_selecttarget)
         request_confirmtarget_button = QPushButton(text="Confirm target", clicked=self.request_confirmtarget)
         request_softcalibration_button = QPushButton(text="Detect tip", clicked=self.request_softcalibration)
@@ -180,7 +181,8 @@ class PatchClampUI(QWidget):
         
         algorithmLayout.addWidget(request_hardcalibrationxy_button, 0, 0, 1, 1)
         algorithmLayout.addWidget(request_hardcalibrationxyz_button, 1, 0, 1, 1)
-        algorithmLayout.addWidget(request_prechecks_button, 0, 1, 2, 1)
+        algorithmLayout.addWidget(request_prechecks_button, 0, 1, 1, 1)
+        algorithmLayout.addWidget(request_autopatch_button, 1, 1, 1, 1)
         algorithmLayout.addWidget(request_selecttarget_button, 0, 2, 1, 1)
         algorithmLayout.addWidget(request_confirmtarget_button, 1, 2, 1, 1)
         algorithmLayout.addWidget(request_target2center_button, 0, 3, 1, 1)
@@ -204,7 +206,7 @@ class PatchClampUI(QWidget):
         request_breakin_button = QPushButton(text="Break-in", clicked=self.request_breakin)
         # request_gigaseal_button = QPushButton(text="XY grid", clicked=self.request_imagexygrid)
         # request_breakin_button = QPushButton(text="Z stack", clicked=self.request_imagezstack)
-        request_zap_button = QPushButton(text="ZAP/Autopatch (don't use!')", clicked=self.request_autopatch)
+        request_zap_button = QPushButton(text="ZAP", clicked=self.request_zap)
         
         sealtestLayout.addWidget(self.resistanceLabel, 0, 0, 1, 3)
         sealtestLayout.addWidget(self.capacitanceLabel, 0, 3, 1, 3)
@@ -404,10 +406,10 @@ class PatchClampUI(QWidget):
         """
         logging.info('connect sealtestthread button pushed')
         if self.connect_sealtestthread_button.isChecked():
-            # sealtestthread = PatchclampSealTest()
+            # sealtestthread = PatchclampSealTest()     # from manualpatcher!
             sealtestthread = SealTestThread()
             
-            # self.signal_sealtest = sealtestthread.measurementThread.measurement
+            # self.signal_sealtest = sealtestthread.measurementThread.measurement   # from manualpatcher!
             self.signal_sealtest = sealtestthread.measurement
             self.signal_sealtest.connect(self.update_currentvoltageplot)
             
@@ -466,6 +468,7 @@ class PatchClampUI(QWidget):
             self.update_snap(I)
             raise ValueError('no camera connected')
     
+    
     def request_release_pressure(self):
         self.backend.pressurethread.set_pressure_stop_waveform(0)
     
@@ -478,6 +481,7 @@ class PatchClampUI(QWidget):
     def request_apply_pressure(self):
         target_pressure = self.set_pressure_button.value()
         self.backend.pressurethread.set_pressure_stop_waveform(target_pressure)
+    
     
     def request_autopatch(self):
         self.backend.request(name='autopatch')
@@ -508,6 +512,13 @@ class PatchClampUI(QWidget):
         self.algorithm.setLabel("bottom", text="height", units="um")
         
         self.backend.request(name='autofocustip')
+    
+    def request_imagexygrid(self):
+        self.backend.request(name='request_imagexygrid')
+    
+    def request_imagezstack(self):
+        self.backend.request(name='request_imagezstack')
+    
     
     def request_selecttarget(self):
         """
@@ -547,6 +558,7 @@ class PatchClampUI(QWidget):
             self.liveView.addedItems[idx].setPen(QPen(QColor(193,245,240), 0))
             self.backend.target_coordinates = np.array([x,y,None])
     
+    
     def request_formgigaseal(self):
         # Clear the algorithm plot and update all labels
         self.algorithmPlot.setData()
@@ -559,11 +571,9 @@ class PatchClampUI(QWidget):
     def request_breakin(self):
         self.backend.request(name='breakin')
     
-    def request_imagexygrid(self):
-        self.backend.request(name='request_imagexygrid')
-    
-    def request_imagezstack(self):
-        self.backend.request(name='request_imagezstack')
+    def request_zap(self):
+        self.backend.sealtestthread.zap()
+        # self.manualpatcher_frontend.zap()     # from manualpatcher!
     
     
     def draw_roi(self, *args):

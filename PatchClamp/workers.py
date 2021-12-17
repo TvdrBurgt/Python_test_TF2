@@ -564,7 +564,10 @@ class Worker(QObject):
             foundfocus = positions[np.argmax(penalties)]
             
             # emit graph
-            self.graph.emit(np.vstack([positionhistory,penaltyhistory]))
+            self.graph.emit(np.vstack([positions,penalties]))
+        
+        # emit graph
+        self.graph.emit(np.vstack([positionhistory,penaltyhistory]))
         
         #VIIa) move pipette into focus
         micromanipulator.moveAbs(x=reference[0], y=reference[1], z=foundfocus)
@@ -729,12 +732,11 @@ class Worker(QObject):
         self.draw.emit(['remove algorithm threshold'])
         if not self.STOP:
             pressurecontroller.set_pressure_stop_waveform(0)
-            time.sleep(5)
         
         #Va) wait for Gigaseal
         logging.info("Attempting gigaseal...")
         start = time.time()
-        while resistance < 1e9 and time.time()-start < 5 and not self.STOP:
+        while resistance < 1e9 and time.time()-start < 10 and not self.STOP:
             resistance = np.nanmax(self._parent.resistance[-10::])
             self.graph.emit(resistancehistory)
             resistancehistory = np.append(resistancehistory, resistance)

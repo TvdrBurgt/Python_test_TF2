@@ -261,14 +261,13 @@ class SmartPatcher(QObject):
     
     @sealtestthread.setter
     def sealtestthread(self, sealtestthread_handle):
-        logging.info('SealTestThread instantiated and wave set')
         self._sealtestthread = sealtestthread_handle
-        self._sealtestthread.setWave(0.1, 0.01, 0)
+        self._sealtestthread.setWave(0.1, 0.01, 0)  # voltage gain, voltage (V), duration (us)
         self._sealtestthread.start()
     
     @sealtestthread.deleter
     def sealtestthread(self):
-        # self._sealtestthread.aboutToQuitHandler()
+        # self._sealtestthread.aboutToQuitHandler()     # from manualpatcher!
         self._sealtestthread.stop()
         self._sealtestthread = None
     
@@ -291,12 +290,10 @@ class SmartPatcher(QObject):
         
     @property
     def micromanipulator(self):
-        logging.info('micromanipulator get')
         return self._micromanipulator
     
     @micromanipulator.setter
     def micromanipulator(self, micromanipulator_handle):
-        logging.info('micromanipulator set')
         self._micromanipulator = micromanipulator_handle
     
     @micromanipulator.deleter
@@ -307,12 +304,10 @@ class SmartPatcher(QObject):
     
     @property
     def objectivemotor(self):
-        logging.info('objectivemotor get')
         return self._objectivemotor
     
     @objectivemotor.setter
     def objectivemotor(self, objective):
-        logging.info('objectivemotor set')
         self._objectivemotor = objective
     
     @objectivemotor.deleter
@@ -323,12 +318,10 @@ class SmartPatcher(QObject):
     
     @property
     def XYstage(self):
-        logging.info('XYstage get')
         return self._XYstage
     
     @XYstage.setter
     def XYstage(self, stage_handle):
-        logging.info('XYstage set')
         self._XYstage = stage_handle
     
     @XYstage.deleter
