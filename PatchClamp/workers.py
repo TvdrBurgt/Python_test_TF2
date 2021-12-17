@@ -782,11 +782,12 @@ class Worker(QObject):
         sealtestthread = self._parent.sealtestthread
         
         # Algorithm variables
-        TIMEOUT = 90                        # seconds
+        TIMEOUT = 60                        # seconds
         I_BREAKIN_CONDITION = 1e-9          # ampere absolute valued
         R_BREAKIN_CONDITION = 300*1e6       # ohm
         C_BREAKIN_CONDITION = [50,200]      # units? farad? farad per surface unit?
         PULSES = np.linspace(-100, -300, 15)
+        SUCCESS = False
         
         # I) attempt breaking in by increasing suction pulses 
         logging.info("Attempting break-in...")
@@ -794,10 +795,8 @@ class Worker(QObject):
         currenthistory = np.array([[],[]])
         start = time.time()
         i = 0
-        while time.time()-start < TIMEOUT and not self.STOP:
+        while time.time()-start < TIMEOUT and not SUCCESS and not self.STOP:
             i += 1
-            pressurecontroller.set_pulse_stop_waveform(PULSES[i%len(PULSES)])
-            time.sleep(2)
             Imax = np.max(self._parent.current)
             Imin = np.min(self._parent.current)
             resistance = np.nanmax(self._parent.resistance[-10::])
@@ -805,27 +804,61 @@ class Worker(QObject):
             if Imax <= I_BREAKIN_CONDITION and Imin >= -I_BREAKIN_CONDITION \
                 and capacitance > C_BREAKIN_CONDITION[0] and capacitance < C_BREAKIN_CONDITION[1] \
                      and resistance <= R_BREAKIN_CONDITION:
+                         SUCCESS = True
                          break
             else:
-                currenthistory = np.append(currenthistory, np.array([[Imax],[Imin]]), axis=1)
-                resistancehistory = np.append(resistancehistory, resistance)
+                pressurecontroller.set_pulse_stop_waveform(PULSES[i%len(PULSES)])
+                time.sleep(2)
+            currenthistory = np.append(currenthistory, np.array([[Imax],[Imin]]), axis=1)
+            resistancehistory = np.append(resistancehistory, resistance)
             self.graph.emit(resistancehistory)
         
-        # # II) second attempt but with zap
-        # while time.time()-start < TIMEOUT and not self.STOP:
-        #     Imax = np.max(self._parent.current)
-        #     Imin = np.min(self._parent.current)
-        #     resistance = np.nanmax(self._parent.resistance[-10::])
-        #     capacitance = np.nanmean(self._parent.capacitance[-10::])
-        #     if Imax <= I_BREAKIN_CONDITION and Imin >= -I_BREAKIN_CONDITION \
-        #         and capacitance > C_BREAKIN_CONDITION[0] and capacitance < C_BREAKIN_CONDITION[1] \
-        #             and resistance <= R_BREAKIN_CONDITION:
-        #                 break
-        #     else:
-        #         # zap membrane
-        #         # apply long suction
-        #         pass
+        # II) second attempt but with zap
+        start = time.time()
+        i = 0
+        while time.time()-start < TIMEOUT/2 and not SUCCESS and not self.STOP:
+            i += 1
+            Imax = np.max(self._parent.current)
+            Imin = np.min(self._parent.current)
+            resistance = np.nanmax(self._parent.resistance[-10::])
+            capacitance = np.nanmean(self._parent.capacitance[-10::])
+            if Imax <= I_BREAKIN_CONDITION and Imin >= -I_BREAKIN_CONDITION \
+                and capacitance > C_BREAKIN_CONDITION[0] and capacitance < C_BREAKIN_CONDITION[1] \
+                    and resistance <= R_BREAKIN_CONDITION:
+                        SUCCESS = True
+                        break
+            else:
+                sealtestthread.zap()
+                pressurecontroller.set_pulse_stop_waveform(PULSES[i%len(PULSES)])
+                time.sleep(2)
+            currenthistory = np.append(currenthistory, np.array([[Imax],[Imin]]), axis=1)
+            resistancehistory = np.append(resistancehistory, resistance)
+            self.graph.emit(resistancehistory)
         
+        # III) third attempt but with zap and longer suction
+        start = time.time()
+        while time.time()-start < TIMEOUT/2 and not SUCCESS and not self.STOP:
+            Imax = np.max(self._parent.current)
+            Imin = np.min(self._parent.current)
+            resistance = np.nanmax(self._parent.resistance[-10::])
+            capacitance = np.nanmean(self._parent.capacitance[-10::])
+            if Imax <= I_BREAKIN_CONDITION and Imin >= -I_BREAKIN_CONDITION \
+                and capacitance > C_BREAKIN_CONDITION[0] and capacitance < C_BREAKIN_CONDITION[1] \
+                    and resistance <= R_BREAKIN_CONDITION:
+                        SUCCESS = True
+                        break
+            else:
+                sealtestthread.zap()
+                pressurecontroller.set_pulse_stop_waveform(-100)
+                pressurecontroller.set_pressure_stop_waveform(-100)
+                time.sleep(0.5)
+                pressurecontroller.set_pulse_stop_waveform(-150)
+                time.sleep(2)
+            currenthistory = np.append(currenthistory, np.array([[Imax],[Imin]]), axis=1)
+            resistancehistory = np.append(resistancehistory, resistance)
+            self.graph.emit(resistancehistory)
+        
+        # IV) measure and average sliding windows for saving
         slidingwindow_current = self._parent.current
         for i in range(0,10):
             slidingwindow_current += self._parent.current
