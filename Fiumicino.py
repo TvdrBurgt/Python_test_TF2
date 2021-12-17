@@ -24,6 +24,7 @@ Created on Sat Aug 10 20:54:40 2019
 from __future__ import division
 import os
 import sys
+import logging
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import Qt, pyqtSignal, QRectF, QPoint, QRect, QObject, QSize
 from PyQt5.QtGui import (
@@ -526,7 +527,17 @@ class Mainbody(QWidget):
 
 
 if __name__ == "__main__":
-
+    
+    def start_logger():
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(message)s",
+            handlers=[
+                # logging.FileHandler("autopatch.log"),   # uncomment to write to .log
+                logging.StreamHandler()
+            ]
+        )
+    
     def run_app():
         app = QtWidgets.QApplication(sys.argv)
         QtWidgets.QApplication.setStyle(QStyleFactory.create("Fusion"))
@@ -534,5 +545,6 @@ if __name__ == "__main__":
         mainwin = Mainbody()
         mainwin.show()
         app.exec_()
-
+    
+    start_logger()
     run_app()
