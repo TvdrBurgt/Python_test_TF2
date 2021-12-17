@@ -160,6 +160,22 @@ class PatchClampUI(QWidget):
         sensorLayout.addWidget(sensorWidget, 0, 0, 1, 1)
         sensorLayout.addWidget(request_resetplots_button, 1, 0, 1, 1)
         sensorContainer.setLayout(sensorLayout)
+        """
+        ---------------------- Calibration & data-collect buttons ----------------------
+        """
+        calibrationContainer = QGroupBox()
+        calibrationLayout = QGridLayout()
+        
+        request_gigaseal_button = QPushButton(text="XY grid", clicked=self.request_imagexygrid)
+        request_breakin_button = QPushButton(text="Z stack", clicked=self.request_imagezstack)
+        request_hardcalibrationxy_button = QPushButton(text="Calibrate XY", clicked=self.request_hardcalibration_xy)
+        request_hardcalibrationpix_button = QPushButton(text="Calibrate pix", clicked=self.request_hardcalibration_pixelsize)
+        
+        calibrationLayout.addWidget(request_gigaseal_button, 0, 1, 1, 1)
+        calibrationLayout.addWidget(request_breakin_button, 1, 1, 1, 1)
+        calibrationLayout.addWidget(request_hardcalibrationxy_button, 0, 2, 1, 1)
+        calibrationLayout.addWidget(request_hardcalibrationpix_button, 1, 2, 1, 1)
+        calibrationContainer.setLayout(calibrationLayout)
         
         """
         ---------------------- Autopatch control buttons ----------------------
@@ -167,8 +183,6 @@ class PatchClampUI(QWidget):
         algorithmContainer = QGroupBox()
         algorithmLayout = QGridLayout()
         
-        request_hardcalibrationxy_button = QPushButton(text="Calibrate XY", clicked=self.request_hardcalibration_xy)
-        request_hardcalibrationxyz_button = QPushButton(text="Calibrate pixelsize", clicked=self.request_hardcalibration_pixelsize)
         request_prechecks_button = QPushButton(text="Pre-checks", clicked=self.request_prechecks)
         request_autopatch_button = QPushButton(text="Autopatch", clicked=self.request_autopatch)
         request_selecttarget_button = QPushButton(text="Select target", clicked=self.request_selecttarget)
@@ -179,8 +193,6 @@ class PatchClampUI(QWidget):
         request_autofocustip = QPushButton(text="Autofocus tip", clicked=self.request_autofocustip)
         request_softcalibration_button = QPushButton(text="Detect tip", clicked=self.request_softcalibration)
         
-        algorithmLayout.addWidget(request_hardcalibrationxy_button, 0, 0, 1, 1)
-        algorithmLayout.addWidget(request_hardcalibrationxyz_button, 1, 0, 1, 1)
         algorithmLayout.addWidget(request_prechecks_button, 0, 1, 1, 1)
         algorithmLayout.addWidget(request_autopatch_button, 1, 1, 1, 1)
         algorithmLayout.addWidget(request_selecttarget_button, 0, 2, 1, 1)
@@ -204,8 +216,6 @@ class PatchClampUI(QWidget):
         
         request_gigaseal_button = QPushButton(text="Gigaseal", clicked=self.request_formgigaseal)
         request_breakin_button = QPushButton(text="Break-in", clicked=self.request_breakin)
-        # request_gigaseal_button = QPushButton(text="XY grid", clicked=self.request_imagexygrid)
-        # request_breakin_button = QPushButton(text="Z stack", clicked=self.request_imagezstack)
         request_zap_button = QPushButton(text="ZAP", clicked=self.request_zap)
         
         sealtestLayout.addWidget(self.resistanceLabel, 0, 0, 1, 3)
@@ -258,7 +268,8 @@ class PatchClampUI(QWidget):
         master.addWidget(hardwareContainer, 0, 0, 1, 1)
         master.addWidget(liveContainer, 0, 1, 1, 2)
         master.addWidget(sensorContainer, 0, 3, 1, 1)
-        master.addWidget(algorithmContainer, 1, 0, 1, 2)
+        master.addWidget(calibrationContainer, 1, 0, 1, 1)
+        master.addWidget(algorithmContainer, 1, 1, 1, 1)
         master.addWidget(sealtestContainer, 1, 2, 1, 1)
         master.addWidget(pressureContainer, 1, 3, 1, 1)
         
