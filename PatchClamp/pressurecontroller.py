@@ -45,6 +45,18 @@ class PressureController(serial.Serial):
         self.write(command.encode('ascii'))
     
     
+    def setPresHold(self, pressure):
+        """
+        This sets the pressure to the given target pressure value once and does
+        not regulate it over time any further.
+            Send: PH 100
+        """
+        command = "PH %d" % pressure + self.ENDOFLINE
+        
+        # Encode the command to ascii and send to the device
+        self.write(command.encode('ascii'))
+    
+    
     def doPulse(self, magnitude):
         """
         This gives a pressure pulse with the desired magnitude.
@@ -56,11 +68,31 @@ class PressureController(serial.Serial):
         self.write(command.encode('ascii'))
     
     
+    def LCDoff(self):
+        """
+        This turns the LCD display on the pressure controller off.
+        """
+        command = "DIM" + self.ENDOFLINE
+        
+        # Encode the command to ascii and send to the device
+        self.write(command.encode('ascii'))
+    
+    
+    def LCDon(self):
+        """
+        This turns the LCD display on the pressure controller off.
+        """
+        command = "LCD" + self.ENDOFLINE
+        
+        # Encode the command to ascii and send to the device
+        self.write(command.encode('ascii'))
+    
+    
     def goIdle(self):
         """
         This lets the pressure controller enter idle mode. The device is does
         not turn off! It only turns off the lcd, the pumps, and the valves
-        while waiting for a 
+        while waiting for wakeUp.
         """
         command = "IDLE" + self.ENDOFLINE
         
