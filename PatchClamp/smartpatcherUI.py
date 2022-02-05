@@ -97,15 +97,20 @@ class PatchClampUI(QWidget):
         stagemoveContainer = QGroupBox("Stage move")
         stagemoveLayout = QGridLayout()
         
+        # Stage translation
         request_stage_up = QPushButton(text="up", clicked=self.mockfunction)
         request_stage_down = QPushButton(text="down", clicked=self.mockfunction)
         request_stage_right = QPushButton(text="right", clicked=self.mockfunction)
         request_stage_left = QPushButton(text="left", clicked=self.mockfunction)
         
+        # Button for moving target to center
+        request_target2center = QPushButton(text="Target to center", clicked=self.mockfunction)
+        
         stagemoveLayout.addWidget(request_stage_up, 0, 1, 1, 1)
         stagemoveLayout.addWidget(request_stage_down, 2, 1, 1, 1)
         stagemoveLayout.addWidget(request_stage_right, 1, 2, 1, 1)
         stagemoveLayout.addWidget(request_stage_left, 1, 0, 1, 1)
+        stagemoveLayout.addWidget(request_target2center, 3, 0, 1, 3)
         stagemoveContainer.setLayout(stagemoveLayout)
         
         """
@@ -355,29 +360,15 @@ class PatchClampUI(QWidget):
         """
         ---------------------- Add widgets and set Layout ---------------------
         """
-        # layout = QGridLayout()
-        # layout.addWidget(hardwareContainer, 0, 0, 1, 1)
-        # layout.addWidget(stagemoveContainer, 1, 0, 1, 1)
-        # layout.addWidget(calibrationContainer, 2, 0, 1, 1)
-        # layout.addWidget(liveContainer, 0, 1, 3, 3)
-        # layout.addWidget(autopatchContainer, 0, 4, 2, 1)
-        # layout.addWidget(pressurecontrolContainer, 0, 5, 1, 1)
-        # layout.addWidget(electrophysiologyContainer, 1, 5, 1, 1)
-        # layout.addWidget(sensorContainer, 2, 4, 1, 2)
-        # self.setLayout(layout)
-        
-        
         layout = QGridLayout()
         layout.addWidget(hardwareContainer, 0, 0, 2, 1)
-        layout.addWidget(stagemoveContainer, 2, 0, 1, 1)
-        layout.addWidget(calibrationContainer, 3, 0, 1, 1)
-        
-        layout.addWidget(liveContainer, 0, 1, 4, 4)
-        
-        layout.addWidget(autopatchContainer, 0, 5, 2, 1)
-        layout.addWidget(pressurecontrolContainer, 0, 6, 1, 1)
-        layout.addWidget(electrophysiologyContainer, 1, 6, 1, 1)
-        layout.addWidget(sensorContainer, 2, 5, 2, 2)
+        layout.addWidget(stagemoveContainer, 2, 0, 2, 1)
+        layout.addWidget(calibrationContainer, 4, 0, 1, 1)
+        layout.addWidget(liveContainer, 0, 1, 5, 5)
+        layout.addWidget(autopatchContainer, 0, 6, 2, 1)
+        layout.addWidget(pressurecontrolContainer, 0, 7, 1, 1)
+        layout.addWidget(electrophysiologyContainer, 1, 7, 1, 1)
+        layout.addWidget(sensorContainer, 2, 6, 3, 2)
         self.setLayout(layout)
         
         """
