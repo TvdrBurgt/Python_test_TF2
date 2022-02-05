@@ -36,7 +36,7 @@ from NIDAQ.constants import MeasurementConstants, NiDaqChannels
 #     def __init__(self):
 #         # inherit a QThread to run parallel from the GUI
 #         super().__init__()
-#         self.isRunning == False
+#         self.isRunning = False
 #         self.moveToThread(self)
 #         self.started.connect(self.measure)
         

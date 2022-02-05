@@ -10,6 +10,8 @@ import numpy as np
 import logging
 import matplotlib.pyplot as plt
 
+from skimage import io
+
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QPen, QColor
 from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QDoubleSpinBox, QGroupBox, QLabel, QStackedWidget, QComboBox
@@ -74,8 +76,8 @@ class PatchClampUI(QWidget):
         self.connect_pressurecontroller_button = QPushButton(text="Pressure controller", clicked=self.connect_pressurethread)
         self.connect_pressurecontroller_button.setCheckable(True)
         
-        # Button to stop all hardware in motion
-        self.STOP_button = QPushButton(text="Emergency STOP", clicked=self.STOP)
+        # Button to stop all the running thread
+        self.STOP_button = QPushButton(text="STOP", clicked=self.STOP)
         self.STOP_button.setCheckable(True)
         
         hardwareLayout.addWidget(self.connect_camerathread_button, 0, 0, 1, 1)
@@ -153,7 +155,10 @@ class PatchClampUI(QWidget):
         pressurePlot.setRange(yRange=[-250,250])
         self.pressurePlot = pressurePlot.plot(pen=(3,3))
         
-        sensorLayout.addWidget(sensorWidget)
+        request_resetplots_button = QPushButton(text="Reset all plots", clicked=self.reset_plots)
+        
+        sensorLayout.addWidget(sensorWidget, 0, 0, 1, 1)
+        sensorLayout.addWidget(request_resetplots_button, 1, 0, 1, 1)
         sensorContainer.setLayout(sensorLayout)
         
         """
@@ -164,22 +169,23 @@ class PatchClampUI(QWidget):
         
         request_hardcalibrationxy_button = QPushButton(text="Calibrate XY", clicked=self.request_hardcalibration_xy)
         request_hardcalibrationxyz_button = QPushButton(text="Calibrate pixelsize", clicked=self.request_hardcalibration_pixelsize)
+        request_prechecks_button = QPushButton(text="Pre-checks", clicked=self.request_prechecks)
         request_selecttarget_button = QPushButton(text="Select target", clicked=self.request_selecttarget)
         request_confirmtarget_button = QPushButton(text="Confirm target", clicked=self.request_confirmtarget)
         request_softcalibration_button = QPushButton(text="Detect tip", clicked=self.request_softcalibration)
         request_target2center_button = QPushButton(text="Move target to center", clicked=self.request_target2center)
         request_pipette2target_button = QPushButton(text="Move pipette to target", clicked=self.request_pipette2target)
         request_autofocustip = QPushButton(text="Autofocus tip", clicked=self.request_autofocustip)
-        request_softcalibration_button = QPushButton(text="Detect tip", clicked=self.request_softcalibration)
         
         algorithmLayout.addWidget(request_hardcalibrationxy_button, 0, 0, 1, 1)
         algorithmLayout.addWidget(request_hardcalibrationxyz_button, 1, 0, 1, 1)
-        algorithmLayout.addWidget(request_selecttarget_button, 0, 1, 1, 1)
-        algorithmLayout.addWidget(request_confirmtarget_button, 1, 1, 1, 1)
-        algorithmLayout.addWidget(request_target2center_button, 0, 2, 1, 1)
-        algorithmLayout.addWidget(request_pipette2target_button, 1, 2, 1, 1)
-        algorithmLayout.addWidget(request_autofocustip, 0, 3, 1, 1)
-        algorithmLayout.addWidget(request_softcalibration_button, 1, 3, 1, 1)
+        algorithmLayout.addWidget(request_prechecks_button, 0, 1, 2, 1)
+        algorithmLayout.addWidget(request_selecttarget_button, 0, 2, 1, 1)
+        algorithmLayout.addWidget(request_confirmtarget_button, 1, 2, 1, 1)
+        algorithmLayout.addWidget(request_target2center_button, 0, 3, 1, 1)
+        algorithmLayout.addWidget(request_pipette2target_button, 1, 3, 1, 1)
+        algorithmLayout.addWidget(request_autofocustip, 0, 4, 1, 1)
+        algorithmLayout.addWidget(request_softcalibration_button, 1, 4, 1, 1)
         algorithmContainer.setLayout(algorithmLayout)
         
         """
@@ -197,7 +203,7 @@ class PatchClampUI(QWidget):
         request_breakin_button = QPushButton(text="Break-in", clicked=self.request_breakin)
         # request_gigaseal_button = QPushButton(text="XY grid", clicked=self.request_imagexygrid)
         # request_breakin_button = QPushButton(text="Z stack", clicked=self.request_imagezstack)
-        request_zap_button = QPushButton(text="ZAP", clicked=self.mockfunction)
+        request_zap_button = QPushButton(text="ZAP (don't use!')", clicked=self.mockfunction)
         
         sealtestLayout.addWidget(self.resistanceLabel, 0, 0, 1, 3)
         sealtestLayout.addWidget(self.capacitanceLabel, 0, 3, 1, 3)
@@ -433,16 +439,27 @@ class PatchClampUI(QWidget):
     def toggle_pauselive(self):
         if hasattr(self, 'signal_camera_live'):
             if self.request_pause_button.isChecked():
-                self.signal_camera_live.disconnect()
+                try:
+                    self.signal_camera_live.disconnect()
+                except TypeError:
+                    pass
+                self.request_pause_button.setChecked(True)
             else:
+                try:
+                    self.signal_camera_live.disconnect()
+                except TypeError:
+                    pass
                 self.signal_camera_live.connect(self.update_live)
+                self.request_pause_button.setChecked(False)
         else:
             self.request_pause_button.setChecked(False)
         
         
     def request_snap(self):
         if self.backend.camerathread != None:
-            self.backend.camerathread.snap()
+            I = self.backend.camerathread.snap()
+            io.imsave(self.backend.save_directory+'.tif', I, check_contrast=False)
+            self.update_snap(I)
         else:
             I = plt.imread("testimage.tif")
             self.update_snap(I)
@@ -466,6 +483,9 @@ class PatchClampUI(QWidget):
         
     def request_hardcalibration_pixelsize(self):
         self.backend.request(name='hardcalibration', mode='pixelsize')
+    
+    def request_prechecks(self):
+        self.backend.request(name='prechecks')
     
     def request_softcalibration(self):
         self.backend.request(name='softcalibration')
@@ -492,6 +512,9 @@ class PatchClampUI(QWidget):
         recycle it. If the target ROI got removed then we place it back to its
         last known position.
         """
+        self.request_pause_button.setChecked(True)
+        self.toggle_pauselive()
+        
         coords = self.backend.target_coordinates
         if all(values is None for values in coords):
             coords = (0,0)
@@ -571,10 +594,14 @@ class PatchClampUI(QWidget):
             idx = self.roimanager.giveROIindex('target')[-1]
             x,y = self.liveView.addedItems[idx].state['pos']
             self.liveView.addedItems[idx].setPos([x-dx,y-dy])
-        elif label == 'threshold':
+        elif label == 'algorithm threshold':
             upper_threshold = args[0][1]
             lower_threshold = args[0][2]
-            self.algorithm.setRange(yRange=[lower_threshold,upper_threshold])
+            self.algorithm.addItem(pg.InfiniteLine(pos=upper_threshold, angle=0))
+            self.algorithm.addItem(pg.InfiniteLine(pos=lower_threshold, angle=0))
+        elif label == 'remove algorithm threshold':
+            for item in self.algorithm.items[1::]:
+                self.algorithm.removeItem(item)
         else:
             print(label + ' is not a known draw-label')
     
@@ -608,7 +635,6 @@ class PatchClampUI(QWidget):
         
         self.pressurePlot.setData(pressuredata[1], pressuredata[0])
         self.pressureLabel.setText("Pressure (in mBar): %.1f" % pressuredata[0,-1])
-        
     
     def update_currentvoltageplot(self, voltOut, curOut):
         self.backend._voltage_append_(voltOut / 10)
@@ -625,7 +651,9 @@ class PatchClampUI(QWidget):
     def updateLabels(self, curOut, voltOut):
         """Update the resistance and capacitance labels.
         http://scipy-lectures.org/intro/scipy/auto_examples/plot_curve_fit.html
-        https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html"""
+        https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html
+        This function was taken from lhuismans and modified by TvdrBurgt.
+        """
         constants = MeasurementConstants()
         sampPerCyc = int(constants.patchSealSampRate / constants.patchSealFreq)
 
@@ -643,12 +671,12 @@ class PatchClampUI(QWidget):
             dIss = np.mean(curData[int(np.floor(0.15 * sampPerCyc)) : int(np.floor(sampPerCyc / 2)) - 2]) - np.mean(curData[int(np.floor(0.65 * sampPerCyc)) : sampPerCyc - 2])  # Computing the current distance
             membraneResistance = dV / (dIss * 1000000)  # Ohms law (MegaOhm)
             self.resistanceLabel.setText("Resistance:  %.4f M\u03A9" % membraneResistance)
-            self.backend._resistance_append_(membraneResistance*1e6)
+            R_to_append = membraneResistance*1e6
 
             estimated_size_resistance = 10000 / (membraneResistance * 1000000)  # The resistance of a typical patch of membrane, RM is 10000 Omega/{cm}^2
         except:
             self.resistanceLabel.setText("Resistance:  %s" % "NaN")
-            self.backend._resistance_append_(np.nan)
+            R_to_append = np.nan
 
         try:
             measured_vlotage = np.mean(voltData) * 1000
@@ -674,6 +702,7 @@ class PatchClampUI(QWidget):
             tau = -1 / fit[1]
             capacitance = 1000 * tau / resistance
             self.capacitanceLabel.setText("Capacitance:  %.4f" % capacitance)
+            C_to_append = capacitance
 
             estimated_size_capacitance = capacitance * (10 ** -12) * (10 ** 6)
 
@@ -686,7 +715,20 @@ class PatchClampUI(QWidget):
 
         except:
             self.capacitanceLabel.setText("Capacitance:  %s" % "NaN")
+            C_to_append = np.nan
             self.ratioLabel.setText("Ratio:  %s" % "NaN")
+        
+        # store resistance and capacitance values in backend
+        self.backend._resistance_capacitance_append_(R_to_append, C_to_append)
+    
+    
+    def reset_plots(self):
+        del self.backend.current
+        del self.backend.voltage
+        del self.backend.pressure
+        self.algorithmPlot.setData([0])
+        self.pressurePlot.setData([0])
+        self.currentPlot.setData([0])
     
     
     def STOP(self):
@@ -711,6 +753,8 @@ class PatchClampUI(QWidget):
         be reused in the main widget, only then we accept the close event.
         and quit the widget.
         """
+        self.backend.STOP = True
+        
         try:
             del self.backend.camerathread
         except AttributeError:
@@ -775,7 +819,7 @@ class ROIManagerGUI:
     def removeallROIs(self):
         name = list(self.ROIdictionary)
         for name in name:
-            self.removeROI(name, 'all')
+            self.removeROI(name, args='all')
                 
     def contains(self, name):
         if name in self.ROIdictionary:

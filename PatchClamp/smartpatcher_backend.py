@@ -22,7 +22,7 @@ class SmartPatcher(QObject):
         self._image_size = [2048, 2048]             # dimension of FOV in pix
         self._pipette_orientation = 0               # in radians
         self._pipette_diameter = 16                 # in pixels (16=patchclamp, ??=cell-picking)
-        self._rotation_angles = [0,0,0]      # (alp,bet,gam) in radians
+        self._rotation_angles = [0,0,0.043767]      # (alp,bet,gam) in radians
         self._focus_offset = 30                     # in micron above coverslip
         self.update_constants_from_JSON()           # rewrites above default constants
         
@@ -37,15 +37,16 @@ class SmartPatcher(QObject):
         self.window_size_c = 200
         self.window_size_v = 200
         self.window_size_p = 200
-        self.window_size_r = 200
+        self.window_size_rc = 200
         self.n_c = 0
         self.n_v = 0
         self.n_p = 0
-        self.n_r = 0
+        self.n_rc = 0
         self._current = np.array([])
         self._voltage = np.array([])
         self._pressure = np.array([[],[]])
         self._resistance = np.array([])
+        self._capacitance = np.array([])
         
         # Hardware devices
         self._camerathread = None
@@ -75,23 +76,28 @@ class SmartPatcher(QObject):
                 # disconnect the started method to prevent double execution
                 try:
                     self.thread.started.disconnect()
-                except:
+                except TypeError:
                     logging.info('Thread is free to use')
                     
                 # workers can use operation modes for extra variable input
                 self.operation_mode = mode
                 
                 # connected the started method to an executable algorithm
-                if name == 'softcalibration':
-                    if self.camerathread == None or self.micromanipulator == None:
-                        raise ValueError('Camera and/or micromanipulator not connected')
-                    else:
-                        self.thread.started.connect(self.worker.softcalibration)
-                elif name == 'hardcalibration':
+                if name == 'hardcalibration':
                     if self.camerathread == None or self.micromanipulator == None:
                         raise ValueError('Camera and/or micromanipulator not connected')
                     else:
                         self.thread.started.connect(self.worker.hardcalibration)
+                elif name == 'prechecks':
+                    if self.sealtestthread == None or self.pressurethread == None:
+                        raise ValueError('Patch amplifier and/or pressure controller not connected')
+                    else:
+                        self.thread.started.connect(self.worker.prechecks)
+                elif name == 'softcalibration':
+                    if self.camerathread == None or self.micromanipulator == None:
+                        raise ValueError('Camera and/or micromanipulator not connected')
+                    else:
+                        self.thread.started.connect(self.worker.softcalibration)
                 elif name == 'autofocustip':
                     if self.camerathread == None or self.micromanipulator == None or self.objectivemotor == None:
                         raise ValueError('Camera, objective and/or micromanipulator not connected')
@@ -110,7 +116,7 @@ class SmartPatcher(QObject):
                         self.thread.started.connect(self.worker.pipette2target)
                 elif name == 'gigaseal':
                     if self.sealtestthread == None or self.pressurethread == None or self.micromanipulator == None:
-                        raise ValueError('Sealtest, pressure controller and/or micromanipulator not connected')
+                        raise ValueError('Patch amplifier, pressure controller and/or micromanipulator not connected')
                     else:
                         self.thread.started.connect(self.worker.formgigaseal)
                 elif name == 'breakin':
@@ -154,30 +160,19 @@ class SmartPatcher(QObject):
         
         return self.R @ np.subtract(target,origin) + origin
 
-    # def update_constants_from_JSON(self):
-    #     # read json file with autopatcher constants and update them in backend
-    #     try:
-    #         with open("autopatch_configuration.txt", "r") as json_infile:
-    #             data = json.load(json_infile)
-    #         self.pixel_size = data["pixel_size"]
-    #         self.image_size = data["image_size"]
-    #         self.pipette_orientation = data["pipette_orientation"]
-    #         self.pipette_diameter = data["pipette_diameter"]
-    #         self.rotation_angles = data["rotation_angles"]
-    #         self.focus_offset = data["focus_offset"]
-    #     except:
-    #         self.write_constants_to_JSON()
-
     def update_constants_from_JSON(self):
         # read json file with autopatcher constants and update them in backend
-        with open("autopatch_configuration.txt", "r") as json_infile:
-            data = json.load(json_infile)
-        self.pixel_size = data["pixel_size"]
-        self.image_size = data["image_size"]
-        self.pipette_orientation = data["pipette_orientation"]
-        self.pipette_diameter = data["pipette_diameter"]
-        self.rotation_angles = data["rotation_angles"]
-        self.focus_offset = data["focus_offset"]
+        try:
+            with open("autopatch_configuration.txt", "r") as json_infile:
+                data = json.load(json_infile)
+            self.pixel_size = data["pixel_size"]
+            self.image_size = data["image_size"]
+            self.pipette_orientation = data["pipette_orientation"]
+            self.pipette_diameter = data["pipette_diameter"]
+            self.rotation_angles = data["rotation_angles"]
+            self.focus_offset = data["focus_offset"]
+        except:
+            self.write_constants_to_JSON()
         
     def write_constants_to_JSON(self):
         data = {
@@ -224,16 +219,18 @@ class SmartPatcher(QObject):
         self.pressure = np.append(self.pressure, np.array([[values],[timings]]), axis=1)
         self.n_p += length
     
-    def _resistance_append_(self, values):
+    def _resistance_capacitance_append_(self, Rvalues, Cvalues):
         """Append new values to a sliding window."""
         length = 1
-        if self.n_r + length > self.window_size_r:
+        if self.n_rc + length > self.window_size_rc:
             # Buffer is full so make room.
-            copySize = self.window_size_r - length
+            copySize = self.window_size_rc - length
             self.resistance = self.resistance[-copySize:]
-            self.n_r = copySize
-        self.resistance = np.append(self.resistance, values)
-        self.n_r += length
+            self.capacitance = self.capacitance[-copySize:]
+            self.n_rc = copySize
+        self.resistance = np.append(self.resistance, Rvalues)
+        self.capacitance = np.append(self.capacitance, Cvalues)
+        self.n_rc += length
     
     
     @property
@@ -411,10 +408,8 @@ class SmartPatcher(QObject):
             alpha,beta,gamma = alphabetagamma
             if type(alpha) and type(beta) and type(gamma) == float or int:
                 logging.info('Set rotation angles alpha beta gamma: '+str(alpha)+' '+str(beta)+' '+str(gamma))
-                alpha_old, beta_old, gamma_old = self.rotation_angles
-                self._rotation_angles = [alpha+alpha_old, beta+beta_old, gamma+gamma_old]
-                self.R = (alpha+alpha_old, beta+beta_old, gamma+gamma_old)
-                self.write_constants_to_JSON()
+                self._rotation_angles = [alpha, beta, gamma]
+                self.R = (alpha, beta, gamma)
             else:
                 raise ValueError('rotation angles should be integers or floats')
         else:
@@ -462,7 +457,6 @@ class SmartPatcher(QObject):
     @R.deleter
     def R(self):
         self._R = np.eye(3)
-        self.write_constants_to_JSON()
     
     
     @property
@@ -528,6 +522,7 @@ class SmartPatcher(QObject):
     
     @resistance_reference.setter
     def resistance_reference(self, resistance):
+        logging.info('Pipette resistance reference set at: '+str(resistance*1e-6)+' MΩ')
         self._resistance_reference = resistance
     
     @resistance_reference.deleter
@@ -583,6 +578,18 @@ class SmartPatcher(QObject):
     def resistance(self):
         self._resistance = np.array([])
     
+    @property
+    def capacitance(self):
+        return self._capacitance
+    
+    @capacitance.setter
+    def capacitance(self, capacitance_array):
+        self._capacitance = capacitance_array
+    
+    @capacitance.deleter
+    def capacitance(self):
+        self._capacitance = np.array([])
+    
     
     @property
     def STOP(self):
@@ -600,10 +607,6 @@ class SmartPatcher(QObject):
             self._STOP = True
             logging.info('Emergency stop active')
             self.worker.STOP = True
-            if self.micromanipulator != None:
-                self._micromanipulator.stop()
-                self._micromanipulator.stop()
-                self._micromanipulator.stop()
         elif state == False:
             self._STOP = False
             logging.info('Emergency stop standby')
