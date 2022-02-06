@@ -68,6 +68,10 @@ from pressurecontroller import PressureController
 #         del self.waveform
 #         self.pressurecontroller.setPres(pressure)
     
+#     def set_pressure_hold_stop_waveform(self, pressure):
+#         del self.waveform
+#         self.pressurecontroller.setPresHold(pressure)
+    
 #     def set_pulse_stop_waveform(self, magnitude):
 #         del self.waveform
 #         self.pressurecontroller.doPulse(magnitude)
@@ -211,6 +215,10 @@ class PressureThread(QThread):
         self.wait()
 
     def set_pressure_stop_waveform(self, pressure):
+        del self.waveform
+        self.pressure_offset = pressure
+    
+    def set_pressure_hold_stop_waveform(self, pressure):
         del self.waveform
         self.pressure_offset = pressure
     

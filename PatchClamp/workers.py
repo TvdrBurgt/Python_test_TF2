@@ -19,7 +19,7 @@ from PatchClamp.ImageProcessing_patchclamp import PatchClampImageProcessing as i
 class Worker(QObject):
     draw = pyqtSignal(list)
     graph = pyqtSignal(np.ndarray)
-    progress = pyqtSignal()
+    state = pyqtSignal(str)
     finished = pyqtSignal()
     
     def __init__(self, parent):
@@ -47,6 +47,7 @@ class Worker(QObject):
     @pyqtSlot()
     def mockworker(self):
         print('printed in thread')
+        self.state.emit("Mockwerker busy")
         self.graph.emit(np.array([1,2,3]))
         self.draw.emit(['algorithm threshold',2+5, 2-5])
         self.draw.emit(['cross',1000,1000])
@@ -64,6 +65,8 @@ class Worker(QObject):
         I) set pressure,
         II) check if resistance is within 3 to 11 MΩ.
         """
+        self.state.emit("pre-checks...")
+        
         # get all relevant parent attributes
         save_directory = self._parent.save_directory
         pressurecontroller = self._parent.pressurethread
@@ -123,6 +126,8 @@ class Worker(QObject):
                          camera y-axis)
             pixelsize   (pixel size in nanometers)
         """
+        self.state.emit("Calibrating...")
+        
         # get all relevant parent attributes
         save_directory = self._parent.save_directory
         micromanipulator = self._parent.micromanipulator
@@ -246,6 +251,8 @@ class Worker(QObject):
             pipette_coordinates_pair    np.array([reference (in microns);
                                                   tip coordinates (in pixels)])
         """
+        self.state.emit("Detecting tip...")
+        
         # get all relevant parent attributes
         save_directory = self._parent.save_directory
         micromanipulator = self._parent.micromanipulator
@@ -352,6 +359,8 @@ class Worker(QObject):
         
         The *focusbias* is around 10-30 micrometers!!!
         """
+        self.state.emit("Autofocus pipette...")
+        
         # get all relevant parent attributes
         save_directory = self._parent.save_directory
         micromanipulator = self._parent.micromanipulator
@@ -549,6 +558,8 @@ class Worker(QObject):
         The camera field-of-view is turned 90 degrees counter-clockwise 
         compared to the ludl XY sample stage.
         """
+        self.state.emit("Centering target...")
+        
         stage = self._parent.XYstage
         pixelsize = self._parent.pixel_size
         width,height = self._parent.image_size
@@ -584,6 +595,8 @@ class Worker(QObject):
         """ Pipette tip to target manoeuvres the micromanipulator to a target
         in the camera field-of-view
         """
+        self.state.emit("Approaching target...")
+        
         micromanipulator = self._parent.micromanipulator
         account4rotation = self._parent.account4rotation
         pixelsize = self._parent.pixel_size
@@ -623,6 +636,8 @@ class Worker(QObject):
                     in an abrupt drop in resistance after which we stop
                     pipette descent immediately.
         """
+        self.state.emit("Gigasealing...")
+        
         save_directory = self._parent.save_directory
         micromanipulator = self._parent.micromanipulator
         pressurecontroller = self._parent.pressurethread
@@ -736,6 +751,8 @@ class Worker(QObject):
         The break-in is successful if the resistance drops below 300MΩ and the
         current is in the range [-300, 300]pA.
         """
+        self.state.emit("Breaking in...")
+        
         save_directory = self._parent.save_directory
         pressurecontroller = self._parent.pressurethread
         sealtestthread = self._parent.sealtestthread
@@ -794,73 +811,6 @@ class Worker(QObject):
         np.save(save_directory+'breakin_currenthistory_'+timestamp, currenthistory)  #FLAG: relevant for MSc thesis
         np.save(save_directory+'breakin_resistancehistory_'+timestamp, resistancehistory)  #FLAG: relevant for MSc thesis
         np.save(save_directory+'breakin_slidingwindowcurrent_'+timestamp, slidingwindow_current)  #FLAG: relevant for MSc thesis
-        
-        self.finished.emit()
-    
-    
-    @pyqtSlot()
-    def request_imagexygrid(self):
-        save_directory = self._parent.save_directory
-        micromanipulator = self._parent.micromanipulator
-        camera = self._parent.camerathread
-        x,y,z = micromanipulator.getPos()
-        stepsize = 50
-        positionhistory = np.array([[],[]])
-        for i in range(0, 11):
-            for j in range(0, 11):
-                micromanipulator.moveAbs(x+i*stepsize, y+j*stepsize,z)
-                for k in ['a','b']:
-                    if k == 'b':
-                        micromanipulator.moveRel(dx=5, dy=0, dz=0)
-                    snap = camera.snap()
-                    io.imsave(save_directory+'_imagexygrid_'+'X%dY%d'%(i*stepsize,j*stepsize)+k+'.tif', snap, check_contrast=False)
-                    x2,y2,z2 = micromanipulator.getPos()
-                    positionhistory = np.append(positionhistory, np.array([[x2],[y2]]))
-                
-                # (emergency) stop
-                if self.STOP:
-                    break
-            
-            # (emergency) stop
-            if self.STOP:
-                break
-        
-        # move micromanipulator back to reference position
-        micromanipulator.moveAbs(x=x, y=y, z=z)
-        
-        # save XY-grid of detected tip coordinates
-        np.save(save_directory+'_imagexygrid_', positionhistory)
-        
-        self.finished.emit()
-    
-    
-    @pyqtSlot()
-    def request_imagezstack(self):
-        save_directory = self._parent.save_directory
-        micromanipulator = self._parent.micromanipulator
-        camera = self._parent.camerathread
-        x,y,z = micromanipulator.getPos()
-        stepsize = 10
-        positionhistory = np.array([])
-        for i in range(0,201):
-            micromanipulator.moveAbs(x, y, z=z+i*stepsize)
-            snap = camera.snap()
-            io.imsave(save_directory+'_imagezstack_'+'Z%d'%(i*stepsize)+'a'+'.tif', snap, check_contrast=False)
-            micromanipulator.moveAbs(x=x+5, y=y, z=z+i*stepsize)
-            snap = camera.snap()
-            io.imsave(save_directory+'_imagezstack_'+'Z%d'%(i*stepsize)+'b'+'.tif', snap, check_contrast=False)
-            x2,y2,z2 = micromanipulator.getPos()
-            positionhistory = np.append(positionhistory, z2)
-            
-            # (emergency) stop
-            if self.STOP:
-                break
-        
-        # move micromanipulator back to reference position
-        micromanipulator.moveAbs(x=x, y=y, z=z)
-        
-        # save Z-stack of micromanipulator positions
-        np.save(save_directory+'_imagezstack_', positionhistory)
         
         self.finished.emit()
                     
