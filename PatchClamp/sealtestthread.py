@@ -10,7 +10,7 @@ Created on Mon Sep 27 15:48:59 2021
 import sys
 import logging
 import numpy as np
-from PyQt5.QtCore import pyqtSignal, QThread
+from PyQt5.QtCore import pyqtSignal, QThread, pyqtSlot
 
 import nidaqmx
 from nidaqmx.stream_readers import AnalogMultiChannelReader
@@ -60,7 +60,20 @@ from NIDAQ.constants import MeasurementConstants, NiDaqChannels
 #         self.wave = np.zeros(self.readNumber)
 #         self.setWave(1,0,0)
         
-        
+#         # operation mode
+#         self.mode = 'voltageclamp'
+    
+    
+#     @property
+#     def mode(self):
+#         return self._mode
+    
+#     @mode.setter
+#     def mode(self, mode):
+#         self._mode = mode
+#         logging.info("Sealtestthread operation mode: "+mode)
+    
+    
 #     def stop(self):
 #         self.isRunning = False
 #         self.quit()
@@ -88,18 +101,66 @@ from NIDAQ.constants import MeasurementConstants, NiDaqChannels
 #             writeClock = self.configs["clock1Channel"]
 #         else:
 #             assert True, "No corresponding clocks defined"
-
-#         readTask.timing.cfg_samp_clk_timing(
-#             rate=self.sampleRate,
-#             sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS,
-#             samps_per_chan=self.readNumber,
-#         )  # Read number is used to determine the buffer size.
-#         writeTask.timing.cfg_samp_clk_timing(
-#             rate=self.sampleRate,
-#             source=writeClock,
-#             sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS,
-#         )
     
+#         if self.mode == 'voltageclamp':
+#             readTask.timing.cfg_samp_clk_timing(
+#                 rate=self.sampleRate,
+#                 sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS,
+#                 samps_per_chan=self.readNumber,
+#             )  # Read number is used to determine the buffer size.
+#             writeTask.timing.cfg_samp_clk_timing(
+#                 rate=self.sampleRate,
+#                 source=writeClock,
+#                 sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS,
+#             )
+#         elif self.mode == 'zap':
+#             readTask.timing.cfg_samp_clk_timing(
+#                 rate=self.sampleRate,
+#                 sample_mode=nidaqmx.constants.AcquisitionType.FINITE,
+#                 samps_per_chan=self.sampleNumber,
+#             )  # Read number is used to determine the buffer size.
+#             writeTask.timing.cfg_samp_clk_timing(
+#                 rate=self.sampleRate,
+#                 source=writeClock,
+#                 sample_mode=nidaqmx.constants.AcquisitionType.FINITE,
+#                 samps_per_chan=self.sampleNumber,
+#             )
+#         else:
+#             pass
+    
+#     def zap(self):
+#         # interrupt measurement
+#         self.stop()
+        
+#         # update attributes for zapping (there should be a function for generating this kind of wave right...?)
+#         zap_voltage = 1
+#         zap_voltagegain = 0.1
+#         zap_duration = 200
+#         self.sampleRate = 100000
+#         self.readNumber = 500
+#         self.voltMax = zap_voltage/zap_voltagegain
+#         self.voltMin = 0/zap_voltagegain
+#         self.wave = self.voltMax * np.ones(int(int(zap_duration) * 10 / 100 / 100000 * self.sampleRate))
+#         self.wave = np.append(self.wave, np.zeros(10))  # give 10*0 at the end of waveform
+#         self.sampleNumber = len(self.wave)
+        
+#         # change operation mode to zap and execute
+#         self.mode = 'zap'
+#         self.start()
+        
+#         # zap cannot be interupted so we press stop and just wait for it to end
+#         self.stop()
+        
+#         # update the wavefunction for ordinary use and execute
+#         self.sampleRate = MeasurementConstants().patchSealSampRate
+#         self.readNumber = 100 # should be a multiple of the wavelength
+#         self.setWave(0.1, 0.01, 0)
+#         self.mode = 'voltageclamp'
+        
+#         # resume sealtestthread
+#         self.start()
+    
+#     @pyqtSlot()
 #     def measure(self):
 #         """
 #         Starts writing a waveform continuously to the patchclamp. While reading
@@ -127,15 +188,21 @@ from NIDAQ.constants import MeasurementConstants, NiDaqChannels
 #             This way the task will have to wait slightly longer for incoming samples. And leaves the buffer
 #             entirely clean. This way we always know the correct numpy size and are always left with an empty
 #             buffer (and the buffer will not slowly fill up)."""
-#             output = np.zeros([2, self.readNumber])
-#             writeTask.start()  # Will wait for the readtask to start so it can use its clock
-#             readTask.start()
-#             self.isRunning == True
-#             while self.isRunning:
-#                 reader.read_many_sample(data=output, number_of_samples_per_channel=self.readNumber)
-
-#                 # Emiting the data just received as a signal
-#                 self.measurement.emit(output[0,:], output[1,:])
+#             if self.mode == 'voltageclamp':
+#                 output = np.zeros([2, self.readNumber])
+#                 writeTask.start()  # Will wait for the readtask to start so it can use its clock
+#                 readTask.start()
+#                 self.isRunning == True
+#                 while self.isRunning:
+#                     reader.read_many_sample(data=output, number_of_samples_per_channel=self.readNumber)
+    
+#                     # Emiting the data just received as a signal
+#                     self.measurement.emit(output[0,:], output[1,:])
+#             elif self.mode == 'zap':
+#                 writeTask.start()  # Will wait for the readtask to start so it can use its clock
+#                 readTask.start()
+#             else:
+#                 pass
             
 #             logging.info('sealtest thread stopped')
     
@@ -176,7 +243,21 @@ class SealTestThread(QThread):
         # generate wave function from loaded constants
         self.wave = np.zeros(self.readNumber)
         self.setWave(1,0,0)
-
+        
+        # operation mode
+        self.mode = 'voltageclamp'
+    
+    
+    @property
+    def mode(self):
+        return self._mode
+    
+    @mode.setter
+    def mode(self, mode):
+        self._mode = mode
+        logging.info("Sealtestthread operation mode: "+mode)
+    
+    
     def stop(self):
         self.isRunning = False
         self.quit()
@@ -188,6 +269,39 @@ class SealTestThread(QThread):
 
         self.wave = blockWave(self.sampleRate, self.frequency, self.voltMin, self.voltMax, self.dutycycle)
     
+    def zap(self):
+        # interrupt measurement
+        self.stop()
+        
+        # update attributes for zapping (there should be a function for generating this kind of wave right...?)
+        zap_voltage = 1
+        zap_voltagegain = 0.1
+        zap_duration = 200
+        self.sampleRate = 100000
+        self.readNumber = 500
+        self.voltMax = zap_voltage/zap_voltagegain
+        self.voltMin = 0/zap_voltagegain
+        self.wave = self.voltMax * np.ones(int(int(zap_duration) * 10 / 100 / 100000 * self.sampleRate))
+        self.wave = np.append(self.wave, np.zeros(10))  # give 10*0 at the end of waveform
+        self.sampleNumber = len(self.wave)
+        
+        # change operation mode to zap and execute
+        self.mode = 'zap'
+        self.start()
+        
+        # zap cannot be interupted so we press stop and just wait for it to end
+        self.stop()
+        
+        # update the wavefunction for ordinary use and execute
+        self.sampleRate = MeasurementConstants().patchSealSampRate
+        self.readNumber = 100 # should be a multiple of the wavelength
+        self.setWave(0.1, 0.01, 0)
+        self.mode = 'voltageclamp'
+        
+        # resume sealtestthread
+        self.start()
+    
+    @pyqtSlot()
     def measure(self):
         """
         Starts writing a waveform continuously to the patchclamp. While reading
@@ -199,16 +313,21 @@ class SealTestThread(QThread):
         self.patchCurOutChan = self.configs["Ip"]
         self.patchVoltInChan = self.configs["patchAO"]
         
-        self.isRunning = True
-        while self.isRunning:
-            output = np.random.rand(2,self.readNumber)
-            output[0,:] *= np.concatenate((np.ones(25),np.zeros(25),np.ones(25),np.zeros(25)))*1
-            output[1,:] *= np.linspace(2,-2,100)*10**-2
-
-            # Emiting the data just received as a signal
-            self.measurement.emit(output[0,:], output[1,:])
-            
-            QThread.msleep(10)
+        if self.mode == 'voltageclamp':
+            self.isRunning = True
+            while self.isRunning:
+                output = np.random.rand(2,self.readNumber)
+                output[0,:] *= np.concatenate((np.ones(25),np.zeros(25),np.ones(25),np.zeros(25)))*1
+                output[1,:] *= np.linspace(2,-2,100)*10**-2
+                QThread.msleep(10)
+    
+                # Emiting the data just received as a signal
+                self.measurement.emit(output[0,:], output[1,:])
+        elif self.mode == 'zap':
+            logging.info('ZAPPPPP!')
+            QThread.msleep(200)
+        else:
+            pass
         
         logging.info('sealtest thread stopped')
     

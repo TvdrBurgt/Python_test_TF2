@@ -35,8 +35,9 @@ class SmartPatcher(QObject):
         
         # Autopatch variables
         self._state_message = "-"
-        self._warning_message = "-"
+        self._progress_message = "-"
         self._operation_mode = "Default"
+        self._resistance_reference = None           # in MΩ
         
         # Data collection
         self.window_size_i = 200
@@ -60,6 +61,37 @@ class SmartPatcher(QObject):
         self.thread = QThread()
         self.worker.moveToThread(self.thread)
         self.worker.finished.connect(self.thread.quit)
+    
+    
+    def request(self, name, mode='Default'):
+        if self.thread.isRunning() == True:
+            pass
+        else:
+            # disconnect the started method to prevent double execution
+            try:
+                self.thread.started.disconnect()
+            except TypeError:
+                pass
+                
+            # workers can use operation modes for extra variable input
+            self.operation_mode = mode
+            
+            # connected the started method to an executable algorithm
+            if name == 'target2center':
+                if self.XYstage == None or np.array_equal(self.target_coordinates, [None,None,None]):
+                    raise ValueError('XY stage not connected')
+                else:
+                    self.thread.started.connect(self.worker.target2center)
+            elif name == 'hardcalibration':
+                if self.camerathread == None or self.micromanipulator == None:
+                    raise ValueError('Camera and/or micromanipulator not connected')
+                else:
+                    self.thread.started.connect(self.worker.hardcalibration)
+            elif name == 'mockworker':
+                    self.thread.started.connect(self.worker.mockworker)
+            
+            # start worker
+            self.thread.start()
     
     
     def update_constants_from_JSON(self):
@@ -271,7 +303,7 @@ class SmartPatcher(QObject):
     @sealtestthread.setter
     def sealtestthread(self, sealtestthread_handle):
         self._sealtestthread = sealtestthread_handle
-        self._sealtestthread.setWave(0.1, 0.01, 0)
+        self._sealtestthread.setWave(0.1, 0.01, 0)  # voltage gain, voltage (V), duration (us)
         self._sealtestthread.start()
     @sealtestthread.deleter
     def sealtestthread(self):
@@ -387,17 +419,17 @@ class SmartPatcher(QObject):
         self._state_message = "-"
     
     @property
-    def warning_message(self):
-        return self._warning_message
-    @warning_message.setter
-    def warning_message(self, message):
+    def progress_message(self):
+        return self._progress_message
+    @progress_message.setter
+    def progress_message(self, message):
         if isinstance(message, str):
-            self._warning_message = message
+            self._progress_message = message
         else:
             raise ValueError('message is not a string')
-    @warning_message.deleter
-    def warning_message(self):
-        self._warning_message = "-"
+    @progress_message.deleter
+    def progress_message(self):
+        self._progress_message = "-"
     
     @property
     def operation_mode(self):
@@ -413,6 +445,15 @@ class SmartPatcher(QObject):
         self._operation_mode = 'default'
     
     
+    @property
+    def resistance_reference(self):
+        return self._resistance_reference
+    @resistance_reference.setter
+    def resistance_reference(self, resistance):
+        self._resistance_reference = resistance
+    @resistance_reference.deleter
+    def resistance_reference(self):
+        self._resistance_reference = None
     
     
     
@@ -429,35 +470,6 @@ class SmartPatcher(QObject):
     
     
     
-    def request(self, name, mode='Default'):
-        if self.thread.isRunning() == True:
-            pass
-        else:
-            # disconnect the started method to prevent double execution
-            try:
-                self.thread.started.disconnect()
-            except TypeError:
-                pass
-                
-            # workers can use operation modes for extra variable input
-            self.operation_mode = mode
-            
-            # connected the started method to an executable algorithm
-            if name == 'target2center':
-                if self.XYstage == None or np.array_equal(self.target_coordinates, [None,None,None]):
-                    raise ValueError('XY stage not connected')
-                else:
-                    self.thread.started.connect(self.worker.target2center)
-            elif name == 'hardcalibration':
-                if self.camerathread == None or self.micromanipulator == None:
-                    raise ValueError('Camera and/or micromanipulator not connected')
-                else:
-                    self.thread.started.connect(self.worker.hardcalibration)
-            elif name == 'mockworker':
-                    self.thread.started.connect(self.worker.mockworker)
-            
-            # start worker
-            self.thread.start()
     
     
     

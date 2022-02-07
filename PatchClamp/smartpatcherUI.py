@@ -195,13 +195,12 @@ class PatchClampUI(QWidget):
         request_start_breakin = QPushButton(text="Start from break-in", clicked=self.mockfunction)
         request_stop = QPushButton(text="STOP!", clicked=self.mockfunction)
         
-        # Labels for autopatch status and warning
+        # Labels for autopatch status and progress updates
         autopatch_status_label = QLabel("Autopatch status:")
-        autopatch_warning_label = QLabel("Warning:")
+        autopatch_progress_label = QLabel("Progress updates:")
         self.autopatch_status = QLabel("Status")
-        self.autopatch_warning = QLabel("Warning")
+        self.autopatch_progress = QLabel("-")
         self.autopatch_status.setFont(QFont("Times", weight=QFont.Bold))
-        self.autopatch_warning.setFont(QFont("Times", weight=QFont.Bold))
         
         autopatchLayout.addWidget(request_prechecks, 0, 0, 1, 2)
         autopatchLayout.addWidget(request_selecttarget, 1, 0, 1, 2)
@@ -213,8 +212,8 @@ class PatchClampUI(QWidget):
         autopatchLayout.addWidget(request_stop, 7, 0, 1, 2)
         autopatchLayout.addWidget(autopatch_status_label, 8, 0, 1, 1)
         autopatchLayout.addWidget(self.autopatch_status, 8, 1, 1, 1)
-        autopatchLayout.addWidget(autopatch_warning_label, 9, 0, 1, 1)
-        autopatchLayout.addWidget(self.autopatch_warning, 9, 1, 1, 1)
+        autopatchLayout.addWidget(autopatch_progress_label, 9, 0, 1, 1)
+        autopatchLayout.addWidget(self.autopatch_progress, 9, 1, 1, 1)
         autopatchContainer.setLayout(autopatchLayout)
         
         """
@@ -300,7 +299,7 @@ class PatchClampUI(QWidget):
         self.membranevoltage_value_label = QLabel("-")
         membranevoltage_unit_label = QLabel("V")
         
-        request_zap_button = QPushButton(text="ZAP!", clicked=self.mockfunction)
+        request_zap_button = QPushButton(text="ZAP!", clicked=self.request_zap)
         
         electrophysiologyLayout.addWidget(resistance_label, 0, 0, 1, 1)
         electrophysiologyLayout.addWidget(self.resistance_value_label, 0, 1, 1, 1)
@@ -396,7 +395,7 @@ class PatchClampUI(QWidget):
         self.backend = SmartPatcher()
         # self.backend.worker.draw.connect(self.draw_roi)
         # self.backend.worker.graph.connect(self.update_algorithmplot)
-        # self.backend.worker.state.connect(self.update_autopatch_status)
+        # self.backend.worker.progress.connect(self.update_autopatch_status)
         self.backend.worker.finished.connect(self.update_constants_from_backend)
         
         """
@@ -642,6 +641,13 @@ class PatchClampUI(QWidget):
                 self.backend.pressurethread.pressurecontroller.LCDon()
         else:
             self.toggle_lcd_button.setChecked(False)
+    
+    
+    def request_zap(self):
+        self.backend.sealtestthread.zap()
+    
+    
+    
     
     
     

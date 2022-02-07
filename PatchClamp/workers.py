@@ -19,7 +19,7 @@ from PatchClamp.ImageProcessing_patchclamp import PatchClampImageProcessing as i
 class Worker(QObject):
     draw = pyqtSignal(list)
     graph = pyqtSignal(np.ndarray)
-    state = pyqtSignal(str)
+    progress = pyqtSignal(str)
     finished = pyqtSignal()
     
     def __init__(self, parent):
@@ -47,7 +47,7 @@ class Worker(QObject):
     @pyqtSlot()
     def mockworker(self):
         print('printed in thread')
-        self.state.emit("Mockwerker busy")
+        self.progress.emit("Mockwerker busy")
         self.graph.emit(np.array([1,2,3]))
         self.draw.emit(['algorithm threshold',2+5, 2-5])
         self.draw.emit(['cross',1000,1000])
@@ -58,14 +58,14 @@ class Worker(QObject):
     
     @pyqtSlot()
     def prechecks(self):
-        """ Pre-checks makes sure the pipette resistance is within its
-        designated range for a good patch and the pipette pressure is set to
+        """ Pre-checks make sure the pipette resistance is within its
+        designated range for a good patch, and the pipette pressure is set to
         prevent contamination during tip descent.
         
         I) set pressure,
         II) check if resistance is within 3 to 11 MΩ.
         """
-        self.state.emit("pre-checks...")
+        self.progress.emit("pre-checks...")
         
         # get all relevant parent attributes
         save_directory = self._parent.save_directory
@@ -75,13 +75,14 @@ class Worker(QObject):
         R_PRECHECK_CONDITION = [3,11]   # MΩ
         
         #I) set pressure to prevent pipette contamination
-        pressurecontroller.set_pressure_stop_waveform(100)
+        pressurecontroller.set_pressure_stop_waveform(50)
         
         #II) measure pipette resistance and check if it is consistent
         del self._parent.resistance_reference
         resistance = np.zeros(10)
         for i in range(0,10):
             resistance[i] = np.nanmax(self._parent.resistance[-10::])
+            
         if all(resistance >= R_PRECHECK_CONDITION[0]*1e6) and all(resistance <= R_PRECHECK_CONDITION[1]*1e6):
             self._parent.resistance_reference = np.nanmean(resistance)
             logging.info('Pre-checks passed')
@@ -92,6 +93,66 @@ class Worker(QObject):
         np.save(save_directory+'precheckresistance_'+timestamp, resistance)             #FLAG: relevant for MSc thesis
         
         self.finished.emit()
+    
+    
+    @pyqtSlot()
+    def prechecks(self):
+        """ Pre-checks make sure that the patch preparation is successful.
+        We make sure that over pressure is applied before entering the sample
+        medium, but we scale it to the right value. We also check if the
+        pipette is suited for whole-cell patching by checking its resistance.
+        
+        I) set pressure,
+        II) check if resistance is within 3 to 11 MΩ.
+        """
+        self.progress.emit("pre-checks...")
+        
+        # get all relevant parent attributes
+        save_directory = self._parent.save_directory
+        pressurecontroller = self._parent.pressurethread
+        
+        # Algorithm variables
+        P_PRECHECK_CONDITION = 20       # mBar
+        R_PRECHECK_CONDITION = [3,11]   # MΩ
+        SUCCESS = True
+        
+        #I) set pressure to prevent pipette contamination
+        pressure = np.zeros(10)
+        for i in range(0,10):
+            pressure[i] = np.nanmean(self._parent.pressure[-10::])
+        
+        if all(pressure >= P_PRECHECK_CONDITION):
+            logging.info("pressure check passed")
+            pressurecontroller.set_pressure_stop_waveform(50)
+        else:
+            logging.info("pressure check failed")
+            SUCCESS = False
+        
+        #II) measure pipette resistance and check if it is consistent
+        del self._parent.resistance_reference
+        resistance = np.zeros(10)
+        for i in range(0,10):
+            resistance[i] = np.nanmax(self._parent.resistance[-10::])
+            
+        if all(resistance >= R_PRECHECK_CONDITION[0]*1e6) \
+            and all(resistance <= R_PRECHECK_CONDITION[1]*1e6):
+            self._parent.resistance_reference = np.nanmean(resistance)
+            logging.info('resistance check passed')
+        else:
+            logging.info('resistance check passed')
+            SUCCESS = False
+        
+        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                   #FLAG: relevant for MSc thesis
+        np.save(save_directory+'precheckresistance_'+timestamp, resistance)             #FLAG: relevant for MSc thesis
+        
+        if SUCCESS:
+            pass
+        else:
+            pass
+        self.progress.emit("pre-checks finished)
+        
+        self.finished.emit()
+    
     
     
     @pyqtSlot()
@@ -126,7 +187,7 @@ class Worker(QObject):
                          camera y-axis)
             pixelsize   (pixel size in nanometers)
         """
-        self.state.emit("Calibrating...")
+        self.progress.emit("Calibrating...")
         
         # get all relevant parent attributes
         save_directory = self._parent.save_directory
@@ -251,7 +312,7 @@ class Worker(QObject):
             pipette_coordinates_pair    np.array([reference (in microns);
                                                   tip coordinates (in pixels)])
         """
-        self.state.emit("Detecting tip...")
+        self.progress.emit("Detecting tip...")
         
         # get all relevant parent attributes
         save_directory = self._parent.save_directory
@@ -359,7 +420,7 @@ class Worker(QObject):
         
         The *focusbias* is around 10-30 micrometers!!!
         """
-        self.state.emit("Autofocus pipette...")
+        self.progress.emit("Autofocus pipette...")
         
         # get all relevant parent attributes
         save_directory = self._parent.save_directory
@@ -572,7 +633,7 @@ class Worker(QObject):
         The camera field-of-view is turned 90 degrees counter-clockwise 
         compared to the ludl XY sample stage.
         """
-        self.state.emit("Centering target...")
+        self.progress.emit("Centering target...")
         
         stage = self._parent.XYstage
         pixelsize = self._parent.pixel_size
@@ -609,7 +670,7 @@ class Worker(QObject):
         """ Pipette tip to target manoeuvres the micromanipulator to a target
         in the camera field-of-view
         """
-        self.state.emit("Approaching target...")
+        self.progress.emit("Approaching target...")
         
         micromanipulator = self._parent.micromanipulator
         account4rotation = self._parent.account4rotation
@@ -650,7 +711,7 @@ class Worker(QObject):
                     in an abrupt drop in resistance after which we stop
                     pipette descent immediately.
         """
-        self.state.emit("Gigasealing...")
+        self.progress.emit("Gigasealing...")
         
         save_directory = self._parent.save_directory
         micromanipulator = self._parent.micromanipulator
@@ -660,7 +721,6 @@ class Worker(QObject):
         pixelsize = self._parent.pixel_size
         tipcoords_manip,tipcoords_cam = self._parent.pipette_coordinates_pair
         xtarget,ytarget,_ = self._parent.target_coordinates
-        # resistance_reference = self._parent.resistance_reference
         
         # Algorithm variables
         R_CRITICAL = 0.15e6         # ohm
@@ -687,9 +747,10 @@ class Worker(QObject):
         
         #IIIa) measure resistance and set graph thresholds
         resistance_ref = np.nanmean(self._parent.resistance)
+        logging.info('Gigaseal resistance reference set at: '+str(resistance_ref*1e-6)+' MΩ')
         self.draw.emit(['algorithm threshold',resistance_ref+1.2*R_CRITICAL, resistance_ref-1.2*R_CRITICAL])
-        logging.info("Upper threshold"+str(resistance_ref+R_CRITICAL))
-        logging.info("Lower threshold"+str(resistance_ref-R_CRITICAL))
+        logging.info("Upper threshold: "+str(round((resistance_ref+R_CRITICAL)*1e-6, 2)))
+        logging.info("Lower threshold: "+str(round((resistance_ref-R_CRITICAL)*1e-6, 2)))
         
         #IIIb) descent pipette until R increases by R_CRITICAL
         resistance = resistance_ref
@@ -719,12 +780,11 @@ class Worker(QObject):
         self.draw.emit(['remove algorithm threshold'])
         if not self.STOP:
             pressurecontroller.set_pressure_stop_waveform(0)
-            time.sleep(3)
         
         #Va) wait for Gigaseal
         logging.info("Attempting gigaseal...")
         start = time.time()
-        while resistance < 1e9 and time.time()-start < 5 and not self.STOP:
+        while resistance < 1e9 and time.time()-start < 10 and not self.STOP:
             resistance = np.nanmax(self._parent.resistance[-10::])
             self.graph.emit(resistancehistory)
             resistancehistory = np.append(resistancehistory, resistance)
@@ -765,18 +825,19 @@ class Worker(QObject):
         The break-in is successful if the resistance drops below 300MΩ and the
         current is in the range [-300, 300]pA.
         """
-        self.state.emit("Breaking in...")
+        self.progress.emit("Breaking in...")
         
         save_directory = self._parent.save_directory
         pressurecontroller = self._parent.pressurethread
         sealtestthread = self._parent.sealtestthread
         
         # Algorithm variables
-        TIMEOUT = 90                        # seconds
+        TIMEOUT = 60                        # seconds
         I_BREAKIN_CONDITION = 1e-9          # ampere absolute valued
         R_BREAKIN_CONDITION = 300*1e6       # ohm
         C_BREAKIN_CONDITION = [50,200]      # units? farad? farad per surface unit?
         PULSES = np.linspace(-100, -300, 15)
+        SUCCESS = False
         
         # I) attempt breaking in by increasing suction pulses 
         logging.info("Attempting break-in...")
@@ -784,10 +845,8 @@ class Worker(QObject):
         currenthistory = np.array([[],[]])
         start = time.time()
         i = 0
-        while time.time()-start < TIMEOUT and not self.STOP:
+        while time.time()-start < TIMEOUT and not SUCCESS and not self.STOP:
             i += 1
-            pressurecontroller.set_pulse_stop_waveform(PULSES[i%len(PULSES)])
-            time.sleep(2)
             Imax = np.max(self._parent.current)
             Imin = np.min(self._parent.current)
             resistance = np.nanmax(self._parent.resistance[-10::])
@@ -795,27 +854,61 @@ class Worker(QObject):
             if Imax <= I_BREAKIN_CONDITION and Imin >= -I_BREAKIN_CONDITION \
                 and capacitance > C_BREAKIN_CONDITION[0] and capacitance < C_BREAKIN_CONDITION[1] \
                      and resistance <= R_BREAKIN_CONDITION:
+                         SUCCESS = True
                          break
             else:
-                currenthistory = np.append(currenthistory, np.array([[Imax],[Imin]]), axis=1)
-                resistancehistory = np.append(resistancehistory, resistance)
+                pressurecontroller.set_pulse_stop_waveform(PULSES[i%len(PULSES)])
+                time.sleep(2)
+            currenthistory = np.append(currenthistory, np.array([[Imax],[Imin]]), axis=1)
+            resistancehistory = np.append(resistancehistory, resistance)
             self.graph.emit(resistancehistory)
         
-        # # II) second attempt but with zap
-        # while time.time()-start < TIMEOUT and not self.STOP:
-        #     Imax = np.max(self._parent.current)
-        #     Imin = np.min(self._parent.current)
-        #     resistance = np.nanmax(self._parent.resistance[-10::])
-        #     capacitance = np.nanmean(self._parent.capacitance[-10::])
-        #     if Imax <= I_BREAKIN_CONDITION and Imin >= -I_BREAKIN_CONDITION \
-        #         and capacitance > C_BREAKIN_CONDITION[0] and capacitance < C_BREAKIN_CONDITION[1] \
-        #             and resistance <= R_BREAKIN_CONDITION:
-        #                 break
-        #     else:
-        #         # zap membrane
-        #         # apply long suction
-        #         pass
+        # II) second attempt but with zap
+        start = time.time()
+        i = 0
+        while time.time()-start < TIMEOUT/2 and not SUCCESS and not self.STOP:
+            i += 1
+            Imax = np.max(self._parent.current)
+            Imin = np.min(self._parent.current)
+            resistance = np.nanmax(self._parent.resistance[-10::])
+            capacitance = np.nanmean(self._parent.capacitance[-10::])
+            if Imax <= I_BREAKIN_CONDITION and Imin >= -I_BREAKIN_CONDITION \
+                and capacitance > C_BREAKIN_CONDITION[0] and capacitance < C_BREAKIN_CONDITION[1] \
+                    and resistance <= R_BREAKIN_CONDITION:
+                        SUCCESS = True
+                        break
+            else:
+                sealtestthread.zap()
+                pressurecontroller.set_pulse_stop_waveform(PULSES[i%len(PULSES)])
+                time.sleep(2)
+            currenthistory = np.append(currenthistory, np.array([[Imax],[Imin]]), axis=1)
+            resistancehistory = np.append(resistancehistory, resistance)
+            self.graph.emit(resistancehistory)
         
+        # III) third attempt but with zap and longer suction
+        start = time.time()
+        while time.time()-start < TIMEOUT/2 and not SUCCESS and not self.STOP:
+            Imax = np.max(self._parent.current)
+            Imin = np.min(self._parent.current)
+            resistance = np.nanmax(self._parent.resistance[-10::])
+            capacitance = np.nanmean(self._parent.capacitance[-10::])
+            if Imax <= I_BREAKIN_CONDITION and Imin >= -I_BREAKIN_CONDITION \
+                and capacitance > C_BREAKIN_CONDITION[0] and capacitance < C_BREAKIN_CONDITION[1] \
+                    and resistance <= R_BREAKIN_CONDITION:
+                        SUCCESS = True
+                        break
+            else:
+                sealtestthread.zap()
+                pressurecontroller.set_pulse_stop_waveform(-100)
+                pressurecontroller.set_pressure_stop_waveform(-100)
+                time.sleep(0.5)
+                pressurecontroller.set_pulse_stop_waveform(-150)
+                time.sleep(2)
+            currenthistory = np.append(currenthistory, np.array([[Imax],[Imin]]), axis=1)
+            resistancehistory = np.append(resistancehistory, resistance)
+            self.graph.emit(resistancehistory)
+        
+        # IV) measure and average sliding windows for saving
         slidingwindow_current = self._parent.current
         for i in range(0,10):
             slidingwindow_current += self._parent.current
