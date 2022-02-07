@@ -425,12 +425,16 @@ class Worker(QObject):
                     pos = positionhistory[-1]
                     micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
                     penaltytail = pen[1::]
+                    monotonicity_condition = True
                     for i in range(2, MIN_TAILLENGTH):
-                        micromanipulator.moveRel(dz=+STEPSIZE)
-                        I = camera.snap()
-                        penalty = ia.comp_variance_of_Laplacian(I)
-                        penaltytail = np.append(penaltytail, penalty)
-                    monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
+                        if monotonicity_condition:
+                            micromanipulator.moveRel(dz=+STEPSIZE)
+                            I = camera.snap()
+                            penalty = ia.comp_variance_of_Laplacian(I)
+                            penaltytail = np.append(penaltytail, penalty)
+                            monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
+                        else:
+                            break
                     if monotonicity_condition:
                         logging.info("Detected maximum is a sharpness peak!")
                         lookingforpeak = False
@@ -452,12 +456,16 @@ class Worker(QObject):
                     pos = positionhistory[2]
                     micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
                     penaltytail = pen[2]
+                    monotonicity_condition = True
                     for i in range(2, MIN_TAILLENGTH):
-                        micromanipulator.moveRel(dz=+STEPSIZE)
-                        I = camera.snap()
-                        penalty = ia.comp_variance_of_Laplacian(I)
-                        penaltytail = np.append(penaltytail, penalty)
-                    monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
+                        if monotonicity_condition:
+                            micromanipulator.moveRel(dz=+STEPSIZE)
+                            I = camera.snap()
+                            penalty = ia.comp_variance_of_Laplacian(I)
+                            penaltytail = np.append(penaltytail, penalty)
+                            monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
+                        else:
+                            break
                     if monotonicity_condition:
                         logging.info("Detected maximum is a sharpness peak!")
                         lookingforpeak = False
@@ -471,22 +479,28 @@ class Worker(QObject):
             elif maximum == 'middle' and going_down:
                 penaltytail = penaltyhistory[1::]
                 taillength = len(penaltytail)
-                pos = positionhistory[-1]
                 if taillength < MIN_TAILLENGTH:
+                    pos = positionhistory[-1]
                     micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
+                    monotonicity_condition = True
                     for i in range(taillength, MIN_TAILLENGTH):
-                        micromanipulator.moveRel(dz=+STEPSIZE)
-                        I = camera.snap()
-                        penalty = ia.comp_variance_of_Laplacian(I)
-                        penaltytail = np.append(penaltytail, penalty)
+                        if monotonicity_condition:
+                            micromanipulator.moveRel(dz=+STEPSIZE)
+                            I = camera.snap()
+                            penalty = ia.comp_variance_of_Laplacian(I)
+                            penaltytail = np.append(penaltytail, penalty)
+                            monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
+                        else:
+                            break
                 else:
                     penaltytail = penaltytail[0:MIN_TAILLENGTH]
-                monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
+                    monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
                 if monotonicity_condition:
                     logging.info("Detected maximum is a sharpness peak!")
                     lookingforpeak = False
                     move = None
                     micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positionhistory[1])
+                    foundfocus = positionhistory[1]
                 else:
                     logging.info("Detected maximum is noise")
                     move = 'step down'
@@ -513,38 +527,38 @@ class Worker(QObject):
         
         #VI) continue with finding the fine focus position
         logging.info('Coarse focus found, continue with finetuning')
-        _,_,z = micromanipulator.getPos()
-        for step in [STEPSIZE, STEPSIZE/5]:
-            # (emergency) stop
-            if self.STOP:
-                break
-            
+        for step in [STEPSIZE, STEPSIZE/3]:
             # Sample six points between the last three penalty scores
-            penalties = np.zeros(6)
-            positions = np.linspace(z-step, z+step, 6)
+            penalties = np.zeros(7)
+            positions = np.linspace(foundfocus-step, foundfocus+step, 7)
             for idx, pos in enumerate(positions):
+                # (emergency) stop
+                if self.STOP:
+                    break
                 micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
                 I = camera.snap()
                 penalties[idx] = ia.comp_variance_of_Laplacian(I)
-                positionhistory = np.append(pos, positionhistory)
-                penaltyhistory = np.append(penalties[idx], penaltyhistory)
+                positionhistory = np.append(positionhistory, pos)
+                penaltyhistory = np.append(penaltyhistory, penalties[idx])
+            
+            # Locate maximum penalty value
+            foundfocus = positions[np.argmax(penalties)]
             
             # emit graph
             self.graph.emit(np.vstack([positions,penalties]))
         
-        #VII) move pipette into focus
-        if not self.STOP:
-            i_max = np.argmax(penalties)
-            foundfocus = positions[i_max]
-            self.graph.emit(np.vstack([positionhistory,penaltyhistory]))
-            micromanipulator.moveAbs(x=reference[0], y=reference[1], z=foundfocus)
+        # emit graph
+        self.graph.emit(np.vstack([positionhistory,penaltyhistory]))
+        
+        #VIIa) move pipette into focus
+        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=foundfocus)
         
         I = camera.snap()                                                                   #FLAG: relevant for MSc thesis
         io.imsave(save_directory+'autofocus_'+timestamp+'.tif', I, check_contrast=False)    #FLAG: relevant for MSc thesis
         np.save(save_directory+'autofocus_positionhistory_'+timestamp, positionhistory)     #FLAG: relevant for MSc thesis
         np.save(save_directory+'autofocus_penaltyhistory_'+timestamp, penaltyhistory)       #FLAG: relevant for MSc thesis
         
-        #VIII) return objective to original position
+        #VIIb) return objective to original position
         objective.moveAbs(z=objective_position_reference)
         
         self.finished.emit()
