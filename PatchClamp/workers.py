@@ -8,7 +8,6 @@ Created on Wed Aug 11 15:15:30 2021
 
 from datetime import datetime
 import time
-import logging
 import numpy as np
 from skimage import io
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
@@ -18,7 +17,9 @@ from PatchClamp.ImageProcessing_patchclamp import PatchClampImageProcessing as i
 
 class Worker(QObject):
     draw = pyqtSignal(list)
-    graph = pyqtSignal(np.ndarray)
+    graph1 = pyqtSignal(np.ndarray)
+    graph2 = pyqtSignal(np.ndarray)
+    status = pyqtSignal(str)
     progress = pyqtSignal(str)
     finished = pyqtSignal()
     
@@ -30,7 +31,6 @@ class Worker(QObject):
     @property
     def parent(self):
         return self._parent
-    
     @parent.setter
     def parent(self, parent):
         self._parent = parent
@@ -38,7 +38,6 @@ class Worker(QObject):
     @property
     def STOP(self):
         return self._STOP
-    
     @STOP.setter
     def STOP(self, state):
         self._STOP = state
@@ -47,50 +46,52 @@ class Worker(QObject):
     @pyqtSlot()
     def mockworker(self):
         print('printed in thread')
-        self.progress.emit("Mockwerker busy")
-        self.graph.emit(np.array([1,2,3]))
-        self.draw.emit(['algorithm threshold',2+5, 2-5])
+        self.status.emit("Mockwerker busy")
+        self.graph1.emit(np.array([1,2,3]))
+        self.graph2.emit(np.array([10,2,3]))
         self.draw.emit(['cross',1000,1000])
         self.draw.emit(['calibrationline',500,500,-(10)])
         self.draw.emit(['calibrationline',500,500,-(10-90)])
-        self.draw.emit(['remove algorithm threshold'])
         self.finished.emit()
     
+    
     @pyqtSlot()
-    def prechecks(self):
-        """ Pre-checks make sure the pipette resistance is within its
-        designated range for a good patch, and the pipette pressure is set to
-        prevent contamination during tip descent.
+    def target2center(self):
+        """ Target to center moves the XY stage so that the user-selected
+        target ends up in the center of the camera field-of-view.
         
-        I) set pressure,
-        II) check if resistance is within 3 to 11 MΩ.
+        The camera field-of-view is turned 90 degrees counter-clockwise 
+        compared to the ludl XY sample stage.
         """
-        self.progress.emit("pre-checks...")
+        self.status.emit("Centering target...")
         
         # get all relevant parent attributes
-        save_directory = self._parent.save_directory
-        pressurecontroller = self._parent.pressurethread
+        stage = self._parent.XYstage
+        pixelsize = self._parent.pixel_size
+        width,height = self._parent.image_size
+        xtarget,ytarget,ztarget = self._parent.target_coordinates
         
-        # Algorithm variables
-        R_PRECHECK_CONDITION = [3,11]   # MΩ
+        # Calculate image center pixels
+        xcenter,ycenter = int(width/2),int(height/2)
         
-        #I) set pressure to prevent pipette contamination
-        pressurecontroller.set_pressure_stop_waveform(50)
+        # Caculate path to travel from target to center
+        dx_pi = (xtarget - xcenter)    #in pixels
+        dy_pi = (ytarget - ycenter)    #in pixels
         
-        #II) measure pipette resistance and check if it is consistent
-        del self._parent.resistance_reference
-        resistance = np.zeros(10)
-        for i in range(0,10):
-            resistance[i] = np.nanmax(self._parent.resistance[-10::])
-            
-        if all(resistance >= R_PRECHECK_CONDITION[0]*1e6) and all(resistance <= R_PRECHECK_CONDITION[1]*1e6):
-            self._parent.resistance_reference = np.nanmean(resistance)
-            logging.info('Pre-checks passed')
-        else:
-            logging.info('Pre-checks not passed')
+        # Convert pixels to ludl indices (1577 ludl index = 340 um)
+        dx = int(dx_pi * pixelsize/1000 * 1577/340)
+        dy = int(dy_pi * pixelsize/1000 * 1577/340)
         
-        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                   #FLAG: relevant for MSc thesis
-        np.save(save_directory+'precheckresistance_'+timestamp, resistance)             #FLAG: relevant for MSc thesis
+        # Move XY stage a distance (-dx,-dy), note that stage axis are rotated
+        ismoving = True
+        stage.moveRel(xRel=dy, yRel=-dx)
+        while ismoving:
+            ismoving = not stage.motorsStopped()
+            time.sleep(0.1)
+        
+        # Update target coordinates in the backend
+        self.parent.target_coordinates = np.array([xcenter,ycenter,ztarget])
+        self.draw.emit(['target', dx_pi, dy_pi])
         
         self.finished.emit()
     
@@ -127,7 +128,7 @@ class Worker(QObject):
                          camera y-axis)
             pixelsize   (pixel size in nanometers)
         """
-        self.progress.emit("Calibrating...")
+        self.status.emit("Calibrating...")
         
         # get all relevant parent attributes
         save_directory = self._parent.save_directory
@@ -151,7 +152,7 @@ class Worker(QObject):
         elif mode == 'pixelsize':
             dimension = 2
         else:
-            logging.warning('Hardcalibration mode not recognized')
+            self.progress.emit('Hardcalibration mode not recognized')
         
         positions = np.linspace(-3*stepsize, 3*stepsize, num=7)
         directions = np.eye(3)
@@ -233,8 +234,322 @@ class Worker(QObject):
             
             # set pixelsize to backend
             self._parent.pixelsize = sample_mean
-            logging.info('pixelsize estimation: mean +/- s.d. = ' + str(sample_mean) + ' +/- ' + str(np.sqrt(sample_var)))
+            self.progress.emit('pixelsize estimation: mean +/- s.d. = '+'{:.1f}'.format(sample_mean)+' +/- '+'{:.1f}'.format(np.sqrt(sample_var)))
         
+        self.status.emit("Calibration finished")
+        self.finished.emit()
+    
+    
+    @pyqtSlot()
+    def prechecks(self):
+        """ Pre-checks make sure that the patch preparation is successful.
+        We make sure that over pressure is applied before entering the sample
+        medium, but we scale it to the right value. We also check if the
+        pipette is suited for whole-cell patching by checking its resistance.
+        
+        I) set pressure,
+        II) check if resistance is within 3 to 11 MΩ.
+        """
+        self.status.emit("pre-checks...")
+        
+        # get all relevant parent attributes
+        save_directory = self._parent.save_directory
+        pressurecontroller = self._parent.pressurethread
+        
+        # Algorithm variables
+        P_PRECHECK_CONDITION = 20       # mBar
+        R_PRECHECK_CONDITION = [3,11]   # MΩ
+        SUCCESS_1 = True
+        SUCCESS_2 = True
+        
+        #I) set pressure to prevent pipette contamination
+        pressure = np.zeros(10)
+        for i in range(0,10):
+            pressure[i] = np.nanmean(self._parent.pressure[-10::])
+        
+        if all(pressure >= P_PRECHECK_CONDITION):
+            self.progress.emit("pressure check passed")
+            pressurecontroller.set_pressure_stop_waveform(50)
+        else:
+            self.progress.emit("pressure check failed")
+            SUCCESS_1 = False
+        
+        #II) measure pipette resistance and check if it is consistent
+        del self._parent.resistance_reference
+        resistance = np.zeros(10)
+        for i in range(0,10):
+            resistance[i] = np.nanmax(self._parent.resistance[-10::])
+            
+        if all(resistance >= R_PRECHECK_CONDITION[0]*1e6) \
+            and all(resistance <= R_PRECHECK_CONDITION[1]*1e6):
+            self._parent.resistance_reference = np.nanmean(resistance)
+            self.progress.emit('resistance check passed')
+        else:
+            self.progress.emit('resistance check passed')
+            SUCCESS_2 = False
+        
+        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                   #FLAG: relevant for MSc thesis
+        np.save(save_directory+'precheckresistance_'+timestamp, resistance)             #FLAG: relevant for MSc thesis
+        
+        if SUCCESS_1 and SUCCESS_2:
+            self.progress.emit("pre-checks successful")
+        elif SUCCESS_1 and not SUCCESS_2:
+            self.progress.emit("resistance too high/low")
+        elif not SUCCESS_1 and SUCCESS_2:
+            self.progress.emit("no pipette pressure")
+        else:
+            self.progress.emit("no pipette pressure \nand resistance too high/low")
+            
+        self.status.emit("pre-checks finished")
+        self.finished.emit()
+    
+    
+    @pyqtSlot()
+    def autopatch(self):
+        """ Autopatch is where the full pipeline of automatic patch algorithms
+        is supposed to start IF the tip detection step would be done by an AI.
+        Image analysis is not precise enough and the user has to correct the
+        localization offset.
+        
+        I) Activate the autofocus step
+        II) Activate the softcalibration step
+        """
+        self.status.emit("autopatching...")
+        
+        # Focus pipette tip
+        self.autofocus_tip()
+        
+        # Detect pipette tip
+        self.softcalibration()
+        
+        self.status.emit("autopatch finished")
+        self.progress.emit("Warning: CHECK TIP LOCALIZATION!")
+        self.finished.emit()
+    
+    
+    @pyqtSlot()
+    def autofocus_tip(self):
+        """ Autofocus pipette tip iteratively moves the pipette up or down
+        untill the tip is in focus.
+        
+        The algorithm uses the variance of the Laplacian as its sharpness
+        function. The sharpness values are high for images with sharp edges and
+        low for images with little sharp edges. We use this phenomenon to find
+        the maximum of the sharpness function, the image contains sharp lines
+        when the pipette is in-focus. Note that the sharpness values go up when
+        the pipette moves through the focal plane, thereby creating more sharp
+        edges as a result of pipette geometry and light bending. However, the
+        sharpness function dips a little when the pipette tip is in focus. The
+        autofocus algorithm here is designed to stop at the local maximum
+        before the dip. Another advantage is that this dip is present at a
+        constant height above the focal plance, this allows us to move past the
+        the peak without pressing the pipette down into the sample/coverslip.
+        
+        The *focusbias* is around 10-30 micrometers!!!
+        """
+        self.status.emit("Autofocus pipette...")
+        
+        # get all relevant parent attributes
+        save_directory = self._parent.save_directory
+        micromanipulator = self._parent.micromanipulator
+        objective = self._parent.objectivemotor
+        camera = self._parent.camerathread
+        focus_offset = self._parent.focus_offset
+        xtarget,ytarget,ztarget = self._parent.target_coordinates
+        
+        # algorithm variables
+        STEPSIZE = 10           # micron
+        MIN_TAILLENGTH = 12     # datapoints (=X*STEPSIZE in micron)
+        
+        reference = micromanipulator.getPos()
+        penaltyhistory = np.array([])
+        positionhistory = np.array([])
+        
+        #I) move objective up to not penatrate cells when focussing
+        ztarget = objective.getPos()
+        self._parent.target_coordinates = np.array([xtarget, ytarget, ztarget])
+        objective.moveAbs(z=ztarget+focus_offset/1000)
+        
+        #II) fill first three sharpness scores towards the tail of the graph
+        pen = np.zeros(3)
+        pos = np.zeros(3)
+        for i in range(0,3):
+            micromanipulator.moveRel(dz=+STEPSIZE)
+            I = camera.snap()
+            pen[i] = ia.comp_variance_of_Laplacian(I)
+            pos[i] = reference[2] + (i+1)*STEPSIZE
+        penaltyhistory = np.append(penaltyhistory, pen)
+        positionhistory = np.append(positionhistory, pos)
+        
+        going_up = True
+        going_down = not going_up
+        lookingforpeak = True
+        while lookingforpeak and not self.STOP:
+            
+            # emit graph
+            self.graph1.emit(np.vstack([positionhistory,penaltyhistory]))
+            
+            #IIIa) check which side of the sharpness graph to extend
+            move = None
+            if going_up:
+                pen = penaltyhistory[-3::]
+            else:
+                pen = penaltyhistory[0:3]
+            
+            #IIIb) check where maximum penalty score is: left, middle, right
+            if np.argmax(pen) == 0:
+                maximum = 'left'
+            elif np.argmax(pen) == 1:
+                maximum = 'middle'
+            elif np.argmax(pen) == 2:
+                maximum = 'right'
+            
+            #IVa) possible actions to undertake while going up
+            if maximum == 'right' and going_up:
+                move = 'step up'
+            elif maximum == 'left' and going_up:
+                going_up = False
+                going_down = True
+            elif maximum == 'middle' and going_up:
+                if pen[1] == np.max(penaltyhistory):
+                    pos = positionhistory[-1]
+                    micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
+                    penaltytail = pen[1::]
+                    monotonicity_condition = True
+                    for i in range(2, MIN_TAILLENGTH):
+                        if monotonicity_condition:
+                            micromanipulator.moveRel(dz=+STEPSIZE)
+                            I = camera.snap()
+                            penalty = ia.comp_variance_of_Laplacian(I)
+                            penaltytail = np.append(penaltytail, penalty)
+                            monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
+                        else:
+                            break
+                    if monotonicity_condition:
+                        self.progress.emit("Maximum is a sharpness peak!")
+                        lookingforpeak = False
+                        move = None
+                        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positionhistory[-2])
+                    else:
+                        self.progress.emit("Maximum is noise")
+                        going_up = False
+                        going_down = True
+                else:
+                    going_up = False
+                    going_down = True
+            
+            #IVb) possible actions to undertake while going down
+            elif maximum == 'left' and going_down:
+                move = 'step down'
+            elif maximum == 'right' and going_down:
+                if pen[2] == np.max(penaltyhistory):
+                    pos = positionhistory[2]
+                    micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
+                    penaltytail = pen[2]
+                    monotonicity_condition = True
+                    for i in range(2, MIN_TAILLENGTH):
+                        if monotonicity_condition:
+                            micromanipulator.moveRel(dz=+STEPSIZE)
+                            I = camera.snap()
+                            penalty = ia.comp_variance_of_Laplacian(I)
+                            penaltytail = np.append(penaltytail, penalty)
+                            monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
+                        else:
+                            break
+                    if monotonicity_condition:
+                        self.progress.emit("Maximum is a sharpness peak!")
+                        lookingforpeak = False
+                        move = None
+                        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positionhistory[2])
+                    else:
+                        self.progress.emit("Maximum is noise")
+                        move = 'step down'
+                else:
+                    move = 'step down'
+            elif maximum == 'middle' and going_down:
+                penaltytail = penaltyhistory[1::]
+                taillength = len(penaltytail)
+                if taillength < MIN_TAILLENGTH:
+                    pos = positionhistory[-1]
+                    micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
+                    monotonicity_condition = True
+                    for i in range(taillength, MIN_TAILLENGTH):
+                        if monotonicity_condition:
+                            micromanipulator.moveRel(dz=+STEPSIZE)
+                            I = camera.snap()
+                            penalty = ia.comp_variance_of_Laplacian(I)
+                            penaltytail = np.append(penaltytail, penalty)
+                            monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
+                        else:
+                            break
+                else:
+                    penaltytail = penaltytail[0:MIN_TAILLENGTH]
+                    monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
+                if monotonicity_condition:
+                    self.progress.emit("Maximum is a sharpness peak!")
+                    lookingforpeak = False
+                    move = None
+                    micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positionhistory[1])
+                    foundfocus = positionhistory[1]
+                else:
+                    self.progress.emit("Maximum is noise")
+                    move = 'step down'
+        
+            #V) extend the sharpness function on either side
+            if move == 'step up':
+                pos = positionhistory[-1] + STEPSIZE
+                micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
+                I = camera.snap()
+                pen = ia.comp_variance_of_Laplacian(I)
+                penaltyhistory = np.append(penaltyhistory, pen)
+                positionhistory = np.append(positionhistory, pos)
+            elif move == 'step down':
+                pos = positionhistory[0] - STEPSIZE
+                micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
+                I = camera.snap()
+                pen = ia.comp_variance_of_Laplacian(I)
+                penaltyhistory = np.append(pen, penaltyhistory)
+                positionhistory = np.append(pos, positionhistory)
+        
+        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                   #FLAG: relevant for MSc thesis
+        np.save(save_directory+'autofocus_positionhistory_'+timestamp, positionhistory) #FLAG: relevant for MSc thesis
+        np.save(save_directory+'autofocus_penaltyhistory_'+timestamp, penaltyhistory)   #FLAG: relevant for MSc thesis
+        
+        #VI) continue with finding the fine focus position
+        self.progress.emit('Sampling the sharpness peak')
+        for step in [STEPSIZE, STEPSIZE/3]:
+            # Sample six points between the last three penalty scores
+            penalties = np.zeros(7)
+            positions = np.linspace(foundfocus-step, foundfocus+step, 7)
+            for idx, pos in enumerate(positions):
+                # (emergency) stop
+                if self.STOP:
+                    break
+                micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
+                I = camera.snap()
+                penalties[idx] = ia.comp_variance_of_Laplacian(I)
+                positionhistory = np.append(positionhistory, pos)
+                penaltyhistory = np.append(penaltyhistory, penalties[idx])
+            
+            # Locate maximum penalty value
+            foundfocus = positions[np.argmax(penalties)]
+            
+            # emit graph
+            self.graph1.emit(np.vstack([positions,penalties]))
+        
+        # emit graph
+        self.graph1.emit(np.vstack([positionhistory,penaltyhistory]))
+        
+        #VIIa) move pipette into focus
+        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=foundfocus)
+        self.progress.emit('Pipette in focus')
+        
+        I = camera.snap()                                                                   #FLAG: relevant for MSc thesis
+        io.imsave(save_directory+'autofocus_'+timestamp+'.tif', I, check_contrast=False)    #FLAG: relevant for MSc thesis
+        np.save(save_directory+'autofocus_positionhistory_'+timestamp, positionhistory)     #FLAG: relevant for MSc thesis
+        np.save(save_directory+'autofocus_penaltyhistory_'+timestamp, penaltyhistory)       #FLAG: relevant for MSc thesis
+        
+        self.status.emit("autofocus finished")
         self.finished.emit()
     
     
@@ -252,7 +567,7 @@ class Worker(QObject):
             pipette_coordinates_pair    np.array([reference (in microns);
                                                   tip coordinates (in pixels)])
         """
-        self.progress.emit("Detecting tip...")
+        self.status.emit("Detecting tip...")
         
         # get all relevant parent attributes
         save_directory = self._parent.save_directory
@@ -261,19 +576,19 @@ class Worker(QObject):
         camera = self._parent.camerathread
         focus_offset = self._parent.focus_offset
         account4rotation = self._parent.account4rotation
+        _,_,ztarget = self._parent.target_coordinates
         D = self._parent.pipette_diameter
         O = self._parent.pipette_orientation
         
         # algorithm variables
-        CALIBRATION_HEIGHT = focus_offset+10  #microns above coverslip (autofocus has bias of ~20micron)
+        CALIBRATION_HEIGHT = focus_offset+20  #microns above coverslip (autofocus has bias of ~20micron)
         POSITIONS = np.array([[-25,-25,0],
                               [25,-25,0],
                               [25,25,0],
                               [-25,25,0]])
         
         # bring focal plane beyond its offset where pipette tip is in focus
-        objective_position_reference = objective.getPos()
-        objective.moveAbs(z=objective_position_reference+CALIBRATION_HEIGHT/1000)
+        objective.moveAbs(z=ztarget+CALIBRATION_HEIGHT/1000)
         
         tipcoords1 = POSITIONS[:,0:2] * 0
         tipcoords2 = POSITIONS[:,0:2] * 0
@@ -313,6 +628,7 @@ class Worker(QObject):
             idx_y_interpolation = np.where(positions[:,1] == posy)
             tipcoords2[idx_possible_outlier,0] = np.mean(tipcoords2[idx_x_interpolation,0])
             tipcoords2[idx_possible_outlier,1] = np.mean(tipcoords2[idx_y_interpolation,1])
+            self.progress.emit("Emitting tip-detection outlier: "+"[{:.1f}".format(posx)+", {:.1f})".format(posy))
         
         # return pipette to starting position
         x,y,z = reference
@@ -325,283 +641,16 @@ class Worker(QObject):
             I = camera.snap()
             timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                                                                       #FLAG: relevant for MSc thesis
             io.imsave(save_directory+'softcalibration_X'+str(tipcoord[0])+'_Y'+str(tipcoord[1])+'_'+timestamp+'.tif', I, check_contrast=False)  #FLAG: relevant for MSc thesis
-            np.save(save_directory+'softcalibration_'+timestamp, tipcoords2)                                                                    #FLAG: relevant for MSc thesis
-        
-            # user bias correction
-            userbias = np.array([0, 0])     #should come from human input!
-            tipcoord += userbias
+            np.save(save_directory+'softcalibration_'+timestamp, tipcoords2)
         
             # set micromanipulator and camera coordinate pair of pipette tip
-            self._parent.pipette_coordinates_pair = np.vstack([reference, np.array([tipcoord[0], tipcoord[1], None])])
+            tipcoord_objective_height = ztarget + CALIBRATION_HEIGHT/1000
+            self._parent.pipette_coordinates_pair = np.vstack([reference, np.array([tipcoord[0], tipcoord[1], tipcoord_objective_height])])
         
         # return objective to original position
-        objective.moveAbs(z=objective_position_reference)
+        objective.moveAbs(z=ztarget)
         
-        self.finished.emit()
-        
-    
-    @pyqtSlot()
-    def autofocus_tip(self):
-        """ Autofocus pipette tip iteratively moves the pipette up or down
-        untill the tip is in focus.
-        
-        The algorithm uses the variance of the Laplacian as its sharpness
-        function. The sharpness values are high for images with sharp edges and
-        low for images with little sharp edges. We use this phenomenon to find
-        the maximum of the sharpness function, the image contains sharp lines
-        when the pipette is in-focus. Note that the sharpness values go up when
-        the pipette moves through the focal plane, thereby creating more sharp
-        edges as a result of pipette geometry and light bending. However, the
-        sharpness function dips a little when the pipette tip is in focus. The
-        autofocus algorithm here is designed to stop at the local maximum
-        before the dip. Another advantage is that this dip is present at a
-        constant height above the focal plance, this allows us to move past the
-        the peak without pressing the pipette down into the sample/coverslip.
-        
-        The *focusbias* is around 10-30 micrometers!!!
-        """
-        self.progress.emit("Autofocus pipette...")
-        
-        # get all relevant parent attributes
-        save_directory = self._parent.save_directory
-        micromanipulator = self._parent.micromanipulator
-        objective = self._parent.objectivemotor
-        camera = self._parent.camerathread
-        focus_offset = self._parent.focus_offset
-        
-        # algorithm variables
-        STEPSIZE = 10           # micron
-        MIN_TAILLENGTH = 12     # datapoints (=X*STEPSIZE in micron)
-        
-        reference = micromanipulator.getPos()
-        penaltyhistory = np.array([])
-        positionhistory = np.array([])
-        
-        #I) move objective up to not penatrate cells when focussing
-        objective_position_reference = objective.getPos()
-        objective.moveAbs(z=objective_position_reference+focus_offset/1000)
-        
-        #II) fill first three sharpness scores towards the tail of the graph
-        pen = np.zeros(3)
-        pos = np.zeros(3)
-        for i in range(0,3):
-            micromanipulator.moveRel(dz=+STEPSIZE)
-            I = camera.snap()
-            pen[i] = ia.comp_variance_of_Laplacian(I)
-            pos[i] = reference[2] + (i+1)*STEPSIZE
-        penaltyhistory = np.append(penaltyhistory, pen)
-        positionhistory = np.append(positionhistory, pos)
-        
-        going_up = True
-        going_down = not going_up
-        lookingforpeak = True
-        while lookingforpeak and not self.STOP:
-            
-            # emit graph
-            self.graph.emit(np.vstack([positionhistory,penaltyhistory]))
-            
-            #IIIa) check which side of the sharpness graph to extend
-            move = None
-            if going_up:
-                pen = penaltyhistory[-3::]
-            else:
-                pen = penaltyhistory[0:3]
-            
-            #IIIb) check where maximum penalty score is: left, middle, right
-            if np.argmax(pen) == 0:
-                maximum = 'left'
-            elif np.argmax(pen) == 1:
-                maximum = 'middle'
-            elif np.argmax(pen) == 2:
-                maximum = 'right'
-            
-            #IVa) possible actions to undertake while going up
-            if maximum == 'right' and going_up:
-                move = 'step up'
-            elif maximum == 'left' and going_up:
-                going_up = False
-                going_down = True
-            elif maximum == 'middle' and going_up:
-                if pen[1] == np.max(penaltyhistory):
-                    pos = positionhistory[-1]
-                    micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
-                    penaltytail = pen[1::]
-                    monotonicity_condition = True
-                    for i in range(2, MIN_TAILLENGTH):
-                        if monotonicity_condition:
-                            micromanipulator.moveRel(dz=+STEPSIZE)
-                            I = camera.snap()
-                            penalty = ia.comp_variance_of_Laplacian(I)
-                            penaltytail = np.append(penaltytail, penalty)
-                            monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
-                        else:
-                            break
-                    if monotonicity_condition:
-                        logging.info("Detected maximum is a sharpness peak!")
-                        lookingforpeak = False
-                        move = None
-                        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positionhistory[-2])
-                    else:
-                        logging.info("Detected maximum is noise")
-                        going_up = False
-                        going_down = True
-                else:
-                    going_up = False
-                    going_down = True
-            
-            #IVb) possible actions to undertake while going down
-            elif maximum == 'left' and going_down:
-                move = 'step down'
-            elif maximum == 'right' and going_down:
-                if pen[2] == np.max(penaltyhistory):
-                    pos = positionhistory[2]
-                    micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
-                    penaltytail = pen[2]
-                    monotonicity_condition = True
-                    for i in range(2, MIN_TAILLENGTH):
-                        if monotonicity_condition:
-                            micromanipulator.moveRel(dz=+STEPSIZE)
-                            I = camera.snap()
-                            penalty = ia.comp_variance_of_Laplacian(I)
-                            penaltytail = np.append(penaltytail, penalty)
-                            monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
-                        else:
-                            break
-                    if monotonicity_condition:
-                        logging.info("Detected maximum is a sharpness peak!")
-                        lookingforpeak = False
-                        move = None
-                        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positionhistory[2])
-                    else:
-                        logging.info("Detected maximum is noise")
-                        move = 'step down'
-                else:
-                    move = 'step down'
-            elif maximum == 'middle' and going_down:
-                penaltytail = penaltyhistory[1::]
-                taillength = len(penaltytail)
-                if taillength < MIN_TAILLENGTH:
-                    pos = positionhistory[-1]
-                    micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
-                    monotonicity_condition = True
-                    for i in range(taillength, MIN_TAILLENGTH):
-                        if monotonicity_condition:
-                            micromanipulator.moveRel(dz=+STEPSIZE)
-                            I = camera.snap()
-                            penalty = ia.comp_variance_of_Laplacian(I)
-                            penaltytail = np.append(penaltytail, penalty)
-                            monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
-                        else:
-                            break
-                else:
-                    penaltytail = penaltytail[0:MIN_TAILLENGTH]
-                    monotonicity_condition = np.all(np.diff(penaltytail) <= 0)
-                if monotonicity_condition:
-                    logging.info("Detected maximum is a sharpness peak!")
-                    lookingforpeak = False
-                    move = None
-                    micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positionhistory[1])
-                    foundfocus = positionhistory[1]
-                else:
-                    logging.info("Detected maximum is noise")
-                    move = 'step down'
-        
-            #V) extend the sharpness function on either side
-            if move == 'step up':
-                pos = positionhistory[-1] + STEPSIZE
-                micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
-                I = camera.snap()
-                pen = ia.comp_variance_of_Laplacian(I)
-                penaltyhistory = np.append(penaltyhistory, pen)
-                positionhistory = np.append(positionhistory, pos)
-            elif move == 'step down':
-                pos = positionhistory[0] - STEPSIZE
-                micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
-                I = camera.snap()
-                pen = ia.comp_variance_of_Laplacian(I)
-                penaltyhistory = np.append(pen, penaltyhistory)
-                positionhistory = np.append(pos, positionhistory)
-        
-        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                   #FLAG: relevant for MSc thesis
-        np.save(save_directory+'autofocus_positionhistory_'+timestamp, positionhistory) #FLAG: relevant for MSc thesis
-        np.save(save_directory+'autofocus_penaltyhistory_'+timestamp, penaltyhistory)   #FLAG: relevant for MSc thesis
-        
-        #VI) continue with finding the fine focus position
-        logging.info('Coarse focus found, continue with finetuning')
-        for step in [STEPSIZE, STEPSIZE/3]:
-            # Sample six points between the last three penalty scores
-            penalties = np.zeros(7)
-            positions = np.linspace(foundfocus-step, foundfocus+step, 7)
-            for idx, pos in enumerate(positions):
-                # (emergency) stop
-                if self.STOP:
-                    break
-                micromanipulator.moveAbs(x=reference[0], y=reference[1], z=pos)
-                I = camera.snap()
-                penalties[idx] = ia.comp_variance_of_Laplacian(I)
-                positionhistory = np.append(positionhistory, pos)
-                penaltyhistory = np.append(penaltyhistory, penalties[idx])
-            
-            # Locate maximum penalty value
-            foundfocus = positions[np.argmax(penalties)]
-            
-            # emit graph
-            self.graph.emit(np.vstack([positions,penalties]))
-        
-        # emit graph
-        self.graph.emit(np.vstack([positionhistory,penaltyhistory]))
-        
-        #VIIa) move pipette into focus
-        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=foundfocus)
-        
-        I = camera.snap()                                                                   #FLAG: relevant for MSc thesis
-        io.imsave(save_directory+'autofocus_'+timestamp+'.tif', I, check_contrast=False)    #FLAG: relevant for MSc thesis
-        np.save(save_directory+'autofocus_positionhistory_'+timestamp, positionhistory)     #FLAG: relevant for MSc thesis
-        np.save(save_directory+'autofocus_penaltyhistory_'+timestamp, penaltyhistory)       #FLAG: relevant for MSc thesis
-        
-        #VIIb) return objective to original position
-        objective.moveAbs(z=objective_position_reference)
-        
-        self.finished.emit()
-    
-    
-    @pyqtSlot()
-    def target2center(self):
-        """ Target to center moves the XY stage so that the user-selected
-        target ends up in the center of the camera field-of-view.
-        
-        The camera field-of-view is turned 90 degrees counter-clockwise 
-        compared to the ludl XY sample stage.
-        """
-        self.progress.emit("Centering target...")
-        
-        stage = self._parent.XYstage
-        pixelsize = self._parent.pixel_size
-        width,height = self._parent.image_size
-        xtarget,ytarget,_ = self._parent.target_coordinates
-        
-        # Calculate image center pixels
-        xcenter,ycenter = int(width/2),int(height/2)
-        
-        # Caculate path to travel from target to center
-        dx_pi = (xtarget - xcenter)    #in pixels
-        dy_pi = (ytarget - ycenter)    #in pixels
-        
-        # Convert pixels to ludl indices (1577 ludl index = 340 um)
-        dx = int(dx_pi * pixelsize/1000 * 1577/340)
-        dy = int(dy_pi * pixelsize/1000 * 1577/340)
-        
-        # Move XY stage a distance (-dx,-dy), note that stage axis are rotated
-        ismoving = True
-        stage.moveRel(xRel=dy, yRel=-dx)
-        while ismoving:
-            ismoving = not stage.motorsStopped()
-            time.sleep(0.1)
-        
-        # Update target coordinates in the backend
-        self.parent.target_coordinates = np.array([xcenter,ycenter,None])
-        self.draw.emit(['target', dx_pi, dy_pi])
-        
+        self.status.emit("Tip-detection finished")
         self.finished.emit()
     
     
@@ -609,39 +658,11 @@ class Worker(QObject):
     def pipette2target(self):
         """ Pipette tip to target manoeuvres the micromanipulator to a target
         in the camera field-of-view
-        """
-        self.progress.emit("Approaching target...")
         
-        micromanipulator = self._parent.micromanipulator
-        account4rotation = self._parent.account4rotation
-        pixelsize = self._parent.pixel_size
-        tipcoords_manip,tipcoords_cam = self._parent.pipette_coordinates_pair
-        xtarget,ytarget,_ = self._parent.target_coordinates
-        
-        # Calculate shortest trajectory to target and apply coordinate transformation
-        dx = xtarget - tipcoords_cam[0]                     #x trajectory (in pixels)
-        dy = ytarget - tipcoords_cam[1]                     #y trajectory (in pixels)
-        trajectory = np.array([dx,dy,0])*pixelsize/1000     #trajectory (in microns)
-        trajectory = account4rotation(origin=np.zeros(3), target=trajectory)
-        
-        # Manoeuvre pipette above target and descent the focal offset
-        micromanipulator.moveAbs(x=tipcoords_manip[0]+trajectory[0],
-                                 y=tipcoords_manip[1]+trajectory[1],
-                                 z=tipcoords_manip[2]+trajectory[2])
-        
-        self.finished.emit()
-    
-    
-    @pyqtSlot()
-    def formgigaseal(self):
-        """ Form Gigaseal brings the pipette to the target cell and forms a 
-        gigaseal with the membrane.
-        
-        I) Set pressure to 100 mBar.
+        I) Apply small overpressure.
         II) Calculate trajectory and bring pipette tip above the target cell.
         III) Pipette tip descent until resistance increases slightly.
-        IV) Set pressure to ATM.
-        V) Release pressure, possibly apply light suction, to form Gigaseal.
+        IV) Release pressure.
         
         Safety measures in place:
             <!>     Pipette descent range: <50 microns so pipette does not
@@ -651,8 +672,9 @@ class Worker(QObject):
                     in an abrupt drop in resistance after which we stop
                     pipette descent immediately.
         """
-        self.progress.emit("Gigasealing...")
+        self.status.emit("Approaching target...")
         
+        # get all relevant parent attributes
         save_directory = self._parent.save_directory
         micromanipulator = self._parent.micromanipulator
         pressurecontroller = self._parent.pressurethread
@@ -666,8 +688,7 @@ class Worker(QObject):
         R_CRITICAL = 0.15e6         # ohm
         PIPETTE_DESCENT_RANGE = 50  # microns
         STEPSIZE = 0.2              # microns
-        TIMEOUT = 50                # seconds
-        PIPETTE_PRESSURE = 50       # mBar
+        PIPETTE_PRESSURE = 30       # mBar
         
         #I) make sure pressure is set at the right value
         pressurecontroller.set_pressure_stop_waveform(PIPETTE_PRESSURE)
@@ -683,14 +704,11 @@ class Worker(QObject):
                                  y=tipcoords_manip[1]+trajectory[1],
                                  z=tipcoords_manip[2]+trajectory[2])
         micromanipulator.moveRel(dz=20-focus_offset)
-        time.sleep(0.5)
         
         #IIIa) measure resistance and set graph thresholds
+        time.sleep(0.5)
         resistance_ref = np.nanmean(self._parent.resistance)
-        logging.info('Gigaseal resistance reference set at: '+str(resistance_ref*1e-6)+' MΩ')
-        self.draw.emit(['algorithm threshold',resistance_ref+1.2*R_CRITICAL, resistance_ref-1.2*R_CRITICAL])
-        logging.info("Upper threshold: "+str(round((resistance_ref+R_CRITICAL)*1e-6, 2)))
-        logging.info("Lower threshold: "+str(round((resistance_ref-R_CRITICAL)*1e-6, 2)))
+        self.progress.emit("Approach R reference: "+"{:.2f}".format(resistance_ref*1e-6)+" MΩ. Contact R: "+"{:.2f}".format(R_CRITICAL*1e-6)+"MΩ")
         
         #IIIb) descent pipette until R increases by R_CRITICAL
         resistance = resistance_ref
@@ -702,59 +720,96 @@ class Worker(QObject):
             micromanipulator.moveRel(dx=0, dy=0, dz=-STEPSIZE)
             position = micromanipulator.getPos()[2]
             resistance = np.nanmean(self._parent.resistance[-10::])
-            self.graph.emit(resistancehistory)
+            self.graph2.emit(resistancehistory)
             
             # safety checks on maximum descent range and resistance drop
             if resistance < resistance_ref-R_CRITICAL:
-                logging.info("Tip broke")
+                self.progress.emit("Tip broke")
                 break
             else:
                 resistancehistory = np.append(resistancehistory, resistance)
             if positionhistory[-1]-positionhistory[0] >= PIPETTE_DESCENT_RANGE:
-                logging.info("Maximum descent range achieved")
+                self.progress.emit("Maximum descent range achieved")
                 break
             else:
                 positionhistory = np.append(positionhistory, position)
         
         #IV) set pressure to ATM
-        self.draw.emit(['remove algorithm threshold'])
         if not self.STOP:
             pressurecontroller.set_pressure_stop_waveform(0)
         
-        #Va) wait for Gigaseal
-        logging.info("Attempting gigaseal...")
-        start = time.time()
-        while resistance < 1e9 and time.time()-start < 10 and not self.STOP:
-            resistance = np.nanmax(self._parent.resistance[-10::])
-            self.graph.emit(resistancehistory)
-            resistancehistory = np.append(resistancehistory, resistance)
-            time.sleep(0.1)
+        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))   
+        np.save(save_directory+'approach_positionhistory_'+timestamp, positionhistory)      #FLAG: relevant for MSc thesis
+        np.save(save_directory+'approach_resistancehistory_'+timestamp, resistancehistory)  #FLAG: relevant for MSc thesis
         
-        #Vb) wait for Gigaseal with suction pulses
-        if resistance > 1e9:
-            logging.info("Gigaseal formed!")
-        elif not self.STOP:
-            logging.info("Timeout reached, starting suction pulses...")
+        self.status.emit("Approach finished")
+        self.finished.emit()
+    
+    
+    @pyqtSlot()
+    def gigaseal(self):
+        """ Gigaseal applies suction to get seal a patch of cell membrane.
+        
+        Ia) Apply low suction waves.
+        Ib) Apply high suction waves.
+        II) Set pressure to atmoshpere.
+        """
+        self.status.emit("Gigasealing...")
+        
+        # get all relevant parent attributes
+        save_directory = self._parent.save_directory
+        pressurecontroller = self._parent.pressurethread
+        tipcoords_manip,tipcoords_cam = self._parent.pipette_coordinates_pair
+        xtarget,ytarget,_ = self._parent.target_coordinates
+        
+        # Algorithm variables
+        TIMEOUT = 60                # seconds
+        
+        #Ia) wait for Gigaseal with suction pulses
+        resistance = np.nanmean(self._parent.resistance[-10::])
+        resistancehistory = np.array([resistance])
+        if resistance < 1e9 and not self.STOP:
+            self.progress.emit("Applying waves of light suction")
             start = time.time()
-            pressurecontroller.set_waveform(high=-10, low=-30, high_T=3, low_T=1.5)
+            pressurecontroller.set_waveform(high=0, low=-10, high_T=1, low_T=1)
             while resistance < 1e9 and time.time()-start < TIMEOUT and not self.STOP:
                 resistance = np.nanmax(self._parent.resistance[-10::])
-                self.graph.emit(resistancehistory)
+                self.graph2.emit(resistancehistory)
                 resistancehistory = np.append(resistancehistory, resistance)
                 time.sleep(0.1)
-            pressurecontroller.set_pressure_stop_waveform(0)
-            if resistance > 1e9:
-                logging.info("Gigaseal formed!")
-            else:
-                logging.info("Gigaseal failed, find an easier cell please...")
-                pressurecontroller.set_pressure_stop_waveform(PIPETTE_PRESSURE)
+        
+        #Ib) wait for Gigaseal with increased suction pulses
+        if resistance < 1e9 and not self.STOP:
+            self.progress.emit("Applying waves of stronger suction")
+            start = time.time()
+            pressurecontroller.set_waveform(high=-10, low=-30, high_T=1, low_T=1)
+            while resistance < 1e9 and time.time()-start < TIMEOUT and not self.STOP:
+                resistance = np.nanmax(self._parent.resistance[-10::])
+                self.graph2.emit(resistancehistory)
+                resistancehistory = np.append(resistancehistory, resistance)
+                time.sleep(0.1)
+        
+        #II) Release pressure
+        pressurecontroller.set_pressure_stop_waveform(0)
+        
+        # Evaluate seal formation by fast sampling
+        if resistance > 1e9:
+            self.progress.emit("Gigaseal formed!")
+            start = time.time()
+            while time.time()-start < 5:
+                resistance = np.nanmax(self._parent.resistance[-10::])
+                self.graph2.emit(resistancehistory)
+                resistancehistory = np.append(resistancehistory, resistance)
+        else:
+            self.progress.emit("Gigaseal failed")
         
         timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))   
-        np.save(save_directory+'gigaseal_positionhistory_'+timestamp, positionhistory)      #FLAG: relevant for MSc thesis
         np.save(save_directory+'gigaseal_resistancehistory_'+timestamp, resistancehistory)  #FLAG: relevant for MSc thesis
         
+        self.status.emit("Gigaseal finished")
         self.finished.emit()
-        
+    
+    
     @pyqtSlot()
     def break_in(self):
         """ Break-in applies pressure pulses to rupture the membrane patch.
@@ -765,8 +820,9 @@ class Worker(QObject):
         The break-in is successful if the resistance drops below 300MΩ and the
         current is in the range [-300, 300]pA.
         """
-        self.progress.emit("Breaking in...")
+        self.status.emit("Break-in...")
         
+        # get all relevant parent attributes
         save_directory = self._parent.save_directory
         pressurecontroller = self._parent.pressurethread
         sealtestthread = self._parent.sealtestthread
@@ -779,8 +835,8 @@ class Worker(QObject):
         PULSES = np.linspace(-100, -300, 15)
         SUCCESS = False
         
-        # I) attempt breaking in by increasing suction pulses 
-        logging.info("Attempting break-in...")
+        # I) attempt breaking-in by increasing suction pulses 
+        self.progress.emit("Attempt i - increasing suction pulses")
         resistancehistory = np.array([])
         currenthistory = np.array([[],[]])
         start = time.time()
@@ -798,15 +854,16 @@ class Worker(QObject):
                          break
             else:
                 pressurecontroller.set_pulse_stop_waveform(PULSES[i%len(PULSES)])
-                time.sleep(2)
+                time.sleep(1)
             currenthistory = np.append(currenthistory, np.array([[Imax],[Imin]]), axis=1)
             resistancehistory = np.append(resistancehistory, resistance)
-            self.graph.emit(resistancehistory)
+            self.graph2.emit(resistancehistory)
         
         # II) second attempt but with zap
+        self.progress.emit("Attempt ii - increasing suction pulses with ZAP")
         start = time.time()
         i = 0
-        while time.time()-start < TIMEOUT/2 and not SUCCESS and not self.STOP:
+        while time.time()-start < TIMEOUT/6 and not SUCCESS and not self.STOP:
             i += 1
             Imax = np.max(self._parent.current)
             Imin = np.min(self._parent.current)
@@ -823,9 +880,10 @@ class Worker(QObject):
                 time.sleep(2)
             currenthistory = np.append(currenthistory, np.array([[Imax],[Imin]]), axis=1)
             resistancehistory = np.append(resistancehistory, resistance)
-            self.graph.emit(resistancehistory)
+            self.graph2.emit(resistancehistory)
         
         # III) third attempt but with zap and longer suction
+        self.progress.emit("Attempt iii - ZAP and strong suction pulses")
         start = time.time()
         while time.time()-start < TIMEOUT/2 and not SUCCESS and not self.STOP:
             Imax = np.max(self._parent.current)
@@ -839,19 +897,25 @@ class Worker(QObject):
                         break
             else:
                 sealtestthread.zap()
-                pressurecontroller.set_pulse_stop_waveform(-100)
-                pressurecontroller.set_pressure_stop_waveform(-100)
+                pressurecontroller.set_pulse_stop_waveform(-250)
+                pressurecontroller.set_pressure_stop_waveform(-200)
                 time.sleep(0.5)
-                pressurecontroller.set_pulse_stop_waveform(-150)
+                pressurecontroller.set_pulse_stop_waveform(-300)
                 time.sleep(2)
             currenthistory = np.append(currenthistory, np.array([[Imax],[Imin]]), axis=1)
             resistancehistory = np.append(resistancehistory, resistance)
-            self.graph.emit(resistancehistory)
+            self.graph2.emit(resistancehistory)
+        
+        if SUCCESS:
+            self.progress.emit("Break-in successful")
+        else:
+            self.progress.emit("failed to break in")
         
         # IV) measure and average sliding windows for saving
         slidingwindow_current = self._parent.current
         for i in range(0,10):
             slidingwindow_current += self._parent.current
+            time.sleep(0.1)
         slidingwindow_current = slidingwindow_current/10
         
         timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
@@ -859,6 +923,5 @@ class Worker(QObject):
         np.save(save_directory+'breakin_resistancehistory_'+timestamp, resistancehistory)  #FLAG: relevant for MSc thesis
         np.save(save_directory+'breakin_slidingwindowcurrent_'+timestamp, slidingwindow_current)  #FLAG: relevant for MSc thesis
         
+        self.status.emit("Break-in finished")
         self.finished.emit()
-                    
-

@@ -34,10 +34,16 @@ class SmartPatcher(QObject):
         self.update_constants_from_JSON()           # overwrite constants from JSON
         
         # Autopatch variables
+        self.save_directory = os.getcwd()+'\\feedback\\'
         self._state_message = "-"
         self._progress_message = "-"
         self._operation_mode = "Default"
         self._resistance_reference = None           # in MΩ
+        self._target_coordinates = np.array(        # [X, Y, Z] in pixels
+            [None,None,None])
+        self._pipette_coordinates_pair = np.array(  # [micromanipulator, camera/objective]
+            [[None,None,None], [None,None,None]])
+        
         
         # Data collection
         self.window_size_i = 200
@@ -63,7 +69,19 @@ class SmartPatcher(QObject):
         self.worker.finished.connect(self.thread.quit)
     
     
+    def emergency_stop(self, state):
+        self.worker.STOP = state
+    
+    
     def request(self, name, mode='Default'):
+        """
+        The autopatcher runs on a separate cpu core (thread). This function
+        disconnects a method slot from the thread - if it is not running - and
+        connects a new method slot to that thread. Then we start the thread.
+        
+        Note:   It is possible to connect multiple slots or to connect the same
+                slot multiple times. Beware because they will run all at once.
+        """
         if self.thread.isRunning() == True:
             pass
         else:
@@ -87,6 +105,32 @@ class SmartPatcher(QObject):
                     raise ValueError('Camera and/or micromanipulator not connected')
                 else:
                     self.thread.started.connect(self.worker.hardcalibration)
+            elif name == 'pre-checks':
+                if self.sealtestthread == None or self.pressurethread == None:
+                    raise ValueError('Patch amplifier and/or pressure controller not connected')
+                else:
+                    self.thread.started.connect(self.worker.prechecks)
+            elif name == 'autopatch':
+                if self.camerathread == None or self.micromanipulator == None or self.objectivemotor == None:
+                    raise ValueError('Camera, objective and/or micromanipulator not connected')
+                else:
+                    self.thread.started.connect(self.worker.autopatch)
+            elif name == 'approach':
+                if self.sealtestthread == None or self.pressurethread == None or self.micromanipulator == None or \
+                    np.array_equal(self.target_coordinates, [None,None,None]) or np.array_equal(self.pipette_coordinates_pair, [[None,None,None], [None,None,None]]):
+                    raise ValueError('Target not selected, pipette tip not detected, Patch amplifier, pressure controller and/or micromanipulator not connected')
+                else:
+                    self.thread.started.connect(self.worker.pipette2target)
+            elif name == 'gigaseal':
+                if self.sealtestthread == None or self.pressurethread == None:
+                    raise ValueError('Sealtest and/or pressure controller not connected')
+                else:
+                    self.thread.started.connect(self.worker.gigaseal)
+            elif name == 'break-in':
+                if self.sealtestthread == None or self.pressurethread == None:
+                    raise ValueError('Sealtest and/or pressure controller not connected')
+                else:
+                    self.thread.started.connect(self.worker.break_in)
             elif name == 'mockworker':
                     self.thread.started.connect(self.worker.mockworker)
             
@@ -121,6 +165,29 @@ class SmartPatcher(QObject):
         filedirectory = os.path.dirname(os.path.abspath('__file__'))
         with open(filedirectory+"/autopatch_configuration.txt", "w") as json_outfile:
             json.dump(data, json_outfile)
+    
+    
+    def account4rotation(self, origin, target):
+        """
+        This function accounts for the misalignment of the micromanipulator
+        w.r.t the camera FOV. The origin is the rotation point where the
+        rotation matrix R rotates about.
+        
+        input:
+            origin = point of rotation (np.ndarray with shape (3,))
+            target = target coordinates (np.ndarray with shape (3,))
+        output:
+            newtarget = rotated target coordinates (np.ndarray with shape (3,))
+        """
+        if isinstance(origin, np.ndarray) and isinstance(target, np.ndarray):
+            if origin.shape == (3,) and target.shape == (3,):
+                pass
+            else:
+                raise ValueError('origin and target should have shape (3,)')
+        else:
+            raise ValueError('origin and target should be numpy.ndarray')
+        
+        return self.R @ np.subtract(target,origin) + origin
     
     
     @property
@@ -352,6 +419,32 @@ class SmartPatcher(QObject):
         self._image_size = [None, None]
     
     @property
+    def pipette_orientation(self):
+        return self._pipette_orientation
+    @pipette_orientation.setter
+    def pipette_orientation(self, angle):
+        if isinstance(angle, float) or isinstance(angle, int):
+            self._pipette_orientation = angle
+        else:
+            raise ValueError('micromanipulator orientation should be a float or integer')
+    @pipette_orientation.deleter
+    def pipette_orientation(self):
+        self._pipette_orientation = None
+    
+    @property
+    def pipette_diameter(self):
+        return self._pipette_diameter
+    @pipette_diameter.setter
+    def pipette_diameter(self, diameter):
+        if isinstance(diameter, float) or isinstance(diameter, int):
+            self._pipette_diameter = diameter
+        else:
+            raise ValueError('Pipette opening diameter should be a float or integer')
+    @pipette_diameter.deleter
+    def pipette_diameter(self):
+        self._pipette_diameter = None
+    
+    @property
     def rotation_angles(self):
         return self._rotation_angles
     @rotation_angles.setter
@@ -370,6 +463,16 @@ class SmartPatcher(QObject):
     def rotation_angles(self):
         self._rotation_angles = [0,0,0]
         del self.R
+    
+    @property
+    def focus_offset(self):
+        return self._focus_offset
+    @focus_offset.setter
+    def focus_offset(self, offset):
+        self._focus_offset = offset
+    @focus_offset.deleter
+    def focus_offset(self):
+        self._focus_offset = None
     
     
     @property
@@ -455,9 +558,37 @@ class SmartPatcher(QObject):
     def resistance_reference(self):
         self._resistance_reference = None
     
+    @property
+    def target_coordinates(self):
+        return self._target_coordinates
+    @target_coordinates.setter
+    def target_coordinates(self, coords):
+        if isinstance(coords, np.ndarray):
+            if coords.shape == (3,):
+                self._target_coordinates = coords
+            else:
+                raise ValueError('length of target coordinates must be 3')
+        else:
+            raise ValueError('target coordinates should be a numpy.ndarray')
+    @target_coordinates.deleter
+    def target_coordinates(self):
+        self._pipette_coordinates = np.array([None, None, None])
     
-    
-    
+    @property
+    def pipette_coordinates_pair(self):
+        return self._pipette_coordinates_pair
+    @pipette_coordinates_pair.setter
+    def pipette_coordinates_pair(self, coords):
+        if isinstance(coords, np.ndarray):
+            if coords.shape == (2,3):
+                self._pipette_coordinates_pair = coords
+            else:
+                raise ValueError('coordinates-pair size should be 2x3')
+        else:
+            raise ValueError('pipette coordinates should be a numpy.ndarray')
+    @pipette_coordinates_pair.deleter
+    def pipette_coordinates_pair(self):
+        self._pipette_coordinates_pair = np.array([[None,None,None], [None,None,None]])
     
     
     

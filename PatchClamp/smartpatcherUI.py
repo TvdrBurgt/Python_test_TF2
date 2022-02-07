@@ -7,8 +7,6 @@ Created on Sat Feb  5 16:34:10 2022
 
 import sys
 import numpy as np
-import logging
-import matplotlib.pyplot as plt
 
 from skimage import io
 
@@ -186,34 +184,39 @@ class PatchClampUI(QWidget):
         autopatchLayout = QGridLayout()
         
         # Buttons for autopatch algorithms
-        request_prechecks = QPushButton(text="Pre-checks", clicked=self.mockfunction)
-        request_selecttarget = QPushButton(text="Select target", clicked=self.mockfunction)
-        request_start_autopatch = QPushButton(text="Start autopatch", clicked=self.mockfunction)
-        request_manual_calibration = QPushButton(text="Correct tip location", clicked=self.mockfunction)
-        request_start_approach = QPushButton(text="Start from target approach", clicked=self.mockfunction)
-        request_start_gigaseal = QPushButton(text="Start from gigaseal", clicked=self.mockfunction)
-        request_start_breakin = QPushButton(text="Start from break-in", clicked=self.mockfunction)
-        request_stop = QPushButton(text="STOP!", clicked=self.mockfunction)
+        request_prechecks_button = QPushButton(text="Pre-checks", clicked=self.request_prechecks)
+        request_selecttarget_button = QPushButton(text="Select target", clicked=self.request_selecttarget)
+        request_confirmtarget_button = QPushButton(text="Confirm target", clicked=self.request_confirmtarget)
+        request_start_autopatch_button = QPushButton(text="Start autopatch", clicked=self.request_start_autopatch)
+        request_manual_adjustment_button = QPushButton(text="Correct tip", clicked=self.request_manual_adjustment)
+        request_adjustment_confirm_button = QPushButton(text="Confirm tip", clicked=self.request_adjustment_confirm)
+        request_start_approach_button = QPushButton(text="Start target approach", clicked=self.request_start_approach)
+        request_start_gigaseal_button = QPushButton(text="Start gigaseal", clicked=self.request_start_gigaseal)
+        request_start_breakin_button = QPushButton(text="Start break-in", clicked=self.request_start_breakin)
+        request_stop_button = QPushButton(text="STOP!", clicked=self.request_emergency_stop)
+        request_stop_button.setCheckable(True)
         
         # Labels for autopatch status and progress updates
         autopatch_status_label = QLabel("Autopatch status:")
         autopatch_progress_label = QLabel("Progress updates:")
-        self.autopatch_status = QLabel("Status")
+        self.autopatch_status = QLabel("Ready")
         self.autopatch_progress = QLabel("-")
         self.autopatch_status.setFont(QFont("Times", weight=QFont.Bold))
         
-        autopatchLayout.addWidget(request_prechecks, 0, 0, 1, 2)
-        autopatchLayout.addWidget(request_selecttarget, 1, 0, 1, 2)
-        autopatchLayout.addWidget(request_start_autopatch, 2, 0, 1, 2)
-        autopatchLayout.addWidget(request_manual_calibration, 3, 0, 1, 2)
-        autopatchLayout.addWidget(request_start_approach, 4, 0, 1, 2)
-        autopatchLayout.addWidget(request_start_gigaseal, 5, 0, 1, 2)
-        autopatchLayout.addWidget(request_start_breakin, 6, 0, 1, 2)
-        autopatchLayout.addWidget(request_stop, 7, 0, 1, 2)
-        autopatchLayout.addWidget(autopatch_status_label, 8, 0, 1, 1)
-        autopatchLayout.addWidget(self.autopatch_status, 8, 1, 1, 1)
-        autopatchLayout.addWidget(autopatch_progress_label, 9, 0, 1, 1)
-        autopatchLayout.addWidget(self.autopatch_progress, 9, 1, 1, 1)
+        autopatchLayout.addWidget(request_prechecks_button, 0, 0, 1, 2)
+        autopatchLayout.addWidget(request_selecttarget_button, 1, 0, 1, 1)
+        autopatchLayout.addWidget(request_confirmtarget_button, 1, 1, 1, 1)
+        autopatchLayout.addWidget(request_start_autopatch_button, 2, 0, 1, 2)
+        autopatchLayout.addWidget(request_manual_adjustment_button, 3, 0, 1, 1)
+        autopatchLayout.addWidget(request_adjustment_confirm_button, 3, 1, 1, 1)
+        autopatchLayout.addWidget(request_start_approach_button, 4, 0, 1, 2)
+        autopatchLayout.addWidget(request_start_gigaseal_button, 5, 0, 1, 2)
+        autopatchLayout.addWidget(request_start_breakin_button, 6, 0, 1, 2)
+        autopatchLayout.addWidget(request_stop_button, 7, 0, 1, 2)
+        autopatchLayout.addWidget(autopatch_status_label, 8, 0, 1, 2)
+        autopatchLayout.addWidget(self.autopatch_status, 9, 0, 1, 2)
+        autopatchLayout.addWidget(autopatch_progress_label, 10, 0, 1, 2)
+        autopatchLayout.addWidget(self.autopatch_progress, 11, 0, 1, 2)
         autopatchContainer.setLayout(autopatchLayout)
         
         """
@@ -322,42 +325,42 @@ class PatchClampUI(QWidget):
         sensorLayout = QGridLayout()
         
         # Algorithm plot
-        algorithmPlot = pg.PlotWidget()
-        algorithmPlot.setTitle("Sharpness graph")
-        algorithmPlot.setLabel("left", text="a.u.")
-        algorithmPlot.setLabel("bottom", text="a.u.")
-        self.algorithmPlot = algorithmPlot.plot(pen=(1,4))
+        algorithmPlotWidget = pg.PlotWidget()
+        algorithmPlotWidget.setTitle("Sharpness graph")
+        algorithmPlotWidget.setLabel("left", text="a.u.")
+        algorithmPlotWidget.setLabel("bottom", text="a.u.")
+        self.algorithmPlot = algorithmPlotWidget.plot(pen=(1,4))
         
         # Current plot
-        currentPlot = pg.PlotWidget()
-        currentPlot.setTitle("Current")
-        currentPlot.setLabel("left", units="A")
-        currentPlot.setLabel("bottom", text="20 ms")
-        self.currentPlot = currentPlot.plot(pen=(2,4))
+        currentPlotWidget = pg.PlotWidget()
+        currentPlotWidget.setTitle("Current")
+        currentPlotWidget.setLabel("left", units="A")
+        currentPlotWidget.setLabel("bottom", text="20 ms")
+        self.currentPlot = currentPlotWidget.plot(pen=(2,4))
         
         # Resistance plot
-        resistancePlot = pg.PlotWidget()
-        resistancePlot.setTitle("Resistance")
-        resistancePlot.setLabel("left", units="Ω")
-        resistancePlot.setLabel("bottom", text="20 ms")
-        self.resistancePlot = resistancePlot.plot(pen=(3,4))
+        resistancePlotWidget = pg.PlotWidget()
+        resistancePlotWidget.setTitle("Resistance")
+        resistancePlotWidget.setLabel("left", units="Ω")
+        resistancePlotWidget.setLabel("bottom", text="20 ms")
+        self.resistancePlot = resistancePlotWidget.plot(pen=(3,4))
         
         # Pressure plot
-        pressurePlot = pg.PlotWidget()
-        pressurePlot.setTitle("Pressure")
-        pressurePlot.setLabel("left", units="mBar")
-        pressurePlot.setLabel("bottom", text="time", units="s")
-        self.pressurePlot = pressurePlot.plot(pen=(4,4))
+        pressurePlotWidget = pg.PlotWidget()
+        pressurePlotWidget.setTitle("Pressure")
+        pressurePlotWidget.setLabel("left", units="mBar")
+        pressurePlotWidget.setLabel("bottom", text="time", units="s")
+        self.pressurePlot = pressurePlotWidget.plot(pen=(4,4))
         
         # Reset plot button
         request_resetplots_button = QPushButton(text="Reset all plots", clicked=self.reset_plots)
         
         # Create plot tabs
         self.displayWidget = QTabWidget()
-        self.displayWidget.addTab(algorithmPlot, "Algorithm")
-        self.displayWidget.addTab(resistancePlot, "Resistance")
-        self.displayWidget.addTab(currentPlot, "Current")
-        self.displayWidget.addTab(pressurePlot, "Pressure")
+        self.displayWidget.addTab(algorithmPlotWidget, "Algorithm")
+        self.displayWidget.addTab(resistancePlotWidget, "Resistance")
+        self.displayWidget.addTab(currentPlotWidget, "Current")
+        self.displayWidget.addTab(pressurePlotWidget, "Pressure")
         
         sensorLayout.addWidget(self.displayWidget, 0, 0, 1, 1)
         sensorLayout.addWidget(request_resetplots_button, 1, 0, 1, 1)
@@ -393,9 +396,11 @@ class PatchClampUI(QWidget):
         =======================================================================
         """
         self.backend = SmartPatcher()
-        # self.backend.worker.draw.connect(self.draw_roi)
-        # self.backend.worker.graph.connect(self.update_algorithmplot)
-        # self.backend.worker.progress.connect(self.update_autopatch_status)
+        self.backend.worker.draw.connect(self.draw_roi)
+        self.backend.worker.graph1.connect(self.update_algorithmplot)
+        self.backend.worker.graph2.connect(self.update_resistanceplot)
+        self.backend.worker.status.connect(self.update_autopatch_status)
+        self.backend.worker.progress.connect(self.update_autopatch_progress)
         self.backend.worker.finished.connect(self.update_constants_from_backend)
         
         """
@@ -593,6 +598,108 @@ class PatchClampUI(QWidget):
             raise AttributeError('no camera connected')
     
     
+    def request_prechecks(self):
+        self.backend.request(name='pre-checks')
+    
+    def request_selecttarget(self):
+        """
+        The user drags a circular ROI on top of the target cell. The ROI center
+        is the target. We first check if a target already exists, if so, we
+        recycle it. If the target ROI got removed then we place it back to its
+        last known position.
+        """
+        self.request_pause_button.setChecked(True)
+        self.toggle_pauselive()
+        
+        coords = self.backend.target_coordinates
+        if all(values is None for values in coords):
+            coords = (0,0)
+        else:
+            coords = (coords[0]-60,coords[1]-60)
+            
+        if not self.roimanager.contains('target'):
+            target = pg.CircleROI(pos=coords, radius=60, movable=True, pen=QPen(QColor(255,255,0), 0))
+            target.setZValue(10)
+            self.roimanager.addROI('target')
+            self.liveView.addItem(target)
+        else:
+            idx = self.roimanager.giveROIindex('target')[-1]
+            self.liveView.addedItems[idx].translatable = True
+            self.liveView.addedItems[idx].setPen(QPen(QColor(255,255,0), 0))
+    
+    def request_confirmtarget(self):
+        """
+        If a target is selected, we save the center coordinates of the ROI in
+        the camera field of reference.
+        """
+        if self.roimanager.contains('target'):
+            idx = self.roimanager.giveROIindex('target')[-1]
+            x,y = self.liveView.addedItems[idx].state['pos'] + self.liveView.addedItems[idx].state['size'] / 2
+            self.liveView.addedItems[idx].translatable = False
+            self.liveView.addedItems[idx].setPen(QPen(QColor(193,245,240), 0))
+            self.backend.target_coordinates = np.array([x,y,None])
+    
+    def request_start_autopatch(self):
+        self.backend.request(name='autopatch')
+    
+    def request_manual_adjustment(self):
+        """
+        The user drags a circular ROI from the detected tip to the real tip.The
+        ROI center is the tip location. We first check if a roi already exists,
+        if so, we recycle it. If the tip ROI got removed then we place it back to its
+        last known position.
+        """
+        self.request_pause_button.setChecked(True)
+        self.toggle_pauselive()
+        self.clearROIs()
+        
+        coords = self.backend.pipette_coordinates_pair[1]
+        if all(values is None for values in coords):
+            coords = (0,0)
+        else:
+            coords = (coords[0]-30,coords[1]-30)
+            
+        if not self.roimanager.contains('tip'):
+            target = pg.CircleROI(pos=coords, radius=30, movable=True, pen=QPen(QColor(255,0,255), 0))
+            target.setZValue(10)
+            self.roimanager.addROI('tip')
+            self.liveView.addItem(target)
+        else:
+            idx = self.roimanager.giveROIindex('tip')[-1]
+            self.liveView.addedItems[idx].translatable = True
+            self.liveView.addedItems[idx].setPen(QPen(QColor(255,0,255), 0))
+    
+    def request_adjustment_confirm(self):
+        """
+        If an adjustment is made, we save the center coordinates of the ROI in
+        the camera field of reference.
+        """
+        if self.roimanager.contains('tip'):
+            idx = self.roimanager.giveROIindex('tip')[-1]
+            x,y = self.liveView.addedItems[idx].state['pos'] + self.liveView.addedItems[idx].state['size'] / 2
+            self.liveView.addedItems[idx].translatable = False
+            self.liveView.addedItems[idx].setPen(QPen(QColor(193,245,240), 0))
+            coords_pair = self.backend.pipette_coordinates_pair
+            coords_pair[1,0] = x
+            coords_pair[1,1] = y
+            self.backend.pipette_coordinates_pair = coords_pair
+    
+    def request_start_approach(self):
+        self.backend.request(name='approach')
+    
+    def request_start_gigaseal(self):
+        self.backend.request(name='gigaseal')
+    
+    def request_start_breakin(self):
+        self.backend.request(name='break-in')
+    
+    def request_emergency_stop(self):
+        if self.STOP_button.isChecked():
+            self.backend.emergency_stop(True)
+        else:
+            self.backend.emergency_stop(False)
+    
+    
     def request_low_positive(self):
         pressure = 30
         self.backend.pressurethread.set_pressure_stop_waveform(pressure)
@@ -647,43 +754,17 @@ class PatchClampUI(QWidget):
         self.backend.sealtestthread.zap()
     
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     def update_live(self, image):
         """
         Image data is retrieved per image and directly displayed.
         """
         self.liveImageItem.setImage(image)
     
-    def update_pressure(self, data):
-        """
-        Pressure data is retrieved as [pressure, timing] and processed in the
-        backend. We retrieve the processed pressure as an array that we can
-        display.
-        """
-        self.backend._pressure_append_(data[0], data[1])
-        pressuredata = self.backend.pressure
-        self.pressurePlot.setData(pressuredata[1], pressuredata[0])
-        self.pressure_value_Label.setText("{:.1f}".format(pressuredata[0,-1]))
+    def update_algorithmplot(self, data):
+        self.algorithmPlot.setData(data[0,:], data[1,:])
+    
+    def update_resistanceplot(self, data):
+        self.resistancePlot.setData(data)
     
     def update_current_voltage(self, voltOut, curOut):
         """
@@ -774,6 +855,16 @@ class PatchClampUI(QWidget):
         self.backend._resistance_append_(R_to_append)
         self.backend._capacitance_append_(C_to_append)
     
+    def update_pressure(self, data):
+        """
+        Pressure data is retrieved as [pressure, timing] and processed in the
+        backend. We retrieve the processed pressure as an array that we can
+        display.
+        """
+        self.backend._pressure_append_(data[0], data[1])
+        pressuredata = self.backend.pressure
+        self.pressurePlot.setData(pressuredata[1], pressuredata[0])
+        self.pressure_value_Label.setText("{:.1f}".format(pressuredata[0,-1]))
     
     def reset_plots(self):
         del self.backend.current
@@ -806,8 +897,11 @@ class PatchClampUI(QWidget):
     
     
     
+    def update_autopatch_status(self, message):
+        self.autopatch_status.setText(message)
     
-    
+    def update_autopatch_progress(self, message):
+        self.autopatch_progress.setText(message)
     
     def update_constants_from_backend(self):
         # self._image_size = [2048, 2048]             # dimension of FOV in pix
@@ -849,7 +943,40 @@ class PatchClampUI(QWidget):
     
     
     
-    
+    def draw_roi(self, *args):
+        label = args[0][0]
+        if label == 'cross':
+            xpos,ypos = args[0][1:3]
+            vertical = pg.ROI(pos=(xpos,ypos-15), size=[1,30], pen=(1,3))
+            horizontal = pg.ROI(pos=(xpos-15,ypos), size=[30,1], pen=(1,3))
+            vertical.setZValue(10)
+            horizontal.setZValue(10)
+            self.roimanager.addROI('cross' + '_vertical')
+            self.roimanager.addROI('cross' + '_horizontal')
+            self.liveView.addItem(vertical)
+            self.liveView.addItem(horizontal)
+        elif label == 'calibrationline':
+            xpos,ypos,orientation = args[0][1:4]
+            if len(self.roimanager.giveROIindex('calibrationline')) == 0:
+                P = (0,3)
+            elif len(self.roimanager.giveROIindex('calibrationline')) == 1:
+                P = (2,3)
+            else:
+                P = (1,3)
+            horizontal = pg.ROI(pos=(xpos-15,ypos), angle=orientation, size=[500,1], pen=P)
+            horizontal.setZValue(10)
+            self.roimanager.addROI('calibrationline')
+            self.liveView.addItem(horizontal)
+        elif label == 'image':
+            img = args[0][1]
+            self.update_live(img)
+        elif label == 'target':
+            dx,dy = args[0][1:3]
+            idx = self.roimanager.giveROIindex('target')[-1]
+            x,y = self.liveView.addedItems[idx].state['pos']
+            self.liveView.addedItems[idx].setPos([x-dx,y-dy])
+        else:
+            print(label + ' is not a known draw-label')
     
     
     def closeEvent(self, event):
@@ -859,6 +986,8 @@ class PatchClampUI(QWidget):
         be reused in the main widget, only then we accept the close event.
         and quit the widget.
         """
+        self.backend.emergency_stop(True)
+        
         try:
             del self.backend.camerathread
         except AttributeError:
@@ -888,7 +1017,8 @@ class PatchClampUI(QWidget):
         
         # Frees the console by quitting the application entirely
         QtWidgets.QApplication.quit() # remove when part of Tupolev!!
-        
+
+
 
 
 
@@ -943,6 +1073,8 @@ class ROIManagerGUI:
             return True
         else:
             return False
+
+
 
 
 
