@@ -96,66 +96,6 @@ class Worker(QObject):
     
     
     @pyqtSlot()
-    def prechecks(self):
-        """ Pre-checks make sure that the patch preparation is successful.
-        We make sure that over pressure is applied before entering the sample
-        medium, but we scale it to the right value. We also check if the
-        pipette is suited for whole-cell patching by checking its resistance.
-        
-        I) set pressure,
-        II) check if resistance is within 3 to 11 MΩ.
-        """
-        self.progress.emit("pre-checks...")
-        
-        # get all relevant parent attributes
-        save_directory = self._parent.save_directory
-        pressurecontroller = self._parent.pressurethread
-        
-        # Algorithm variables
-        P_PRECHECK_CONDITION = 20       # mBar
-        R_PRECHECK_CONDITION = [3,11]   # MΩ
-        SUCCESS = True
-        
-        #I) set pressure to prevent pipette contamination
-        pressure = np.zeros(10)
-        for i in range(0,10):
-            pressure[i] = np.nanmean(self._parent.pressure[-10::])
-        
-        if all(pressure >= P_PRECHECK_CONDITION):
-            logging.info("pressure check passed")
-            pressurecontroller.set_pressure_stop_waveform(50)
-        else:
-            logging.info("pressure check failed")
-            SUCCESS = False
-        
-        #II) measure pipette resistance and check if it is consistent
-        del self._parent.resistance_reference
-        resistance = np.zeros(10)
-        for i in range(0,10):
-            resistance[i] = np.nanmax(self._parent.resistance[-10::])
-            
-        if all(resistance >= R_PRECHECK_CONDITION[0]*1e6) \
-            and all(resistance <= R_PRECHECK_CONDITION[1]*1e6):
-            self._parent.resistance_reference = np.nanmean(resistance)
-            logging.info('resistance check passed')
-        else:
-            logging.info('resistance check passed')
-            SUCCESS = False
-        
-        timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                   #FLAG: relevant for MSc thesis
-        np.save(save_directory+'precheckresistance_'+timestamp, resistance)             #FLAG: relevant for MSc thesis
-        
-        if SUCCESS:
-            pass
-        else:
-            pass
-        self.progress.emit("pre-checks finished)
-        
-        self.finished.emit()
-    
-    
-    
-    @pyqtSlot()
     def hardcalibration(self):
         """ Hardcalibration aligns the coordinate system of the micromanipulator
         with that of the camera field-of-view (FOV) by constructing a rotation
