@@ -417,6 +417,13 @@ class PatchClampUI(QWidget):
         """
     
     
+    def request_imagexygrid(self):                          #FLAG: relevant for MSc thesis
+        self.backend.request(name='request_imagexygrid')    #FLAG: relevant for MSc thesis
+    
+    def request_imagezstack(self):                          #FLAG: relevant for MSc thesis
+        self.backend.request(name='request_imagezstack')    #FLAG: relevant for MSc thesis
+    
+    
     def connect_camerathread(self):
         """
         We initiate the camera by creating the CameraThread object, then we
@@ -892,22 +899,6 @@ class PatchClampUI(QWidget):
         # update labels
         self.rotation_angles_value_label.setText("({:.2f}".format(alpha)+", {:.2f}, ".format(beta)+"{:.2f})".format(gamma))
         self.pixelsize_unit_label.setText("{:.1f}".format(pixelsize)+"x{:.1f}".format(pixelsize))
-        
-    
-    
-    
-    # def request_imagexygrid(self):
-    #     self.backend.request(name='request_imagexygrid')
-    
-    # def request_imagezstack(self):
-    #     self.backend.request(name='request_imagezstack')
-    
-    
-    
-    
-    
-    
-    
     
     
     def draw_roi(self, *args):

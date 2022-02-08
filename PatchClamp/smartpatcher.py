@@ -150,6 +150,10 @@ class SmartPatcher(QObject):
                     raise ValueError('Sealtest and/or pressure controller not connected')
                 else:
                     self.thread.started.connect(self.worker.break_in)
+            elif name == 'request_imagexygrid':                                 #FLAG: relevant for MSc thesis
+                self.thread.started.connect(self.worker.request_imagexygrid)    #FLAG: relevant for MSc thesis
+            elif name == 'request_imagezstack':                                 #FLAG: relevant for MSc thesis
+                self.thread.started.connect(self.worker.request_imagezstack)    #FLAG: relevant for MSc thesis
             
             # start worker
             self.thread.start()
