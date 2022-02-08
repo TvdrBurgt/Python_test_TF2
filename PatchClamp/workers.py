@@ -313,16 +313,30 @@ class Worker(QObject):
         Image analysis is not precise enough and the user has to correct the
         localization offset.
         
-        I) Activate the autofocus step
-        II) Activate the softcalibration step
+        I) Register focal height (where in-focus cells should be)).
+        II) Activate the autofocus algorithm.
+        III) Activate the softcalibration algorithm.
+        IV) Return focal plane.
         """
         self.status.emit("autopatching...")
         
-        # Focus pipette tip
+        # get all relevant parent attributes
+        objective = self._parent.objectivemotor
+        xtarget,ytarget,ztarget = self._parent.target_coordinates
+        
+        #I) Register target cell height
+        ztarget = objective.getPos()
+        self._parent.target_coordinates = np.array([xtarget, ytarget, ztarget])
+        
+        #II) Focus pipette tip
         self.autofocus_tip()
         
-        # Detect pipette tip
+        #III) Detect pipette tip
         self.softcalibration()
+        
+        #IV) Return focal plane to target cell height
+        self.progress.emit("Return focal plane to cell height")
+        objective.moveAbs(ztarget)
         
         self.status.emit("autopatch finished")
         self.progress.emit("Warning: CHECK TIP LOCALIZATION!")
@@ -368,8 +382,6 @@ class Worker(QObject):
         positionhistory = np.array([])
         
         #I) move objective up to not penatrate cells when focussing
-        ztarget = objective.getPos()
-        self._parent.target_coordinates = np.array([xtarget, ytarget, ztarget])
         objective.moveAbs(z=ztarget+focus_offset/1000)
         
         #II) fill first three sharpness scores towards the tail of the graph
@@ -586,7 +598,7 @@ class Worker(QObject):
         O = self._parent.pipette_orientation
         
         # algorithm variables
-        CALIBRATION_HEIGHT = focus_offset+20  #microns above coverslip (autofocus has bias of ~20micron)
+        CALIBRATION_HEIGHT = focus_offset+30  #microns above coverslip (+term = bias + height above focus for tip detection)
         POSITIONS = np.array([[-25,-25,0],
                               [25,-25,0],
                               [25,25,0],
@@ -609,7 +621,7 @@ class Worker(QObject):
             # pipette tip detection algorithm
             x1, y1 = ia.detectPipettetip(image_left, image_right, diameter=D, orientation=O)
             self.draw.emit(['cross',x1,y1])
-            W = ia.makeGaussian(size=image_left.shape, mu=(x1,y1), sigma=(image_left.shape[0]//12,image_left.shape[1]//12))
+            W = ia.makeGaussian(size=image_left.shape, mu=(x1,y1), sigma=(image_left.shape[0]//6,image_left.shape[1]//6))
             camera.snapsignal.emit(np.multiply(image_right,W))
             x2, y2 = ia.detectPipettetip(np.multiply(image_left,W), np.multiply(image_right,W), diameter=(5/4)*D, orientation=O)
             self.draw.emit(['cross',x2,y2])
@@ -651,9 +663,6 @@ class Worker(QObject):
             # set micromanipulator and camera coordinate pair of pipette tip
             tipcoord_objective_height = ztarget + CALIBRATION_HEIGHT/1000
             self._parent.pipette_coordinates_pair = np.vstack([reference, np.array([tipcoord[0], tipcoord[1], tipcoord_objective_height])])
-        
-        # return objective to original position
-        objective.moveAbs(z=ztarget)
         
         self.status.emit("Tip-detection finished")
         self.finished.emit()
