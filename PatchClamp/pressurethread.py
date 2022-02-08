@@ -7,7 +7,6 @@ Created on Mon Dec  6 10:03:29 2021
 
 
 import time
-import logging
 import numpy as np
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, QThread
 

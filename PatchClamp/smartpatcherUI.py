@@ -329,7 +329,7 @@ class PatchClampUI(QWidget):
         algorithmPlotWidget = pg.PlotWidget()
         algorithmPlotWidget.setTitle("Sharpness graph")
         algorithmPlotWidget.setLabel("left", text="a.u.")
-        algorithmPlotWidget.setLabel("bottom", text="height", units="um")
+        algorithmPlotWidget.setLabel("bottom", text="height", units="μm")
         self.algorithmPlot = algorithmPlotWidget.plot(pen=(1,4))
         
         # Current plot
@@ -416,16 +416,6 @@ class PatchClampUI(QWidget):
         ----------------------------- End of GUI ------------------------------
         =======================================================================
         """
-    
-    
-    
-    
-    
-    
-    def mockfunction(self):
-        self.backend.request(name='mockworker')
-    
-    
     
     
     def connect_camerathread(self):
@@ -596,7 +586,7 @@ class PatchClampUI(QWidget):
     def request_snap(self):
         if self.backend.camerathread is not None:
             I = self.backend.camerathread.snap()
-            io.imsave(self.backend.save_directory+'.tif', I, check_contrast=False)
+            io.imsave(self.backend.save_directory+'snapshot.tif', I, check_contrast=False)
             self.toggle_pauselive()
             self.update_live(I)
         else:
@@ -924,22 +914,15 @@ class PatchClampUI(QWidget):
         # update labels
         self.rotation_angles_value_label.setText("({:.2f}".format(alpha)+", {:.2f}, ".format(beta)+"{:.2f})".format(gamma))
         self.pixelsize_unit_label.setText("{:.1f}".format(pixelsize)+"x{:.1f}".format(pixelsize))
-    
-    
-    
-    
-    
-    def unlock_pressure_control(self):
-        # Set radout pressure to "-"
-        # Set pressure status to (dis)connected
-        # Unlock the pressure control widget
-        # Unlock other pressure control dependent buttons
-        pass
         
     
     
     
+    # def request_imagexygrid(self):
+    #     self.backend.request(name='request_imagexygrid')
     
+    # def request_imagezstack(self):
+    #     self.backend.request(name='request_imagezstack')
     
     
     
@@ -1022,7 +1005,7 @@ class PatchClampUI(QWidget):
         event.accept()
         
         # Frees the console by quitting the application entirely
-        # QtWidgets.QApplication.quit() # remove when part of Tupolev!!
+        QtWidgets.QApplication.quit() # remove when part of Tupolev!!
 
 
 

@@ -175,12 +175,12 @@ class Worker(QObject):
                 self.draw.emit(['cross',x1,y1])
                 # W = ia.makeGaussian(size=image_left.shape, mu=(x1,y1), sigma=(image_left.shape[0]//12,image_left.shape[1]//12))
                 # self.draw.emit(['image',np.multiply(image_right,W)])
-                # x, y = ia.detectPipettetip(np.multiply(image_left,W), np.multiply(image_right,W), diameter=(5/4)*D, orientation=O)
+                # x2, y2 = ia.detectPipettetip(np.multiply(image_left,W), np.multiply(image_right,W), diameter=(5/4)*D, orientation=O)
+                # self.draw.emit(['cross',x2,y2])
                 
                 # save tip coordinates
                 tipcoords[i,j,:] = np.array([x1,y1,np.nan])
-                # self.draw.emit(['cross',x,y])
-                # np.save(save_directory+'hardcalibration_'+timestamp, tipcoords)         #FLAG: relevant for MSc thesis
+                np.save(save_directory+'hardcalibration_'+timestamp, tipcoords)         #FLAG: relevant for MSc thesis
                 
                 # (emergency) stop
                 if self.STOP:

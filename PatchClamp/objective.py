@@ -7,7 +7,6 @@ Created on Thu Dec  9 10:18:47 2021
 
 
 import sys
-import logging
 
 sys.path.append('../')
 from pipython import GCSDevice, pitools
@@ -23,11 +22,8 @@ class PIMotor:
     def __init__(self, objective_motor_handle=None):
         # Connect the objective motor if it is not given
         if objective_motor_handle == None:
-            logging.info("objective connecting...")
             self.objective = GCSDevice(gcsdll=__file__+'/../../'+'/PI_ObjectiveMotor/PI_GCS2_DLL_x64.dll')
-            logging.info("connecting takes a while, hold on...")
             self.objective.ConnectUSB(serialnum='PI C-863 Mercury SN 0185500828')
-            logging.info("objective connected successfully")
         else:
             self.objective = objective_motor_handle
     

@@ -7,7 +7,6 @@ Created on Sun Feb  6 11:31:11 2022
 
 import os
 import json
-import logging
 import numpy as np
 from PyQt5.QtCore import QObject, QThread
 
@@ -39,11 +38,10 @@ class SmartPatcher(QObject):
         self._progress_message = "-"
         self._operation_mode = "Default"
         self._resistance_reference = None           # in MΩ
-        self._target_coordinates = np.array(        # [X, Y, Z] in pixels
+        self._target_coordinates = np.array(        # [Xcam,Ycam,Zobj] in (pix,pix,μm)
             [None,None,None])
-        self._pipette_coordinates_pair = np.array(  # [micromanipulator, camera/objective]
+        self._pipette_coordinates_pair = np.array(  # [[Xmm,Ymm,Zmm],[Xcam,Ycam,Zobj]] in ((μm,μm,μm),(pix,pix,μm))
             [[None,None,None], [None,None,None]])
-        
         
         # Data collection
         self.window_size_i = 200
@@ -152,8 +150,6 @@ class SmartPatcher(QObject):
                     raise ValueError('Sealtest and/or pressure controller not connected')
                 else:
                     self.thread.started.connect(self.worker.break_in)
-            elif name == 'mockworker':
-                    self.thread.started.connect(self.worker.mockworker)
             
             # start worker
             self.thread.start()
@@ -318,15 +314,6 @@ class SmartPatcher(QObject):
         self.n_c += length
     
     
-    
-    
-    
-    
-    
-    
-    
-    
-        
     @property
     def camerathread(self):
         return self._camerathread
@@ -461,7 +448,6 @@ class SmartPatcher(QObject):
         if len(alphabetagamma) == 3:
             alpha,beta,gamma = alphabetagamma
             if type(alpha) and type(beta) and type(gamma) == float or int:
-                logging.info('Set rotation angles alpha beta gamma: '+str(alpha)+' '+str(beta)+' '+str(gamma))
                 self._rotation_angles = [alpha, beta, gamma]
                 self.R = (alpha, beta, gamma)
             else:
@@ -506,15 +492,6 @@ class SmartPatcher(QObject):
     @R.deleter
     def R(self):
         self._R = np.eye(3)
-    
-    
-    
-    
-    
-    
-    
-    
-    
     
     
     @property
@@ -598,37 +575,3 @@ class SmartPatcher(QObject):
     @pipette_coordinates_pair.deleter
     def pipette_coordinates_pair(self):
         self._pipette_coordinates_pair = np.array([[None,None,None], [None,None,None]])
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-
-
-
-
