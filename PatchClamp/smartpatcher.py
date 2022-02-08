@@ -70,7 +70,28 @@ class SmartPatcher(QObject):
     
     
     def emergency_stop(self, state):
+        """
+        This emergency stop function asks the worker to activate its stop
+        condition. Depending on the algorithm, this might not be instant and
+        hardware might still be moving.
+        
+        Note that you might also want to call self.stop_moving_hardware.
+        """
         self.worker.STOP = state
+    
+    def stop_moving_hardware(self):
+        """
+        This function tries to override any moving hardware devices by asking
+        them to stand down.
+        """
+        if self.micromanipulator is not None:
+            self.micromanipulator.stop()
+        if self.XYstage is not None:
+            x,y = self.XYstage.getPos()
+            self.XYstage.moveAbs(x,y)
+        if self.objectivemotor is not None:
+            height = self.objective.getPos()
+            self.objective.moveAbs(height)
     
     
     def request(self, name, mode='Default'):
@@ -328,18 +349,6 @@ class SmartPatcher(QObject):
     def objectivemotor(self):
         self._objectivemotor.disconnect()
         self._objectivemotor = None
-    
-    @property
-    def micromanipulator(self):
-        return self._micromanipulator
-    @micromanipulator.setter
-    def micromanipulator(self, micromanipulator_handle):
-        
-        self._micromanipulator = micromanipulator_handle
-    @micromanipulator.deleter
-    def micromanipulator(self):
-        self._micromanipulator.stop()
-        self._micromanipulator = None
     
     @property
     def micromanipulator(self):

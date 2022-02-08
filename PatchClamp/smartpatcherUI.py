@@ -696,6 +696,7 @@ class PatchClampUI(QWidget):
     def request_emergency_stop(self):
         if self.STOP_button.isChecked():
             self.backend.emergency_stop(True)
+            self.backend.stop_moving_hardware()
         else:
             self.backend.emergency_stop(False)
     
