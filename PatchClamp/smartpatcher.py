@@ -394,6 +394,7 @@ class SmartPatcher(QObject):
     def pixel_size(self, size):
         if isinstance(size, float) or isinstance(size, int):
             self._pixel_size = size
+            self.write_constants_to_JSON()
         else:
             raise ValueError('pixelsize should be a float or integer')
     @pixel_size.deleter
@@ -408,6 +409,7 @@ class SmartPatcher(QObject):
         width,height = size
         if type(width) and type(height) == float or int:
             self._image_size = [width, height]
+            self.write_constants_to_JSON()
         else:
             raise ValueError('Image size should have width and height of type float or integer')
     @image_size.deleter
@@ -421,6 +423,7 @@ class SmartPatcher(QObject):
     def pipette_orientation(self, angle):
         if isinstance(angle, float) or isinstance(angle, int):
             self._pipette_orientation = angle
+            self.write_constants_to_JSON()
         else:
             raise ValueError('micromanipulator orientation should be a float or integer')
     @pipette_orientation.deleter
@@ -434,6 +437,7 @@ class SmartPatcher(QObject):
     def pipette_diameter(self, diameter):
         if isinstance(diameter, float) or isinstance(diameter, int):
             self._pipette_diameter = diameter
+            self.write_constants_to_JSON()
         else:
             raise ValueError('Pipette opening diameter should be a float or integer')
     @pipette_diameter.deleter
@@ -450,6 +454,7 @@ class SmartPatcher(QObject):
             if type(alpha) and type(beta) and type(gamma) == float or int:
                 self._rotation_angles = [alpha, beta, gamma]
                 self.R = (alpha, beta, gamma)
+                self.write_constants_to_JSON()
             else:
                 raise ValueError('rotation angles should be integers or floats')
         else:
@@ -465,6 +470,7 @@ class SmartPatcher(QObject):
     @focus_offset.setter
     def focus_offset(self, offset):
         self._focus_offset = offset
+        self.write_constants_to_JSON()
     @focus_offset.deleter
     def focus_offset(self):
         self._focus_offset = None

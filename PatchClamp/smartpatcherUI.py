@@ -103,6 +103,8 @@ class PatchClampUI(QWidget):
         
         # Button for moving target to center
         request_target2center_button = QPushButton(text="Target to center", clicked=self.request_target2center)
+        request_target2center_button.setToolTip("Brings target ROI to the center of the field-of-view.\n"+ \
+                                                "Make sure that a target is set.")
         
         stagemoveLayout.addWidget(request_stage_up_button, 0, 1, 1, 1)
         stagemoveLayout.addWidget(request_stage_down_button, 2, 1, 1, 1)
@@ -120,6 +122,10 @@ class PatchClampUI(QWidget):
         # Calibration algorithms
         request_calibrate_xy_button = QPushButton(text="Calibrate XY", clicked=self.request_calibrate_xy)
         request_calibrate_pixelsize_button = QPushButton(text="Calibrate pixelsize", clicked=self.request_calibrate_pixelsize)
+        request_calibrate_xy_button.setToolTip("Aligns the micromanipulator axes with the pixel rows and columns on screen.\n"+ \
+                                               "Performs best with the pipette tip ~10μm below focus")
+        request_calibrate_pixelsize_button.setToolTip("Calibrates the pixelsize. Use this if 'Target to center' and"+ \
+                                                      " 'Start target approach' miss their target. \nPerforms best with the pipette tip ~10μm below focus")
         
         # Calibration statistics
         rotation_angles_label = QLabel("Rotation axes (α,β,γ):")
@@ -195,6 +201,8 @@ class PatchClampUI(QWidget):
         request_start_breakin_button = QPushButton(text="Start break-in", clicked=self.request_start_breakin)
         self.request_stop_button = QPushButton(text="STOP!", clicked=self.request_emergency_stop)
         self.request_stop_button.setCheckable(True)
+        self.request_stop_button.setToolTip("Do not spam! Leave it checked and the algorithm will\n"+ \
+                                            " safely stop while stopping all motion devices.")
         
         # Labels for autopatch status and progress updates
         autopatch_status_label = QLabel("Autopatch status:")
@@ -296,7 +304,7 @@ class PatchClampUI(QWidget):
         capacitance_label = QLabel("Capacitance: ")
         self.capacitance_value_label = QLabel("-")
         self.capacitance_value_label.setFont(QFont("Times", weight=QFont.Bold))
-        capacitance_unit_label = QLabel("F/μm?")
+        capacitance_unit_label = QLabel("F")
         ratio_label = QLabel("Ratio: ")
         self.ratio_value_label = QLabel("-")
         membranevoltage_label = QLabel("Membrane potential:")
@@ -594,6 +602,7 @@ class PatchClampUI(QWidget):
     
     
     def request_prechecks(self):
+        self.displayWidget.setCurrentIndex(3)
         self.backend.request(name='pre-checks')
     
     def request_selecttarget(self):
@@ -635,6 +644,7 @@ class PatchClampUI(QWidget):
             self.backend.target_coordinates = np.array([x,y,None])
     
     def request_start_autopatch(self):
+        self.displayWidget.setCurrentIndex(0)
         self.backend.request(name='autopatch')
     
     def request_manual_adjustment(self):
@@ -680,12 +690,15 @@ class PatchClampUI(QWidget):
             self.backend.pipette_coordinates_pair = coords_pair
     
     def request_start_approach(self):
+        self.displayWidget.setCurrentIndex(1)
         self.backend.request(name='approach')
     
     def request_start_gigaseal(self):
+        self.displayWidget.setCurrentIndex(1)
         self.backend.request(name='gigaseal')
     
     def request_start_breakin(self):
+        self.displayWidget.setCurrentIndex(2)
         self.backend.request(name='break-in')
     
     def request_emergency_stop(self):
