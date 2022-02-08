@@ -2,7 +2,7 @@
 """
 Created on Mon Dec  6 09:49:25 2021
 
-@author: tvdrb
+@author: TvdrBurgt
 """
 
 import serial
@@ -114,6 +114,3 @@ class PressureController(serial.Serial):
 
 if __name__ == "__main__":
     PS = PressureController(address='COM21', baud=9600)
-    
-    
-    

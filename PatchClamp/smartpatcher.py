@@ -2,7 +2,7 @@
 """
 Created on Sun Feb  6 11:31:11 2022
 
-@author: tvdrb
+@author: TvdrBurgt
 """
 
 import os

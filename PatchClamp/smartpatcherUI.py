@@ -2,7 +2,7 @@
 """
 Created on Sat Feb  5 16:34:10 2022
 
-@author: tvdrb
+@author: TvdrBurgt
 """
 
 import sys
@@ -13,13 +13,12 @@ from skimage import io
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QPen, QColor, QFont, QPalette
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QDoubleSpinBox, QGroupBox, QLabel, QStackedWidget, QComboBox, QTabWidget
+from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QDoubleSpinBox, QGroupBox, QLabel, QTabWidget
 import pyqtgraph.exporters
 import pyqtgraph as pg
 
 sys.path.append('../')
 from NIDAQ.constants import MeasurementConstants
-from PatchClamp.manualpatcher_frontend import PatchclampSealTestUI
 from PatchClamp.smartpatcher import SmartPatcher
 from PatchClamp.camerathread import CameraThread
 from PatchClamp.sealtestthread import SealTestThread
@@ -27,14 +26,6 @@ from PatchClamp.pressurethread import PressureThread
 from PatchClamp.objective import PIMotor
 from PatchClamp.micromanipulator import ScientificaPatchStar
 from PatchClamp.stage import LudlStage
-
-
-
-
-
-
-
-
 
 
 
@@ -885,27 +876,6 @@ class PatchClampUI(QWidget):
         self.pressurePlot.setData([0])
     
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     def update_autopatch_status(self, message):
         self.autopatch_status.setText(message)
     
@@ -913,11 +883,6 @@ class PatchClampUI(QWidget):
         self.autopatch_progress.setText(message)
     
     def update_constants_from_backend(self):
-        # self._image_size = [2048, 2048]             # dimension of FOV in pix
-        # self._pipette_orientation = 0               # in radians
-        # self._pipette_diameter = 16                 # in pixels (16=patchclamp, ??=cell-picking)
-        # self._focus_offset = 30                     # in micron above coverslip
-        
         # retrieve constants from backend
         alpha = self.backend.rotation_angles[0]*180/np.pi
         beta = self.backend.rotation_angles[1]*180/np.pi

@@ -329,4 +329,3 @@ class SealTestThread(QThread):
 #             pass
         
 #         print('sealtest thread stopped')
-    
