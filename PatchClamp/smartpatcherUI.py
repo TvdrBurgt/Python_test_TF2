@@ -193,8 +193,8 @@ class PatchClampUI(QWidget):
         request_start_approach_button = QPushButton(text="Start target approach", clicked=self.request_start_approach)
         request_start_gigaseal_button = QPushButton(text="Start gigaseal", clicked=self.request_start_gigaseal)
         request_start_breakin_button = QPushButton(text="Start break-in", clicked=self.request_start_breakin)
-        request_stop_button = QPushButton(text="STOP!", clicked=self.request_emergency_stop)
-        request_stop_button.setCheckable(True)
+        self.request_stop_button = QPushButton(text="STOP!", clicked=self.request_emergency_stop)
+        self.request_stop_button.setCheckable(True)
         
         # Labels for autopatch status and progress updates
         autopatch_status_label = QLabel("Autopatch status:")
@@ -202,6 +202,7 @@ class PatchClampUI(QWidget):
         self.autopatch_status = QLabel("Ready")
         self.autopatch_progress = QLabel("-")
         self.autopatch_status.setFont(QFont("Times", weight=QFont.Bold))
+        self.autopatch_progress.setFont(QFont("Times", weight=QFont.Bold))
         
         autopatchLayout.addWidget(request_prechecks_button, 0, 0, 1, 2)
         autopatchLayout.addWidget(request_selecttarget_button, 1, 0, 1, 1)
@@ -212,7 +213,7 @@ class PatchClampUI(QWidget):
         autopatchLayout.addWidget(request_start_approach_button, 4, 0, 1, 2)
         autopatchLayout.addWidget(request_start_gigaseal_button, 5, 0, 1, 2)
         autopatchLayout.addWidget(request_start_breakin_button, 6, 0, 1, 2)
-        autopatchLayout.addWidget(request_stop_button, 7, 0, 1, 2)
+        autopatchLayout.addWidget(self.request_stop_button, 7, 0, 1, 2)
         autopatchLayout.addWidget(autopatch_status_label, 8, 0, 1, 2)
         autopatchLayout.addWidget(self.autopatch_status, 9, 0, 1, 2)
         autopatchLayout.addWidget(autopatch_progress_label, 10, 0, 1, 2)
@@ -328,7 +329,7 @@ class PatchClampUI(QWidget):
         algorithmPlotWidget = pg.PlotWidget()
         algorithmPlotWidget.setTitle("Sharpness graph")
         algorithmPlotWidget.setLabel("left", text="a.u.")
-        algorithmPlotWidget.setLabel("bottom", text="a.u.")
+        algorithmPlotWidget.setLabel("bottom", text="height", units="um")
         self.algorithmPlot = algorithmPlotWidget.plot(pen=(1,4))
         
         # Current plot
@@ -540,19 +541,23 @@ class PatchClampUI(QWidget):
     
     
     def request_stage_up(self):
-        step_height = self.backend.image_size[0]*self.backend.pixel_size
+        # Convert pixels to ludl indices (1577 ludl index = 340 um)
+        step_height = int(self.backend.image_size[0] * self.backend.pixel_size/1000 * 1577/340)
         self.backend.XYstage.moveRel(xRel=step_height, yRel=0)
     
     def request_stage_down(self):
-        step_height = self.backend.image_size[0]*self.backend.pixel_size
+        # Convert pixels to ludl indices (1577 ludl index = 340 um)
+        step_height = int(self.backend.image_size[0] * self.backend.pixel_size/1000 * 1577/340)
         self.backend.XYstage.moveRel(xRel=-step_height, yRel=0)
     
     def request_stage_right(self):
-        step_width = self.backend.image_size[1]*self.backend.pixel_size
+        # Convert pixels to ludl indices (1577 ludl index = 340 um)
+        step_width = int(self.backend.image_size[1] * self.backend.pixel_size/1000 * 1577/340)
         self.backend.XYstage.moveRel(xRel=0, yRel=-step_width)
     
     def request_stage_left(self):
-        step_width = self.backend.image_size[1]*self.backend.pixel_size
+        # Convert pixels to ludl indices (1577 ludl index = 340 um)
+        step_width = int(self.backend.image_size[1] * self.backend.pixel_size/1000 * 1577/340)
         self.backend.XYstage.moveRel(xRel=0, yRel=step_width)
     
     def request_target2center(self):
@@ -612,7 +617,7 @@ class PatchClampUI(QWidget):
         self.toggle_pauselive()
         
         coords = self.backend.target_coordinates
-        if all(values is None for values in coords):
+        if coords[0] is None and coords[1] is None:
             coords = (0,0)
         else:
             coords = (coords[0]-60,coords[1]-60)
@@ -694,7 +699,7 @@ class PatchClampUI(QWidget):
         self.backend.request(name='break-in')
     
     def request_emergency_stop(self):
-        if self.STOP_button.isChecked():
+        if self.request_stop_button.isChecked():
             self.backend.emergency_stop(True)
         else:
             self.backend.emergency_stop(False)
@@ -1016,7 +1021,7 @@ class PatchClampUI(QWidget):
         event.accept()
         
         # Frees the console by quitting the application entirely
-        QtWidgets.QApplication.quit() # remove when part of Tupolev!!
+        # QtWidgets.QApplication.quit() # remove when part of Tupolev!!
 
 
 

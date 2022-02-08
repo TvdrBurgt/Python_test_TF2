@@ -145,10 +145,10 @@ class Worker(QObject):
         # modes of operation
         if mode == 'XY':
             dimension = 2
-            self._parent.rotation_angles = (0, 0, 0)
+            del self._parent.rotation_angles
         elif mode == 'XYZ':
             dimension = 3
-            self._parent.rotation_angles = (0, 0, 0)
+            del self._parent.rotation_angles
         elif mode == 'pixelsize':
             dimension = 2
         else:
@@ -172,15 +172,15 @@ class Worker(QObject):
                 
                 # pipette tip detection algorithm
                 x1, y1 = ia.detectPipettetip(image_left, image_right, diameter=D, orientation=O)
-#                self.draw.emit(['cross',x1,y1])
-                W = ia.makeGaussian(size=image_left.shape, mu=(x1,y1), sigma=(image_left.shape[0]//12,image_left.shape[1]//12))
-                camera.snapsignal.emit(np.multiply(image_right,W))
-                x, y = ia.detectPipettetip(np.multiply(image_left,W), np.multiply(image_right,W), diameter=(5/4)*D, orientation=O)
+                self.draw.emit(['cross',x1,y1])
+                # W = ia.makeGaussian(size=image_left.shape, mu=(x1,y1), sigma=(image_left.shape[0]//12,image_left.shape[1]//12))
+                # self.draw.emit(['image',np.multiply(image_right,W)])
+                # x, y = ia.detectPipettetip(np.multiply(image_left,W), np.multiply(image_right,W), diameter=(5/4)*D, orientation=O)
                 
                 # save tip coordinates
-                tipcoords[i,j,:] = np.array([x,y,np.nan])
-                self.draw.emit(['cross',x,y])
-                np.save(save_directory+'hardcalibration_'+timestamp, tipcoords)         #FLAG: relevant for MSc thesis
+                tipcoords[i,j,:] = np.array([x1,y1,np.nan])
+                # self.draw.emit(['cross',x,y])
+                # np.save(save_directory+'hardcalibration_'+timestamp, tipcoords)         #FLAG: relevant for MSc thesis
                 
                 # (emergency) stop
                 if self.STOP:
@@ -227,13 +227,13 @@ class Worker(QObject):
             # couple micrometer distance with pixeldistance and take the mean
             diff_realcoords = np.abs(np.diff(realcoords, axis=1))   # in microns
             diff_pixcoords = np.abs(np.diff(pixcoords, axis=1))     # in pixels
-            samples = diff_realcoords/diff_pixcoords     # microns per pixel
+            samples = diff_realcoords/diff_pixcoords                # microns per pixel
             sample = np.array([samples[0,:,0], samples[1,:,1]])
-            sample_mean = np.mean(sample)
-            sample_var = np.var(sample)
+            sample_mean = np.mean(sample)*1000                      # in nanometers
+            sample_var = np.var(sample)*1000                        # in nanometers
             
             # set pixelsize to backend
-            self._parent.pixelsize = sample_mean
+            self._parent.pixel_size = sample_mean
             self.progress.emit('pixelsize estimation: mean +/- s.d. = '+'{:.1f}'.format(sample_mean)+' +/- '+'{:.1f}'.format(np.sqrt(sample_var)))
         
         self.status.emit("Calibration finished")
@@ -265,7 +265,8 @@ class Worker(QObject):
         #I) set pressure to prevent pipette contamination
         pressure = np.zeros(10)
         for i in range(0,10):
-            pressure[i] = np.nanmean(self._parent.pressure[-10::])
+            pressure[i] = np.nanmean(self._parent.pressure[0][-10::])
+            time.sleep(0.2)
         
         if all(pressure >= P_PRECHECK_CONDITION):
             self.progress.emit("pressure check passed")
@@ -279,6 +280,7 @@ class Worker(QObject):
         resistance = np.zeros(10)
         for i in range(0,10):
             resistance[i] = np.nanmax(self._parent.resistance[-10::])
+            time.sleep(0.2)
             
         if all(resistance >= R_PRECHECK_CONDITION[0]*1e6) \
             and all(resistance <= R_PRECHECK_CONDITION[1]*1e6):
@@ -358,7 +360,7 @@ class Worker(QObject):
         xtarget,ytarget,ztarget = self._parent.target_coordinates
         
         # algorithm variables
-        STEPSIZE = 10           # micron
+        STEPSIZE = 7            # micron
         MIN_TAILLENGTH = 12     # datapoints (=X*STEPSIZE in micron)
         
         reference = micromanipulator.getPos()
@@ -518,6 +520,9 @@ class Worker(QObject):
         #VI) continue with finding the fine focus position
         self.progress.emit('Sampling the sharpness peak')
         for step in [STEPSIZE, STEPSIZE/3]:
+            # (emergency) stop
+            if self.STOP:
+                break
             # Sample six points between the last three penalty scores
             penalties = np.zeros(7)
             positions = np.linspace(foundfocus-step, foundfocus+step, 7)
