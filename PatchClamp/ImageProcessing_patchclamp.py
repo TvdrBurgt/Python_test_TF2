@@ -48,6 +48,10 @@ class PatchClampImageProcessing:
             xpos        = x position of the pipette tip
             ypos        = y position of the pipette tip
         """
+        # Image normalization
+        Ia = Ia/np.sum(Ia)
+        Ib = Ib/np.sum(Ib)
+        
         # Gaussian blur
         LB = filters.gaussian(Ia, 1)
         RB = filters.gaussian(Ib, 1)
@@ -63,7 +67,7 @@ class PatchClampImageProcessing:
         H, T, R = transform.hough_line(BW, angle_range)
         
         # Find Hough peaks
-        _, Tpeaks, Rpeaks = transform.hough_line_peaks(H,T,R, num_peaks=5, threshold=0)
+        _, Tpeaks, Rpeaks = transform.hough_line_peaks(H,T,R, num_peaks=10, threshold=0)
         
         # Cluster peaks
         idx_lowT = np.argmin(Tpeaks)
