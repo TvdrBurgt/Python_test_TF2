@@ -13,13 +13,13 @@ from skimage import io
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QPen, QColor, QFont, QPalette
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QDoubleSpinBox, QGroupBox, QLabel, QTabWidget
+from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QDoubleSpinBox, QGroupBox, QLabel, QTabWidget, QInputDialog
 import pyqtgraph.exporters
 import pyqtgraph as pg
 
 sys.path.append('../')
 from NIDAQ.constants import MeasurementConstants
-from PatchClamp.smartpatcher import SmartPatcher
+from PatchClamp.smartpatcher_backend import SmartPatcher
 from PatchClamp.camerathread import CameraThread
 from PatchClamp.sealtestthread import SealTestThread
 from PatchClamp.pressurethread import PressureThread
@@ -561,10 +561,18 @@ class PatchClampUI(QWidget):
     
     
     def request_calibrate_xy(self):
-        self.backend.request(name='hardcalibration', mode='XY')
+        orientations = ["North", "East", "South", "West"]
+        orientations_inradians = [np.pi/2, np.pi, 3*np.pi/2, 0]
+        orientation, ok = QInputDialog().getItem(self, "Calibration options", "Pipette orientation", orientations, 3, False)
+        if ok:
+            self.backend.pipette_orientation = orientations_inradians[orientations.index(orientation)]
+            self.backend.request(name='hardcalibration', mode='XY')
     
     def request_calibrate_pixelsize(self):
-        self.backend.request(name='hardcalibration', mode='pixelsize')
+        diameter, ok = QInputDialog().getInt(self, "Calibration options", "Pipette diamter (in pixels)", value=16)
+        if ok:
+            self.backend.pipette_diameter = diameter
+            self.backend.request(name='hardcalibration', mode='pixelsize')
     
     
     def toggle_pauselive(self):
