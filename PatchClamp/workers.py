@@ -222,7 +222,7 @@ class Worker(QObject):
             
             # set pixelsize to backend
             self._parent.pixel_size = sample_mean
-            self.progress.emit('pixelsize estimation: mean +/- s.d. = '+'{:.1f}'.format(sample_mean)+' +/- '+'{:.1f}'.format(np.sqrt(sample_var)))
+            self.progress.emit('pixelsize estimation: mean +/- s.d. = '+'{:.2f}'.format(sample_mean)+' +/- '+'{:.2f}'.format(np.sqrt(sample_var)))
         
         self.status.emit("Calibration finished")
         self.finished.emit()
@@ -238,7 +238,7 @@ class Worker(QObject):
         I) set pressure,
         II) check if resistance is within 3 to 11 MΩ.
         """
-        self.status.emit("pre-checks...")
+        self.status.emit("Pre-checks...")
         
         # get all relevant parent attributes
         save_directory = self._parent.save_directory
@@ -257,10 +257,10 @@ class Worker(QObject):
             time.sleep(0.2)
         
         if all(pressure >= P_PRECHECK_CONDITION):
-            self.progress.emit("pressure check passed")
+            self.progress.emit("Pressure check passed")
             pressurecontroller.set_pressure_stop_waveform(50)
         else:
-            self.progress.emit("pressure check failed")
+            self.progress.emit("Pressure check failed")
             SUCCESS_1 = False
         
         #II) measure pipette resistance and check if it is consistent
@@ -273,24 +273,24 @@ class Worker(QObject):
         if all(resistance >= R_PRECHECK_CONDITION[0]*1e6) \
             and all(resistance <= R_PRECHECK_CONDITION[1]*1e6):
             self._parent.resistance_reference = np.nanmean(resistance)
-            self.progress.emit('resistance check passed')
+            self.progress.emit('Resistance check passed')
         else:
-            self.progress.emit('resistance check passed')
+            self.progress.emit('Resistance check passed')
             SUCCESS_2 = False
         
         timestamp = str(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))                   #FLAG: relevant for MSc thesis
         np.save(save_directory+'precheckresistance_'+timestamp, resistance)             #FLAG: relevant for MSc thesis
         
         if SUCCESS_1 and SUCCESS_2:
-            self.progress.emit("pre-checks successful")
+            self.progress.emit("Pre-checks successful")
         elif SUCCESS_1 and not SUCCESS_2:
-            self.progress.emit("resistance too high/low")
+            self.progress.emit("Resistance too high/low")
         elif not SUCCESS_1 and SUCCESS_2:
-            self.progress.emit("no pipette pressure")
+            self.progress.emit("No pipette pressure")
         else:
-            self.progress.emit("no pipette pressure \nand resistance too high/low")
+            self.progress.emit("No pipette pressure \nand resistance too high/low")
             
-        self.status.emit("pre-checks finished")
+        self.status.emit("Pre-checks finished")
         self.finished.emit()
     
     
@@ -306,7 +306,7 @@ class Worker(QObject):
         III) Activate the softcalibration algorithm.
         IV) Return focal plane.
         """
-        self.status.emit("autopatching...")
+        self.status.emit("Autopatching...")
         
         # get all relevant parent attributes
         objective = self._parent.objectivemotor
@@ -326,7 +326,7 @@ class Worker(QObject):
         self.progress.emit("Return focal plane to cell height")
         objective.moveAbs(ztarget)
         
-        self.status.emit("autopatch finished")
+        self.status.emit("Autopatch finished")
         self.progress.emit("Warning: CHECK TIP LOCALIZATION!")
         self.finished.emit()
     
@@ -363,7 +363,7 @@ class Worker(QObject):
         
         # algorithm variables
         STEPSIZE = 7            # micron
-        MIN_TAILLENGTH = 13     # datapoints (=X*STEPSIZE in micron)
+        MIN_TAILLENGTH = 12     # datapoints (=X*STEPSIZE in micron)
         
         reference = micromanipulator.getPos()
         penaltyhistory = np.array([])
@@ -431,7 +431,7 @@ class Worker(QObject):
                         self.progress.emit("Maximum is a sharpness peak!")
                         lookingforpeak = False
                         move = None
-                        foundfocus = positionhistory[-2]
+                        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positionhistory[-2])
                     else:
                         self.progress.emit("Maximum is noise")
                         going_up = False
@@ -462,7 +462,7 @@ class Worker(QObject):
                         self.progress.emit("Maximum is a sharpness peak!")
                         lookingforpeak = False
                         move = None
-                        foundfocus = positionhistory[2]
+                        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positionhistory[2])
                     else:
                         self.progress.emit("Maximum is noise")
                         move = 'step down'
@@ -491,6 +491,7 @@ class Worker(QObject):
                     self.progress.emit("Maximum is a sharpness peak!")
                     lookingforpeak = False
                     move = None
+                    micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positionhistory[1])
                     foundfocus = positionhistory[1]
                 else:
                     self.progress.emit("Maximum is noise")
@@ -553,7 +554,7 @@ class Worker(QObject):
         np.save(save_directory+'autofocus_positionhistory_'+timestamp, positionhistory)     #FLAG: relevant for MSc thesis
         np.save(save_directory+'autofocus_penaltyhistory_'+timestamp, penaltyhistory)       #FLAG: relevant for MSc thesis
         
-        self.status.emit("autofocus finished")
+        self.status.emit("Autofocus finished")
         self.finished.emit()
     
     
@@ -585,7 +586,7 @@ class Worker(QObject):
         O = self._parent.pipette_orientation
         
         # algorithm variables
-        CALIBRATION_HEIGHT = focus_offset+10  #microns above coverslip (+term = bias + height above focus for tip detection)
+        CALIBRATION_HEIGHT = focus_offset+30  #microns above coverslip (+term = bias + height above focus for tip detection)
         POSITIONS = np.array([[-25,-25,0],
                               [25,-25,0],
                               [25,25,0],
@@ -709,7 +710,7 @@ class Worker(QObject):
         #IIIa) measure resistance and set graph thresholds
         time.sleep(0.5)
         resistance_ref = np.nanmean(self._parent.resistance)
-        self.progress.emit("Approach R reference: "+"{:.2f}".format(resistance_ref*1e-6)+" MΩ. Contact R: "+"{:.2f}".format(R_CRITICAL*1e-6)+"MΩ")
+        self.progress.emit("R reference: "+"{:.2f}".format(resistance_ref*1e-6)+" MΩ. Contact R: "+"{:.2f}".format(R_CRITICAL*1e-6)+"MΩ")
         
         #IIIb) descent pipette until R increases by R_CRITICAL
         resistance = resistance_ref
@@ -764,7 +765,7 @@ class Worker(QObject):
         xtarget,ytarget,_ = self._parent.target_coordinates
         
         # Algorithm variables
-        TIMEOUT = 30                # seconds
+        TIMEOUT = 60                # seconds
         
         #Ia) wait for Gigaseal with suction pulses
         resistance = np.nanmean(self._parent.resistance[-10::])
@@ -837,7 +838,7 @@ class Worker(QObject):
         SUCCESS = False
         
         # I) attempt breaking-in by increasing suction pulses 
-        self.progress.emit("Attempt i - increasing suction pulses")
+        self.progress.emit("Attempt 1/3: increasing suction pulses")
         resistancehistory = np.array([])
         currenthistory = np.array([[],[]])
         start = time.time()
@@ -861,7 +862,7 @@ class Worker(QObject):
             self.graph2.emit(resistancehistory)
         
         # II) second attempt but with zap
-        self.progress.emit("Attempt ii - increasing suction pulses with ZAP")
+        self.progress.emit("Attempt 2/3: - increasing suction pulses with ZAP")
         start = time.time()
         i = 0
         while time.time()-start < TIMEOUT/6 and not SUCCESS and not self.STOP:
@@ -884,7 +885,7 @@ class Worker(QObject):
             self.graph2.emit(resistancehistory)
         
         # III) third attempt but with zap and longer suction
-        self.progress.emit("Attempt iii - ZAP and strong suction pulses")
+        self.progress.emit("Attempt 3/3 - ZAP and strong suction pulses")
         start = time.time()
         while time.time()-start < TIMEOUT/2 and not SUCCESS and not self.STOP:
             Imax = np.max(self._parent.current)
@@ -910,7 +911,7 @@ class Worker(QObject):
         if SUCCESS:
             self.progress.emit("Break-in successful")
         else:
-            self.progress.emit("failed to break in")
+            self.progress.emit("Failed to break in")
         
         # IV) measure and average sliding windows for saving
         slidingwindow_current = self._parent.current

@@ -34,8 +34,6 @@ class SmartPatcher(QObject):
         
         # Autopatch variables
         self.save_directory = os.getcwd()+'\\feedback\\'
-        self._state_message = "-"
-        self._progress_message = "-"
         self._operation_mode = "Default"
         self._resistance_reference = None           # in MΩ
         self._target_coordinates = np.array(        # [Xcam,Ycam,Zobj] in (pix,pix,μm)
@@ -82,14 +80,20 @@ class SmartPatcher(QObject):
         This function tries to override any moving hardware devices by asking
         them to stand down.
         """
-        if self.micromanipulator is not None:
+        try:
             self.micromanipulator.stop()
-        if self.XYstage is not None:
+        except:
+            pass
+        try:
             x,y = self.XYstage.getPos()
             self.XYstage.moveAbs(x,y)
-        if self.objectivemotor is not None:
-            height = self.objective.getPos()
-            self.objective.moveAbs(height)
+        except:
+            pass
+        try:
+            height = self.objectivemotor.getPos()
+            self.objectivemotor.moveAbs(height)
+        except:
+            pass
     
     
     def request(self, name, mode='Default'):

@@ -817,7 +817,7 @@ class PatchClampUI(QWidget):
             dV = np.mean(voltData[voltData > tres]) - np.mean(voltData[voltData < tres])  # Computing the voltage difference
             dIss = np.mean(curData[int(np.floor(0.15 * sampPerCyc)) : int(np.floor(sampPerCyc / 2)) - 2]) - np.mean(curData[int(np.floor(0.65 * sampPerCyc)) : sampPerCyc - 2])  # Computing the current distance
             membraneResistance = dV / (dIss * 1000000)  # Ohms law (MegaOhm)
-            self.resistance_value_label.setText("{:.1f}".format(membraneResistance))
+            self.resistance_value_label.setText("{:.2f}".format(membraneResistance))
             R_to_append = membraneResistance*1e6
 
             estimated_size_resistance = 10000 / (membraneResistance * 1000000)  # The resistance of a typical patch of membrane, RM is 10000 Omega/{cm}^2
