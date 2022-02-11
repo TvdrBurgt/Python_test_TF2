@@ -363,7 +363,7 @@ class Worker(QObject):
         
         # algorithm variables
         STEPSIZE = 7            # micron
-        MIN_TAILLENGTH = 12     # datapoints (=X*STEPSIZE in micron)
+        MIN_TAILLENGTH = 13     # datapoints (=X*STEPSIZE in micron)
         
         reference = micromanipulator.getPos()
         penaltyhistory = np.array([])
@@ -431,7 +431,7 @@ class Worker(QObject):
                         self.progress.emit("Maximum is a sharpness peak!")
                         lookingforpeak = False
                         move = None
-                        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positionhistory[-2])
+                        foundfocus = positionhistory[-2]
                     else:
                         self.progress.emit("Maximum is noise")
                         going_up = False
@@ -462,7 +462,7 @@ class Worker(QObject):
                         self.progress.emit("Maximum is a sharpness peak!")
                         lookingforpeak = False
                         move = None
-                        micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positionhistory[2])
+                        foundfocus = positionhistory[2]
                     else:
                         self.progress.emit("Maximum is noise")
                         move = 'step down'
@@ -491,7 +491,6 @@ class Worker(QObject):
                     self.progress.emit("Maximum is a sharpness peak!")
                     lookingforpeak = False
                     move = None
-                    micromanipulator.moveAbs(x=reference[0], y=reference[1], z=positionhistory[1])
                     foundfocus = positionhistory[1]
                 else:
                     self.progress.emit("Maximum is noise")
@@ -586,7 +585,7 @@ class Worker(QObject):
         O = self._parent.pipette_orientation
         
         # algorithm variables
-        CALIBRATION_HEIGHT = focus_offset+30  #microns above coverslip (+term = bias + height above focus for tip detection)
+        CALIBRATION_HEIGHT = focus_offset+10  #microns above coverslip (+term = bias + height above focus for tip detection)
         POSITIONS = np.array([[-25,-25,0],
                               [25,-25,0],
                               [25,25,0],
@@ -765,7 +764,7 @@ class Worker(QObject):
         xtarget,ytarget,_ = self._parent.target_coordinates
         
         # Algorithm variables
-        TIMEOUT = 60                # seconds
+        TIMEOUT = 30                # seconds
         
         #Ia) wait for Gigaseal with suction pulses
         resistance = np.nanmean(self._parent.resistance[-10::])
