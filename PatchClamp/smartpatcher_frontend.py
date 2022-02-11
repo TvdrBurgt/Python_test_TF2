@@ -40,7 +40,7 @@ class PatchClampUI(QWidget):
         """
         # ---------------------- General widget settings ---------------------
         """
-        self.setWindowTitle("Patchclamp")
+        self.setWindowTitle("Smartpatcher")
         
         """
         -------------------------- Hardware container -------------------------
